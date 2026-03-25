@@ -1,0 +1,22 @@
+version: "3.8"
+
+services:
+  logitrack:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Estas variables se leen del archivo .env en la misma carpeta
+        REACT_APP_SUPABASE_URL: ${REACT_APP_SUPABASE_URL}
+        REACT_APP_SUPABASE_ANON_KEY: ${REACT_APP_SUPABASE_ANON_KEY}
+        REACT_APP_GOOGLE_MAPS_API_KEY: ${REACT_APP_GOOGLE_MAPS_API_KEY}
+    image: logitrack:latest
+    container_name: logitrack-app
+    ports:
+      - "3000:80"      # Accede en http://localhost:3000
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
