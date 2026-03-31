@@ -8,6 +8,7 @@ import React, { useState } from "react";
 import Sidebar from "./Sidebar";
 import AlertQueue from "./AlertQueue";
 import AlertDetailPanel from "./AlertDetailPanel";
+import MonitoreoLicencias from "./MonitoreoLicencias";
 import { useAlerts } from "../hooks/useAlerts";
 
 export default function OperatorDashboard({ operator, onSignOut }) {
@@ -99,10 +100,12 @@ export default function OperatorDashboard({ operator, onSignOut }) {
           </div>
         )}
 
-        {/* Placeholder para otras secciones */}
-        {activeSection !== "alertas" && (
+        {/* Sección de RRHH y placeholders para el resto */}
+        {activeSection === "rrhh" ? (
+          <MonitoreoLicencias />
+        ) : activeSection !== "alertas" ? (
           <PlaceholderSection section={activeSection} />
-        )}
+        ) : null}
       </main>
 
       {/* Estilos globales */}
