@@ -8,6 +8,7 @@ import React, { useState } from "react";
 import Sidebar from "./Sidebar";
 import AlertQueue from "./AlertQueue";
 import MapView from "./MapView";
+import LicenseUploadForm from './LicenseUploadForm'; 
 import { useAlerts } from "../hooks/useAlerts";
 
 export default function OperatorDashboard() {
@@ -80,8 +81,17 @@ export default function OperatorDashboard() {
           </div>
         )}
 
+{/* Vista de RRHH (Carga de Licencias) */}
+        {activeSection === "rrhh" && (
+          <div style={{ flex: 1, padding: "30px", overflowY: "auto", display: "flex", justifyContent: "center", alignItems: "flex-start" }}>
+            <div style={{ width: "100%", maxWidth: "600px", marginTop: "20px" }}>
+              <LicenseUploadForm />
+            </div>
+          </div>
+        )}
+
         {/* Placeholder para otras secciones */}
-        {activeSection !== "alertas" && (
+        {activeSection !== "alertas" && activeSection !== "rrhh" && (
           <PlaceholderSection section={activeSection} />
         )}
       </main>
@@ -116,12 +126,13 @@ export default function OperatorDashboard() {
 
 // ─── TopBar ─────────────────────────────────────────────────────────────────
 function TopBar({ urgentCount, section }) {
-  const SECTION_LABELS = {
+const SECTION_LABELS = {
     alertas:   "🚨 Gestión de Alertas Críticas",
     rutas:     "🗺️ Rutas Activas",
     despachos: "📋 Guías de Despacho",
     camiones:  "🚛 Estado de Flota",
     mensajes:  "💬 Mensajería",
+    rrhh:      "👥 Recursos Humanos - Licencias", // <-- NUEVA LÍNEA
   };
 
   return (

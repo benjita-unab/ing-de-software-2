@@ -7,11 +7,12 @@
 import React from "react";
 
 const NAV_ITEMS = [
-  { id: "alertas",   icon: "🚨", label: "Alertas Críticas",  badge: true },
+  { id: "alertas",   icon: "🚨", label: "Alertas Críticas",   badge: true },
   { id: "rutas",     icon: "🗺️",  label: "Rutas Activas" },
   { id: "despachos", icon: "📋", label: "Guías de Despacho" },
   { id: "camiones",  icon: "🚛", label: "Estado de Flota" },
   { id: "mensajes",  icon: "💬", label: "Mensajería" },
+  { id: "rrhh",      icon: "👥", label: "Recursos Humanos" }, // <-- NUEVO BOTÓN
 ];
 
 export default function Sidebar({

@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { id: "despachos", icon: "📋", label: "Guías de Despacho" },
   { id: "camiones",  icon: "🚛", label: "Estado de Flota" },
   { id: "mensajes",  icon: "💬", label: "Mensajería" },
+  { id: "rrhh",      icon: "👥", label: "Recursos Humanos" }, // <-- NUEVO BOTÓN
 ];
 
 export default function Sidebar({ activeSection, onNavigate, urgentCount = 0 }) {
