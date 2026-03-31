@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import * as FileSystem from 'expo-file-system/legacy';
 import {
   View,
   Text,
@@ -13,7 +14,6 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
-import * as FileSystem from 'expo-file-system/legacy';
 import { decode } from 'base64-arraybuffer';
 import { createClient } from '@supabase/supabase-js';
 
@@ -23,6 +23,21 @@ const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 const supabase =
   SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
+const normalizeFileUri = (uri) => {
+  if (!uri) return uri;
+
+  if (uri.startsWith('file://')) {
+    return uri;
+  }
+
+  // iOS puede devolver rutas sin file://
+  if (uri.startsWith('/')) {
+    return `file://${uri.replace(/^\/+/, '/')}`;
+  }
+
+  return uri;
+};
 
 function ProgressSteps({ etapaActual }) {
   return (
@@ -61,7 +76,7 @@ function StageCard({
 
       {fotoActual ? (
         <View style={styles.thumbnailContainer}>
-          <Image source={{ uri: fotoActual.photoUri }} style={styles.thumbnail} />
+          <Image source={{ uri: fotoActual.permanentUri }} style={styles.thumbnail} />
           <View style={styles.thumbMeta}>
             <Text style={styles.thumbTitle}>Foto registrada</Text>
             <Text style={styles.thumbText}>
@@ -104,7 +119,7 @@ function StageCard({
   );
 }
 
-export default function RegistroViaje() {
+export default function RegistroViaje({ onViajeFinalizado, onReiniciarViaje }) {
   const [etapaActual, setEtapaActual] = useState(0);
   const [registros, setRegistros] = useState([]);
   const [viajeFinalizado, setViajeFinalizado] = useState(false);
@@ -166,14 +181,30 @@ export default function RegistroViaje() {
       setIsCapturing(true);
       const captureTimestamp = new Date().toISOString();
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.7 });
+
+      // -- Persistir en ruta permanente para iOS (no cache volatile) --
+      const fileName = `entrega_${Date.now()}.jpg`;
+      const permanentUri = `${FileSystem.documentDirectory}${fileName}`;
+
+      try {
+        await FileSystem.copyAsync({ from: normalizeFileUri(photo.uri), to: permanentUri });
+        console.log('📸 Foto asegurada en ruta permanente:', permanentUri);
+      } catch (copyError) {
+        console.error('❌ Error al asegurar la foto en iOS:', copyError);
+        Alert.alert('Error', 'No se pudo guardar la foto en almacenamiento permanente.');
+        setIsCapturing(false);
+        return;
+      }
+
       const position = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
       });
 
+      const photoUri = normalizeFileUri(permanentUri);
       const newRecord = {
         id: `${ETAPAS[etapaActual]}-${Date.now()}`,
         stage: ETAPAS[etapaActual],
-        photoUri: photo.uri,
+        photoUri,
         latitude: position.coords.latitude,
         longitude: position.coords.longitude,
         timestamp: captureTimestamp,
@@ -205,13 +236,14 @@ export default function RegistroViaje() {
       // --- NUEVA LÓGICA AGRESIVA PARA ANDROID ---
       try {
         // 1. Validar que el archivo existe
-        const fileInfo = await FileSystem.getInfoAsync(record.photoUri);
-        if (!fileInfo.exists) {
-          throw new Error(`Archivo no encontrado: ${record.id}`);
-        }
+const normalizedUri = normalizeFileUri(record.photoUri);
+      const fileInfo = await FileSystem.getInfoAsync(normalizedUri);
+      if (!fileInfo.exists) {
+        throw new Error(`Archivo no encontrado: ${record.id} (${normalizedUri})`);
+      }
 
-        // 2. Leer como Base64 (Única forma 100% segura en Android)
-        const base64 = await FileSystem.readAsStringAsync(record.photoUri, {
+      // 2. Leer como Base64 (lógico para iOS/Android) con URI normalizada
+      const base64 = await FileSystem.readAsStringAsync(normalizedUri, {
           encoding: FileSystem.EncodingType.Base64,
         });
 
@@ -302,6 +334,9 @@ export default function RegistroViaje() {
     } else {
       setViajeFinalizado(true);
       setIsCameraOpen(false);
+      if (typeof onViajeFinalizado === 'function') {
+        onViajeFinalizado();
+      }
     }
   };
 
@@ -314,6 +349,9 @@ export default function RegistroViaje() {
       setIsCameraOpen(false);
       setIsCapturing(false);
       setIsSyncing(false);
+      if (typeof onReiniciarViaje === 'function') {
+        onReiniciarViaje();
+      }
     } catch (error) {
       Alert.alert('Error', 'No se pudo reiniciar el viaje.');
     }

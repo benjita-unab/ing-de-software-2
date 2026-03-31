@@ -20,7 +20,11 @@ export async function cerrarDespachoYEnviarComprobante(
   }
 
   const pdf = await generarComprobantePDF(id);
-  const email = pdf.cliente.contacto_email;
+  // COMENTA LA LÍNEA ORIGINAL:
+  //const email = pdf.cliente.contacto_email;
+
+  // AGREGA TU CORREO REAL AQUÍ (El mismo con el que creaste tu cuenta de Resend):
+  const email = "oyanadelbastian5@gmail.com";
 
   if (!email || !String(email).trim()) {
     throw new Error(

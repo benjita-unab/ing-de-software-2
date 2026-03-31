@@ -16,6 +16,14 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    npx expo start
    ```
 
+   Para usar túnel sin que el CLI pregunte por login:
+
+   ```bash
+   npm run start:tunnel
+   ```
+
+   Esto usa la variable de entorno `EXPO_NO_PROMPT=1` y permite continuar con "Proceed anonymously".
+
 In the output, you'll find options to open the app in a
 
 - [development build](https://docs.expo.dev/develop/development-builds/introduction/)

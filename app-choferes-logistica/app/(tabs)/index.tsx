@@ -1,10 +1,18 @@
+import React, { useState } from 'react';
+import { ScrollView } from 'react-native';
 import RegistroViaje from '../../scripts/RegistroViaje';
-import { BotonCerrarDespacho } from '../../src/components/BotonCerrarDespacho';
+import ScannerYFirmaMovil from '../../src/components/ScannerYFirmaMovil';
+
 export default function HomeScreen() {
+  const [pasoPrevioCompletado, setPasoPrevioCompletado] = useState(false);
+
   return (
-    <>
-      <RegistroViaje />
-      <BotonCerrarDespacho rutaId="36515438-9272-4841-b3e4-c0d3b943b1c7" />
-    </>
+    <ScrollView contentContainerStyle={{ flexGrow: 1, padding: 12 }}>
+      <RegistroViaje
+        onViajeFinalizado={() => setPasoPrevioCompletado(true)}
+        onReiniciarViaje={() => setPasoPrevioCompletado(false)}
+      />
+      <ScannerYFirmaMovil pasoPrevioCompletado={pasoPrevioCompletado} />
+    </ScrollView>
   );
 }
