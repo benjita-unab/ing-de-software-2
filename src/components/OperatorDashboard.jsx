@@ -9,6 +9,7 @@ import Sidebar from "./Sidebar";
 import AlertQueue from "./AlertQueue";
 import AlertDetailPanel from "./AlertDetailPanel";
 import MonitoreoLicencias from "./MonitoreoLicencias";
+import AsignacionRutas from "./AsignacionRutas";
 import { useAlerts } from "../hooks/useAlerts";
 
 export default function OperatorDashboard({ operator, onSignOut }) {
@@ -103,6 +104,8 @@ export default function OperatorDashboard({ operator, onSignOut }) {
         {/* Sección de RRHH y placeholders para el resto */}
         {activeSection === "rrhh" ? (
           <MonitoreoLicencias />
+        ) : activeSection === "rutas" ? (
+          <AsignacionRutas />
         ) : activeSection !== "alertas" ? (
           <PlaceholderSection section={activeSection} />
         ) : null}
