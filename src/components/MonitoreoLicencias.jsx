@@ -127,10 +127,10 @@ export default function MonitoreoLicencias() {
     try {
       const sanitizedFileName = file.name.replace(/\s+/g, "_");
       const generatedFilename = `${Date.now()}_${sanitizedFileName}`;
-      const uploadPath = `licencias/${driverId}/${generatedFilename}`;
+      const uploadPath = `driver_licenses/${driverId}/${generatedFilename}`;
 
       const { error: uploadError } = await supabase.storage
-        .from("licencias")
+        .from("driver_licenses")
         .upload(uploadPath, file, {
           cacheControl: "3600",
           upsert: false,
@@ -142,7 +142,7 @@ export default function MonitoreoLicencias() {
       }
 
       const { data: publicData, error: publicError } = supabase.storage
-        .from("licencias")
+        .from("driver_licenses")
         .getPublicUrl(uploadPath);
 
       if (publicError) {
