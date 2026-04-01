@@ -1,51 +1,63 @@
-# ing-de-software-2 -  App Choferes Logística - HU-1 (Trazabilidad)
-## Esta HU utiliza :
-* **Frontend:** [React Native](https://reactnative.dev/) con el framework [Expo](https://expo.dev/) (SDK 54). Permite el desarrollo híbrido para iOS y Android con una sola base de código en JavaScript.
-* **Lenguaje:** [JavaScript](https://developer.mozilla.org/es/docs/Web/JavaScript) (ES6+) con tipado y soporte de componentes funcionales (Hooks).
-* **Backend (BaaS):** [Supabase](https://supabase.com/) (PostgreSQL). Gestiona la base de datos, el almacenamiento de archivos (Storage) y la autenticación.
-* **Gestión de Archivos:** [Expo FileSystem](https://docs.expo.dev/versions/latest/sdk/filesystem/) para el manejo de imágenes en modo offline y conversión a Base64.
-* **Geolocalización:** [Expo Location](https://docs.expo.dev/versions/latest/sdk/location/) para la captura de coordenadas GPS en tiempo real.
-* **Control de Versiones:** [Git](https://git-scm.com/) y [GitHub](https://github.com/benjita-unab/ing-de-software-2) para la colaboración y despliegue del código.
+Proyecto: ing-de-software-2 - App Choferes Logística
 
+1. Descripción general
+   - Aplicación móvil híbrida para choferes de logística con trazabilidad (captura de fotos, geolocalización, gestión de entregas)
+   - Frontend React (web) para panel administrativo / monitoreo de alertas y rutas.
+   - App móvil Expo React Native (carpeta app-choferes-logistica) para operativa en campo.
+   - Backend BaaS en Supabase (PostgreSQL + Auth + Storage).
 
-
-Esta versión incluye la funcionalidad completa de la Historia de Usuario 1 (HU-1): Captura de evidencia fotográfica offline, geolocalización nativa, interfaz responsive y sincronización en la nube con Supabase.
-
-## Requisitos Previos
-- Tener instalado [Node.js](https://nodejs.org/) en tu computadora.
-- Tener instalada la aplicación **Expo Go** en tu celular (disponible gratis en App Store y Google Play).
-
-
----
-
-##  Guía de Instalación y Ejecución
-
-Sigue estos 4 pasos **estrictamente en orden** para correr la aplicación sin errores en tu entorno local:
-
-### 1. Abrir la carpeta correcta
-Es vital que abras tu terminal o tu editor de código (VS Code / Cursor) **directamente** en la carpeta del proyecto móvil.
-
-cd app-choferes-logistica
- 
-### 2. Instalar las dependencias (Librerías)
-Para descargar todas las herramientas de React Native y Expo, ejecuta:
-
-npm install
-
-## 3.Configurar las Llaves de Seguridad (.env)
-
-1.Crea un archivo nuevo llamado exactamente .env.
-## IMPORTANTE :
- Este archivo debe estar adentro de la carpeta app-choferes-logistica (al mismo nivel que package.json y app.json).
+2. Stack principal
+   - JavaScript (ES6+), TypeScript en módulo móvil
+   - Expo SDK (React Native)
+   - React en web, hooks personalizados
+   - Supabase para base datos, autenticación, archivos
+   - Node.js con npm para dependencias
    
-2.Solicita las credenciales oficiales por interno y pégalas dentro del archivo con este formato:
-    EXPO_PUBLIC_SUPABASE_URL=pegar_url_aqui
-    EXPO_PUBLIC_SUPABASE_ANON_KEY=pegar_key_aqui
 
-## 4.Levantar el servidor:
-Una vez instaladas las dependencias y creado el .env, levanta el servidor de Expo.Se recomienda usar el flag -c para limpiar el caché y obligar al sistema a leer las llaves nuevas ( (Nota: Si necesitas levantar la app para compañeros que no están conectados a tu misma red Wi-Fi, utiliza el comando npx expo start -c --tunnel).)
+3. Estructura de archivos (resumen)
+   - / (raíz): componentes React web sueltos (AlertCard.jsx, AlertQueue.jsx, App.js, MapView.jsx...) + config Docker + supabaseClient.js
+   - /public: index.html
+   - /src: App.js + index.js + components UI (Alert*, AsignacionRutas, LoginPage, etc.) + hooks (useAlerts, useAuth) + lib (rutasService, supabaseClient)
+   - /app-choferes-logistica: app Expo completo
+      * app.json, package.json, tsconfig, ESLint
+      * src/components (BotonCerrarDespacho, ValidacionEntregaQR)
+      * src/services (cierreDespachoService, emailService, entregasService, pdfService)
+      * src/lib/supabaseClient.ts
+      * scripts/RegistroViaje.js, reset-project.js
+      * rutas en app/(tabs, explore)
 
-npx expo start -c
+4. Funcionalidades clave
+   - Autenticación y sesión con Supabase
+   - Sincronización de entrega y evidencia multimedia
+   - Geolocalización en tiempo real (Expo Location)
+   - Gestor de alertas y asignación de rutas (panel administrativo)
+   - Monitoreo de licencias
+   - Exportar/mostrar PDF y emails de despacho
 
-## 5.Probar en el celular:
-Abre la cámara de tu celular (en iOS) o la app de Expo Go (en Android) y escanea el código QR que aparecerá en tu terminal. ¡La aplicación compilará y estará lista para usar!
+5. Cómo ejecutar (adaptado)
+   a) Web (panel administrativo):
+      - Abrir terminal en la raíz del proyecto.
+      - Ejecutar: npm install
+      - Esperar a que se instalen dependencias.
+      - Ejecutar: npm start
+      - Abrir navegador en: http://localhost:3000 (o puerto que muestre
+        la terminal).
+      
+
+   b) Móvil (app-choferes-logistica):
+      - cd app-choferes-logistica
+      - npm install
+      - Crear archivo .env (en la misma carpeta) con 4 líneas:
+          EXPO_PUBLIC_SUPABASE_URL=<tu_url_supabase>
+          EXPO_PUBLIC_SUPABASE_ANON_KEY=<tu_key_anon_supabase>
+          EXPO_PUBLIC_RESEND_API_KEY=<tu_api_key_resend>
+          EXPO_PUBLIC_RESEND_FROM_EMAIL=<onboarding@resend.dev>
+
+      - Ejecutar: npx expo start -c
+     
+      - En Expo Go en tu celular:
+          * En android desde la app expo escanear el QR de la terminal
+          * En ios desde la camara escanear el QR de la terminal
+          * Confirmar que la app se conecta a Supabase y muestra pantalla de login.
+      - Probar: iniciar sesión, capturar evidencia, terminar despacho y sincronzar.
+
