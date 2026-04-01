@@ -9,7 +9,6 @@ import {
   obtenerRutasSinAsignar,
   obtenerConductoresActivos,
   asignarConductorARuta,
-  validarLicenciaConductor,
   obtenerEstadoLicencia,
 } from "../lib/rutasService";
 
@@ -407,7 +406,7 @@ export default function AsignacionRutas() {
             Cargando rutas...
           </div>
         ) : rutas.length === 0 ? (
-          <div style={base.alert} style={{ ...base.alert, ...base.alertWarning }}>
+          <div style={{ ...base.alert, ...base.alertWarning }}>
             ℹ️ Todas las rutas ya están asignadas
           </div>
         ) : (
@@ -452,7 +451,7 @@ export default function AsignacionRutas() {
             Cargando conductores...
           </div>
         ) : conductores.length === 0 ? (
-          <div style={base.alert} style={{ ...base.alert, ...base.alertWarning }}>
+          <div style={{ ...base.alert, ...base.alertWarning }}>
             ⚠️ No hay conductores activos
           </div>
         ) : (
