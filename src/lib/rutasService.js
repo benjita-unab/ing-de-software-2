@@ -90,13 +90,15 @@ export async function validarLicenciaConductor(conductorId) {
  * Asigna un conductor a una ruta después de validar su licencia
  * @param {string} rutaId - ID de la ruta
  * @param {string} conductorId - ID del conductor
+ * @param {string} camionId - ID del camión
+ * @param {number} cargaRequeridaKg - Carga requerida para validar la capacidad del camión
  * @returns {Promise<{success: boolean, data?: object, error?: string}>}
  */
-export async function asignarConductorARuta(rutaId, conductorId) {
-  if (!rutaId || !conductorId) {
+export async function asignarConductorARuta(rutaId, conductorId, camionId, cargaRequeridaKg = 0) {
+  if (!rutaId || !conductorId || !camionId) {
     return {
       success: false,
-      error: "Ruta y conductor son requeridos",
+      error: "Ruta, conductor y camión son requeridos",
     };
   }
 
@@ -111,15 +113,40 @@ export async function asignarConductorARuta(rutaId, conductorId) {
       };
     }
 
-    // PASO 2: Actualizar la ruta con el conductor asignado
+    // PASO 2: Validar capacidad del camión (CA-3)
+    // Se obtiene la capacidad desde la DB asumiendo un campo "capacidad_kg" o "tonelaje", y asegurando que esté disponible
+    const { data: camion, error: camionError } = await supabase
+      .from("camiones")
+      // Seleccionamos "patente" y asumiendo "capacidad_kg" para validar. Puedes ajustar este campo al real de tu DB.
+      .select("id, patente, capacidad_kg") 
+      .eq("id", camionId)
+      .single();
+
+    if (camionError || !camion) {
+      return {
+        success: false,
+        error: "No se pudo validar el camión seleccionado.",
+      };
+    }
+
+    // Validar si el camión tiene la capacidad requerida (solo si hay carga requerida en la ruta y capacidad en el camión)
+    if (cargaRequeridaKg > 0 && camion.capacidad_kg && camion.capacidad_kg < cargaRequeridaKg) {
+      return {
+        success: false,
+        error: `Asignación denegada: La capacidad del camión (${camion.capacidad_kg}kg) es menor a la carga requerida (${cargaRequeridaKg}kg).`
+      };
+    }
+
+    // PASO 3: Actualizar la ruta con el conductor y camión asignados (CA-2)
     const { data: rutaActualizada, error: updateError } = await supabase
       .from("rutas")
       .update({
         conductor_id: conductorId,
+        camion_id: camionId,
         fecha_inicio: new Date().toISOString(),
       })
       .eq("id", rutaId)
-      .select("id, conductor_id, origen, destino, fecha_inicio")
+      .select("id, conductor_id, camion_id, origen, destino, fecha_inicio")
       .single();
 
     if (updateError) {
@@ -141,6 +168,7 @@ export async function asignarConductorARuta(rutaId, conductorId) {
       data: {
         rutaId: rutaActualizada.id,
         conductorId,
+        camionId,
         origen: rutaActualizada.origen,
         destino: rutaActualizada.destino,
         asignadoEn: rutaActualizada.fecha_inicio,
@@ -170,6 +198,7 @@ export async function obtenerRutasSinAsignar() {
         destino, 
         estado, 
         eta, 
+        carga_requerida_kg,
         created_at,
         clientes(id, nombre)
       `
@@ -181,6 +210,35 @@ export async function obtenerRutasSinAsignar() {
       return {
         data: [],
         error: `Error obtener rutas: ${error.message}`,
+      };
+    }
+
+    return { data };
+  } catch (err) {
+    return {
+      data: [],
+      error: `Error inesperado: ${err.message}`,
+    };
+  }
+}
+
+/**
+ * Obtiene todos los camiones disponibles y con documentación al día
+ * @returns {Promise<{data: array, error?: string}>}
+ */
+export async function obtenerCamionesDisponibles() {
+  try {
+    const { data, error } = await supabase
+      .from("camiones")
+      // Asume patentes, estado y capacidad.
+      .select("id, patente, capacidad_kg, estado")
+      .eq("estado", "DISPONIBLE");
+      // .eq("documentacion_al_dia", true); // Descomentar si tienes el flag en DB
+
+    if (error) {
+      return {
+        data: [],
+        error: `Error obtener camiones: ${error.message}`,
       };
     }
 

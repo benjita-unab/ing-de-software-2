@@ -10,6 +10,7 @@ import {
   obtenerConductoresActivos,
   asignarConductorARuta,
   obtenerEstadoLicencia,
+  obtenerCamionesDisponibles
 } from "../lib/rutasService";
 
 const base = {
@@ -36,7 +37,7 @@ const base = {
   },
   grid: {
     display: "grid",
-    gridTemplateColumns: "1fr 1fr",
+    gridTemplateColumns: "1fr 1fr 1fr",
     gap: "20px",
   },
   label: {
@@ -160,12 +161,15 @@ const base = {
 export default function AsignacionRutas() {
   const [rutas, setRutas] = useState([]);
   const [conductores, setConductores] = useState([]);
+  const [camiones, setCamiones] = useState([]);
   const [cargandoRutas, setCargandoRutas] = useState(true);
   const [cargandoConductores, setCargandoConductores] = useState(true);
+  const [cargandoCamiones, setCargandoCamiones] = useState(true);
   const [cargandoAsignacion, setCargandoAsignacion] = useState(false);
 
   const [rutaSeleccionada, setRutaSeleccionada] = useState("");
   const [conductorSeleccionado, setConductorSeleccionado] = useState("");
+  const [camionSeleccionado, setCamionSeleccionado] = useState("");
   const [estadoLicencia, setEstadoLicencia] = useState(null);
 
   const [mensaje, setMensaje] = useState({ tipo: "", texto: "" });
@@ -187,10 +191,12 @@ export default function AsignacionRutas() {
   const cargarDatos = async () => {
     setCargandoRutas(true);
     setCargandoConductores(true);
+    setCargandoCamiones(true);
 
-    const [resRutas, resConductores] = await Promise.all([
+    const [resRutas, resConductores, resCamiones] = await Promise.all([
       obtenerRutasSinAsignar(),
       obtenerConductoresActivos(),
+      obtenerCamionesDisponibles(),
     ]);
 
     if (resRutas.error) {
@@ -205,8 +211,15 @@ export default function AsignacionRutas() {
       setConductores(resConductores.data || []);
     }
 
+    if (resCamiones.error) {
+      setMensaje({ tipo: "error", texto: `Error cargando camiones: ${resCamiones.error}` });
+    } else {
+      setCamiones(resCamiones.data || []);
+    }
+
     setCargandoRutas(false);
     setCargandoConductores(false);
+    setCargandoCamiones(false);
   };
 
   const cargarEstadoLicencia = async (conductorId) => {
@@ -220,25 +233,30 @@ export default function AsignacionRutas() {
   };
 
   const handleAsignar = async () => {
-    if (!rutaSeleccionada || !conductorSeleccionado) {
-      setMensaje({ tipo: "error", texto: "Selecciona ruta y conductor" });
+    if (!rutaSeleccionada || !conductorSeleccionado || !camionSeleccionado) {
+      setMensaje({ tipo: "error", texto: "Selecciona ruta, conductor y camión" });
       return;
     }
 
     setCargandoAsignacion(true);
     setMensaje({ tipo: "", texto: "" });
 
-    const res = await asignarConductorARuta(rutaSeleccionada, conductorSeleccionado);
+    // Buscar carga requerida (opcional, si existe ese campo en los datos de la ruta)
+    const rutaObj = rutas.find((r) => r.id === rutaSeleccionada);
+    const cargaRequeridaKg = rutaObj?.carga_requerida_kg || 0;
+
+    const res = await asignarConductorARuta(rutaSeleccionada, conductorSeleccionado, camionSeleccionado, cargaRequeridaKg);
 
     if (res.success) {
       setMensaje({
         tipo: "success",
-        texto: `✅ Ruta asignada exitosamente a ${rutaSeleccionada}`,
+        texto: `✅ Ruta asignada exitosamente con conductor y camión seleccionados.`,
       });
 
       // Actualizar listas
       setRutaSeleccionada("");
       setConductorSeleccionado("");
+      setCamionSeleccionado("");
       setEstadoLicencia(null);
 
       await cargarDatos();
@@ -352,6 +370,31 @@ export default function AsignacionRutas() {
                 {conductores.map((conductor) => (
                   <option key={conductor.id} value={conductor.id}>
                     {conductor.rut}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+          
+          {/* Columna 3: Seleccionar camión */}
+          <div>
+            <label style={base.label}>Camión (disponible)</label>
+            {cargandoCamiones ? (
+              <div style={base.loadingText}>
+                <div style={base.spinner} />
+                Cargando camiones...
+              </div>
+            ) : (
+              <select
+                style={base.select}
+                value={camionSeleccionado}
+                onChange={(e) => setCamionSeleccionado(e.target.value)}
+                disabled={cargandoAsignacion}
+              >
+                <option value="">-- Selecciona un camión --</option>
+                {camiones.map((camion) => (
+                  <option key={camion.id} value={camion.id}>
+                    {camion.patente || camion.placa} {camion.capacidad_kg ? `- ${camion.capacidad_kg}kg` : ""}
                   </option>
                 ))}
               </select>

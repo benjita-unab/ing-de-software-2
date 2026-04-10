@@ -10,6 +10,9 @@ import AlertQueue from "./AlertQueue";
 import AlertDetailPanel from "./AlertDetailPanel";
 import MonitoreoLicencias from "./MonitoreoLicencias";
 import AsignacionRutas from "./AsignacionRutas";
+import RutasActivas from "./RutasActivas";
+import FormularioCliente from "./FormularioCliente";
+import HistorialDespachos from "./HistorialDespachos";
 import { useAlerts } from "../hooks/useAlerts";
 
 export default function OperatorDashboard({ operator, onSignOut }) {
@@ -105,7 +108,15 @@ export default function OperatorDashboard({ operator, onSignOut }) {
         {activeSection === "rrhh" ? (
           <MonitoreoLicencias />
         ) : activeSection === "rutas" ? (
+          <RutasActivas />
+        ) : activeSection === "asignacion" ? (
           <AsignacionRutas />
+        ) : activeSection === "clientes" ? (
+          <div style={{ padding: "20px" }}>
+            <FormularioCliente />
+          </div>
+        ) : activeSection === "historial" ? (
+          <HistorialDespachos />
         ) : activeSection !== "alertas" ? (
           <PlaceholderSection section={activeSection} />
         ) : null}

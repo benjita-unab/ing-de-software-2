@@ -8,8 +8,11 @@ import React from "react";
 
 const NAV_ITEMS = [
   { id: "alertas",   icon: "🚨", label: "Alertas Críticas",   badge: true },
+  { id: "asignacion",icon: "📋", label: "Asignar Rutas" },
+  { id: "historial", icon: "📜", label: "Historial Despachos" },
+  { id: "clientes",  icon: "👤", label: "Crear Cliente" },
   { id: "rutas",     icon: "🗺️",  label: "Rutas Activas" },
-  { id: "despachos", icon: "📋", label: "Guías de Despacho" },
+  { id: "despachos", icon: "📑", label: "Guías de Despacho" },
   { id: "camiones",  icon: "🚛", label: "Estado de Flota" },
   { id: "mensajes",  icon: "💬", label: "Mensajería" },
   { id: "rrhh",      icon: "👥", label: "Recursos Humanos" }, // <-- NUEVO BOTÓN
