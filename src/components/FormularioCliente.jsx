@@ -70,9 +70,15 @@ export default function FormularioCliente({ onGuardado }) {
     e.preventDefault();
     setLoading(true);
     try {
+      const payload = {
+        nombre: formData.nombre,
+        rut: formData.rut,
+        contacto_telefono: formData.telefono,
+        direccion: formData.direccion
+      };
       const { error } = await supabase
         .from("clientes")
-        .insert([formData]); 
+        .insert([payload]); 
 
       if (error) throw error;
       alert("✅ Cliente guardado exitosamente");

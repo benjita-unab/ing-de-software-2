@@ -102,7 +102,7 @@ export default function RutasActivas() {
         .from("rutas")
         .select(`
           id, origen, destino, estado, created_at,
-          clientes(nombre, latitud, longitud), 
+          clientes(nombre), 
           conductores(usuario_id, rut, usuarios(nombre)),
           camiones(patente)
         `)
