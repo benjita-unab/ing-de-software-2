@@ -198,7 +198,6 @@ export async function obtenerRutasSinAsignar() {
         destino, 
         estado, 
         eta, 
-        carga_requerida_kg,
         created_at,
         clientes(id, nombre)
       `
@@ -303,7 +302,7 @@ export async function obtenerRutaDetalle(rutaId) {
         created_at,
         conductores(id, rut, licencia_numero, licencia_vencimiento),
         clientes(id, nombre),
-        camiones(id, placa)
+        camiones(id, patente)
       `
       )
       .eq("id", rutaId)

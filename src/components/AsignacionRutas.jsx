@@ -243,7 +243,8 @@ export default function AsignacionRutas() {
 
     // Buscar carga requerida (opcional, si existe ese campo en los datos de la ruta)
     const rutaObj = rutas.find((r) => r.id === rutaSeleccionada);
-    const cargaRequeridaKg = rutaObj?.carga_requerida_kg || 0;
+    // La columna fue eliminada temporalmente, usaremos 0
+    const cargaRequeridaKg = 0;
 
     const res = await asignarConductorARuta(rutaSeleccionada, conductorSeleccionado, camionSeleccionado, cargaRequeridaKg);
 
@@ -428,10 +429,10 @@ export default function AsignacionRutas() {
             ...base.buttonPrimary,
             width: "100%",
             marginTop: "16px",
-            ...(cargandoAsignacion ? base.buttonDisabled : {}),
+            ...((cargandoAsignacion || !rutaSeleccionada || !conductorSeleccionado || !camionSeleccionado) ? base.buttonDisabled : {}),
           }}
           onClick={handleAsignar}
-          disabled={cargandoAsignacion || !rutaSeleccionada || !conductorSeleccionado}
+          disabled={cargandoAsignacion || !rutaSeleccionada || !conductorSeleccionado || !camionSeleccionado}
         >
           {cargandoAsignacion ? "Asignando..." : "✅ Asignar Ruta"}
         </button>
