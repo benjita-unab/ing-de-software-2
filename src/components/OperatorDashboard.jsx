@@ -4,18 +4,58 @@
 // Estructura: Sidebar | Cola de Alertas | Panel de Detalle
 // ─────────────────────────────────────────────────────────────────────────────
 
-import React, { useState } from "react";
-import Sidebar from "./Sidebar";
+import React, { useEffect, useMemo, useState } from "react";
+import Sidebar, { NAV_ITEMS } from "./Sidebar";
 import AlertQueue from "./AlertQueue";
 import AlertDetailPanel from "./AlertDetailPanel";
 import MonitoreoLicencias from "./MonitoreoLicencias";
 import AsignacionRutas from "./AsignacionRutas";
+import WIPView from "./WIPView";
 import { useAlerts } from "../hooks/useAlerts";
 
 export default function OperatorDashboard({ operator, onSignOut }) {
   const { alerts, loading, acknowledgeAlert, resolveAlert: rawResolveAlert } = useAlerts();
   const [activeSection, setActiveSection]   = useState("alertas");
   const [selectedAlert, setSelectedAlert]   = useState(null);
+  const [wipSourceModule, setWipSourceModule] = useState("");
+
+  const disabledModuleIds = useMemo(
+    () => new Set(NAV_ITEMS.filter((item) => item.disabled).map((item) => item.id)),
+    []
+  );
+
+  const sectionLabelMap = useMemo(
+    () => Object.fromEntries(NAV_ITEMS.map((item) => [item.id, item.label])),
+    []
+  );
+
+  useEffect(() => {
+    // #99 HU19: resolver ruta inicial en hash y redirigir deshabilitadas a WIP.
+    const hashSection = window.location.hash.replace(/^#\/?/, "").split("?")[0];
+    if (!hashSection) return;
+
+    if (disabledModuleIds.has(hashSection)) {
+      setWipSourceModule(sectionLabelMap[hashSection] ?? hashSection);
+      setActiveSection("wip");
+      window.history.replaceState(null, "", "#/wip");
+      return;
+    }
+
+    setActiveSection(hashSection);
+  }, [disabledModuleIds, sectionLabelMap]);
+
+  const handleNavigation = (targetSection, navItem) => {
+    // #98 HU19: bloquear módulos no desarrollados y enviar a vista WIP.
+    if (navItem?.disabled || disabledModuleIds.has(targetSection)) {
+      setWipSourceModule(navItem?.label ?? sectionLabelMap[targetSection] ?? targetSection);
+      setActiveSection("wip");
+      window.history.replaceState(null, "", "#/wip");
+      return;
+    }
+
+    setActiveSection(targetSection);
+    window.history.replaceState(null, "", `#/${targetSection}`);
+  };
 
   const handleResolveAlert = async (alertId) => {
     const success = await rawResolveAlert(alertId);
@@ -53,7 +93,7 @@ export default function OperatorDashboard({ operator, onSignOut }) {
       {/* ── Sidebar ── */}
       <Sidebar
         activeSection={activeSection}
-        onNavigate={setActiveSection}
+        onNavigate={handleNavigation}
         urgentCount={urgentCount}
         operator={operator}
         onSignOut={onSignOut}
@@ -102,7 +142,9 @@ export default function OperatorDashboard({ operator, onSignOut }) {
         )}
 
         {/* Sección de RRHH y placeholders para el resto */}
-        {activeSection === "rrhh" ? (
+        {activeSection === "wip" ? (
+          <WIPView moduleLabel={wipSourceModule} />
+        ) : activeSection === "rrhh" ? (
           <MonitoreoLicencias />
         ) : activeSection === "rutas" ? (
           <AsignacionRutas />
@@ -147,6 +189,7 @@ function TopBar({ urgentCount, section, operator }) {
     despachos: "📋 Guías de Despacho",
     camiones:  "🚛 Estado de Flota",
     mensajes:  "💬 Mensajería",
+    wip:       "🚧 Módulo en Desarrollo",
   };
 
   return (

@@ -5,13 +5,15 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import React from "react";
+import Badge from "./Badge";
 
-const NAV_ITEMS = [
+// #98 HU19: Señalización y bloqueo de módulos no desarrollados.
+export const NAV_ITEMS = [
   { id: "alertas",   icon: "🚨", label: "Alertas Críticas",   badge: true },
   { id: "rutas",     icon: "🗺️",  label: "Rutas Activas" },
-  { id: "despachos", icon: "📋", label: "Guías de Despacho" },
-  { id: "camiones",  icon: "🚛", label: "Estado de Flota" },
-  { id: "mensajes",  icon: "💬", label: "Mensajería" },
+  { id: "despachos", icon: "📋", label: "Guías de Despacho", statusBadge: "WIP", disabled: true },
+  { id: "camiones",  icon: "🚛", label: "Estado de Flota", statusBadge: "WIP", disabled: true },
+  { id: "mensajes",  icon: "💬", label: "Mensajería", statusBadge: "Próximamente", disabled: true },
   { id: "rrhh",      icon: "👥", label: "Recursos Humanos" }, // <-- NUEVO BOTÓN
 ];
 
@@ -70,10 +72,11 @@ export default function Sidebar({
         {NAV_ITEMS.map((item) => {
           const isActive  = activeSection === item.id;
           const showBadge = item.badge && urgentCount > 0;
+          const isDisabled = Boolean(item.disabled);
           return (
             <button
               key={item.id}
-              onClick={() => onNavigate(item.id)}
+              onClick={() => onNavigate(item.id, item)}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -83,7 +86,7 @@ export default function Sidebar({
                 border: isActive ? "1px solid #1565c044" : "1px solid transparent",
                 borderRadius: "8px",
                 padding: "10px 12px",
-                cursor: "pointer",
+                cursor: isDisabled ? "not-allowed" : "pointer",
                 marginBottom: "4px",
                 color: isActive ? "#fff" : "#778",
                 fontFamily: "'Syne', sans-serif",
@@ -92,10 +95,13 @@ export default function Sidebar({
                 textAlign: "left",
                 transition: "all 0.15s ease",
                 position: "relative",
+                opacity: isDisabled ? 0.55 : 1,
               }}
+              aria-disabled={isDisabled}
             >
               <span style={{ fontSize: "16px" }}>{item.icon}</span>
               <span style={{ flex: 1 }}>{item.label}</span>
+              {item.statusBadge && <Badge text={item.statusBadge} />}
               {showBadge && (
                 <span
                   style={{
