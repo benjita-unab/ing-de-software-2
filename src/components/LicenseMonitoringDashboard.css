@@ -1,0 +1,387 @@
+/* src/components/LicenseMonitoringDashboard.css */
+/* ─────────────────────────────────────────────────────────────────────────── */
+/* Estilos para el dashboard de monitoreo de licencias */
+/* ─────────────────────────────────────────────────────────────────────────── */
+
+.monitoring-dashboard {
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.dashboard-container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* ── Header ── */
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 28px;
+  padding-bottom: 20px;
+  border-bottom: 2px solid rgba(0, 0, 0, 0.05);
+}
+
+.dashboard-title {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 800;
+  color: #1a202c;
+  letter-spacing: -0.5px;
+}
+
+.dashboard-subtitle {
+  margin: 8px 0 0 0;
+  font-size: 14px;
+  color: #666;
+  font-weight: 400;
+}
+
+.refresh-btn {
+  background: white;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  width: 48px;
+  height: 48px;
+  font-size: 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.refresh-btn:hover:not(:disabled) {
+  border-color: #cbd5e0;
+  background: #f7fafc;
+  transform: scale(1.05);
+}
+
+.refresh-btn.refreshing {
+  animation: spin 0.6s linear infinite;
+}
+
+.refresh-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ── Stats Grid ── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 28px 0;
+}
+
+.stat-card {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: all 0.2s;
+  border: 1px solid #f0f0f0;
+}
+
+.stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.stat-icon {
+  font-size: 32px;
+}
+
+.stat-content {
+  flex: 1;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1a202c;
+  margin: 0;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: #718096;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+  margin: 4px 0 0 0;
+}
+
+.stat-card.critical-card {
+  border-left: 4px solid #e53e3e;
+  background: #fff5f5;
+}
+
+.stat-card.warning-card {
+  border-left: 4px solid #d69e2e;
+  background: #fffaf0;
+}
+
+/* ── Loading Container ── */
+.loading-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 32px;
+  background: white;
+  border-radius: 12px;
+  color: #666;
+  margin: 24px 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 3px solid #e0e0e0;
+  border-top-color: #1a202c;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── Success Container ── */
+.success-container {
+  text-align: center;
+  padding: 48px 32px;
+  background: white;
+  border-radius: 12px;
+  margin: 24px 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border-top: 4px solid #48bb78;
+}
+
+.success-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  display: block;
+}
+
+.success-container h3 {
+  margin: 0 0 8px 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #1a202c;
+}
+
+.success-container p {
+  margin: 0;
+  color: #666;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* ── Error Container ── */
+.error-container {
+  text-align: center;
+  padding: 48px 32px;
+  background: #fff5f5;
+  border-radius: 12px;
+  margin: 24px 0;
+  border: 2px solid #fed7d7;
+}
+
+.error-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  display: block;
+}
+
+.error-container h3 {
+  margin: 0 0 8px 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #c53030;
+}
+
+.error-container p {
+  margin: 0;
+  color: #742a2a;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* ── Alerts List Section ── */
+.alerts-list-section {
+  margin-top: 28px;
+}
+
+.section-title {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #1a202c;
+}
+
+.alerts-detailed-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.alert-list-item {
+  display: flex;
+  gap: 16px;
+  padding: 16px;
+  background: white;
+  border-radius: 12px;
+  border-left: 4px solid;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: all 0.2s;
+}
+
+.alert-list-item:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.alert-list-item.priority-alta {
+  border-left-color: #d69e2e;
+  background: #fffaf0;
+}
+
+.alert-list-item.priority-critica {
+  border-left-color: #e53e3e;
+  background: #fff5f5;
+}
+
+.alert-list-item.priority-normal {
+  border-left-color: #3182ce;
+  background: #f0f4ff;
+}
+
+.alert-list-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.alert-list-content {
+  flex: 1;
+}
+
+.alert-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.alert-list-type {
+  font-weight: 600;
+  color: #1a202c;
+  font-size: 14px;
+}
+
+.alert-list-time {
+  font-size: 12px;
+  color: #999;
+  font-family: "Monaco", "Courier New", monospace;
+}
+
+.alert-list-description {
+  margin: 0;
+  color: #555;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.alert-list-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.small-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.2s;
+}
+
+.small-btn:hover {
+  transform: scale(1.05);
+}
+
+.small-btn.check {
+  color: #48bb78;
+  border-color: #48bb78;
+}
+
+.small-btn.check:hover {
+  background: #f0fff4;
+}
+
+.small-btn.close {
+  color: #e53e3e;
+  border-color: #e53e3e;
+}
+
+.small-btn.close:hover {
+  background: #fff5f5;
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .monitoring-dashboard {
+    padding: 16px;
+  }
+
+  .dashboard-header {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .dashboard-title {
+    font-size: 24px;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .stat-card {
+    padding: 16px;
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .stat-value {
+    font-size: 24px;
+  }
+
+  .alert-list-item {
+    gap: 12px;
+  }
+
+  .alert-list-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .alert-list-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}

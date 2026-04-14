@@ -1,0 +1,153 @@
+/* src/components/MonitoreoLicencias.css */
+/* ─────────────────────────────────────────────────────────────────────────── */
+/* Estilos para el dashboard de monitoreo de licencias */
+/* ─────────────────────────────────────────────────────────────────────────── */
+
+.monitoreo-licencias {
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  margin-bottom: 24px;
+}
+
+/* ── Estadísticas ── */
+.stats-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.stat-card {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+  transition: all 0.2s;
+}
+
+.stat-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.stat-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 500;
+}
+
+.stat-card.priority-alta {
+  border-left: 4px solid #ffc107;
+  background: #fff9e6;
+}
+
+.stat-card.priority-alta .stat-value {
+  color: #ff8c00;
+}
+
+.stat-card.priority-critica {
+  border-left: 4px solid #dc3545;
+  background: #fff5f5;
+}
+
+.stat-card.priority-critica .stat-value {
+  color: #dc3545;
+}
+
+/* ── Loading Indicator ── */
+.loading-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  color: #666;
+  font-size: 13px;
+  margin-top: 12px;
+}
+
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #e0e0e0;
+  border-top-color: #666;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── No Alerts State ── */
+.no-alerts {
+  text-align: center;
+  padding: 40px 20px;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  margin-top: 12px;
+}
+
+.no-alerts-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.no-alerts p {
+  margin: 0;
+  color: #666;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ── Error State ── */
+.monitoreo-error {
+  background: #f8d7da;
+  border: 1px solid #f5c6cb;
+  border-radius: 8px;
+  padding: 16px;
+  color: #721c24;
+}
+
+.monitoreo-error p {
+  margin: 0;
+  font-size: 13px;
+}
+
+/* ── Responsive ── */
+@media (max-width: 640px) {
+  .monitoreo-licencias {
+    padding: 12px;
+  }
+
+  .stats-container {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .stat-value {
+    font-size: 24px;
+  }
+
+  .stat-label {
+    font-size: 11px;
+  }
+}

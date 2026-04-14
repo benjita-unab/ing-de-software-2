@@ -1,6 +1,8 @@
 // src/App.js
 import React from "react";
 import OperatorDashboard from "./components/OperatorDashboard";
+import LicenseMonitoringDashboard from "./LicenseMonitoringDashboard";
+// Luego usarlo dentro del componente
 
 // ── Operador de demo (acceso sin login) ────────────────────────
 // Para reactivar el login, descomentar el bloque de abajo y
