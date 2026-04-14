@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useSyncScheduler } from '../src/hooks/useSyncScheduler';
 import {
   View,
   Text,
@@ -85,20 +86,21 @@ function StageCard({
         )}
       </TouchableOpacity>
 
-      <TouchableOpacity
-        style={[styles.btnSync, (pendingCount === 0 || isSyncing) && styles.btnDisabled]}
-        onPress={onSyncNow}
-        disabled={pendingCount === 0 || isSyncing}
-      >
-        {isSyncing ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Sincronizar ahora</Text>}
-      </TouchableOpacity>
-
-      <View style={styles.syncPill}>
-        <Text style={styles.syncPillText}>
-          {pendingCount > 0
-            ? `Pendiente de Sincronizacion (${pendingCount})`
-            : 'Todos los registros sincronizados'}
+      <View style={styles.syncStatusContainer}>
+        <View
+          style={[
+            styles.statusDot,
+            { backgroundColor: pendingCount === 0 ? '#16A34A' : '#F59E0B' }
+          ]}
+        />
+        <Text style={styles.statusText}>
+          {pendingCount === 0 ? 'Sincronizado' : 'En espera de sincronización'}
         </Text>
+        {pendingCount > 0 && (
+          <Text style={styles.statusPending}>
+            ({pendingCount} pendientes)
+          </Text>
+        )}
       </View>
     </View>
   );
@@ -166,7 +168,7 @@ export default function RegistroViaje({ onSyncComplete }) {
       setIsCapturing(true);
       const captureTimestamp = new Date().toISOString();
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.7 });
-      
+
       const position = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
       });
@@ -338,7 +340,16 @@ export default function RegistroViaje({ onSyncComplete }) {
   const registrosEtapaActual = registros.filter((record) => record.stage === etapa);
   const fotoActual = registrosEtapaActual[registrosEtapaActual.length - 1] || null;
   const pendingCount = registros.filter((record) => !record.synced).length;
-  const pendientes = registros.filter((record) => !record.synced).length;
+  const pendientes = pendingCount; // alias para la vista de viaje finalizado
+
+  // ── Scheduler automático con backoff Fibonacci ──────────────────────────────
+  // Se detiene solo cuando pendingCount === 0, y se reactiva si vuelven pendientes.
+  // NO genera múltiples timers: el hook garantiza un único timer activo.
+  useSyncScheduler({
+    pendingCount,
+    onSync: handleSyncNow,
+    enabled: !viajeFinalizado, // opcional: no seguir intentando tras finalizar el viaje
+  });
 
   useEffect(() => {
     if (onSyncComplete) {
@@ -482,28 +493,37 @@ const styles = StyleSheet.create({
   thumbMeta: { gap: 4 },
   thumbTitle: { fontSize: 15, fontWeight: '700', color: '#1D2939' },
   thumbText: { fontSize: 13, color: '#475467' },
-  syncPill: {
-    marginTop: 14,
-    alignSelf: 'center',
-    backgroundColor: '#FFF4ED',
+  syncStatusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 16,
+    padding: 12,
+    backgroundColor: '#fff',
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#FED7AA',
-    borderRadius: 50,
-    paddingVertical: 7,
-    paddingHorizontal: 14,
+    borderColor: '#E5EAF2',
   },
-  syncPillText: { color: '#C2410C', fontWeight: '600', fontSize: 12 },
+  statusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 8,
+  },
+  statusText: {
+    fontSize: 14,
+    color: '#475467',
+    fontWeight: '500',
+  },
+  statusPending: {
+    fontSize: 14,
+    color: '#F59E0B',
+    fontWeight: '600',
+    marginLeft: 6,
+  },
   footer: { padding: 20, paddingBottom: 34, backgroundColor: '#fff' },
   btnCamara: {
     backgroundColor: '#2563EB',
-    borderRadius: 12,
-    paddingVertical: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  btnSync: {
-    marginTop: 10,
-    backgroundColor: '#6D28D9',
     borderRadius: 12,
     paddingVertical: 15,
     alignItems: 'center',
