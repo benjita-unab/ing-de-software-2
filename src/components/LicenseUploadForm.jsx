@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import supabaseClient from '../lib/supabaseClient'; // Descomenta cuando necesites integrar con Supabase
-import { supabaseClient } from '../supabaseClient'; // O simplemente 'supabase' dependiendo de cómo lo hayas exportado
+import { supabase } from '../lib/supabaseClient'; // Integración con Supabase
+
 /**
  * Componente LicenseUploadForm
  * 
