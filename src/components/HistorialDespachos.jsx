@@ -65,7 +65,7 @@ export default function HistorialDespachos() {
       const { data, error } = await supabase
         .from("rutas")
         .select(`
-          id, origen, destino, estado, created_at,
+          *,
           clientes(nombre), 
           conductores(usuario_id, rut, usuarios(nombre)),
           camiones(patente)
@@ -104,6 +104,7 @@ export default function HistorialDespachos() {
                   <th style={base.th}>Destino</th>
                   <th style={base.th}>Finalizado</th>
                   <th style={base.th}>Estado</th>
+                  <th style={base.th}>Ficha Adjunta</th>
                 </tr>
               </thead>
               <tbody>
@@ -124,6 +125,20 @@ export default function HistorialDespachos() {
                     </td>
                     <td style={base.td}>
                       <span style={base.badge}>✅ {despacho.estado}</span>
+                    </td>
+                    <td style={base.td}>
+                      {despacho.ficha_despacho_url ? (
+                        <a 
+                          href={despacho.ficha_despacho_url} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          style={{ color: "#3B82F6", textDecoration: "none", fontWeight: 600, fontSize: "12px" }}
+                        >
+                          📄 Ver Ficha
+                        </a>
+                      ) : (
+                        <span style={{ color: "#94A3B8", fontSize: "12px" }}>Sin ficha</span>
+                      )}
                     </td>
                   </tr>
                 ))}

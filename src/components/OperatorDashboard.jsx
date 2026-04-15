@@ -11,6 +11,7 @@ import AlertDetailPanel from "./AlertDetailPanel";
 import MonitoreoLicencias from "./MonitoreoLicencias";
 import AsignacionRutas from "./AsignacionRutas";
 import RutasActivas from "./RutasActivas";
+import GuiasDespacho from "./GuiasDespacho";
 import FormularioCliente from "./FormularioCliente";
 import HistorialDespachos from "./HistorialDespachos";
 import { useAlerts } from "../hooks/useAlerts";
@@ -117,6 +118,8 @@ export default function OperatorDashboard({ operator, onSignOut }) {
           </div>
         ) : activeSection === "historial" ? (
           <HistorialDespachos />
+        ) : activeSection === "despachos" ? (
+          <GuiasDespacho />
         ) : activeSection !== "alertas" ? (
           <PlaceholderSection section={activeSection} />
         ) : null}

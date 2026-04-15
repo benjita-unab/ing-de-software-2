@@ -66,7 +66,7 @@ const base = {
   }
 };
 
-export default function RutasActivas() {
+export default function GuiasDespacho() {
   const [rutas, setRutas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploadingId, setUploadingId] = useState(null);
@@ -75,24 +75,8 @@ export default function RutasActivas() {
   const googleMapRef = useRef(null);
   const markersRef = useRef([]);
 
-  // Cargar Google Maps
-  useEffect(() => {
-    if (!MAPS_API_KEY) return;
-    if (window.google?.maps) {
-      setMapLoaded(true);
-      return;
-    }
-    const scriptId = "google-maps-script";
-    if (!document.getElementById(scriptId)) {
-      const script = document.createElement("script");
-      script.id = scriptId;
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${MAPS_API_KEY}&libraries=marker&v=beta`;
-      script.async = true;
-      script.defer = true;
-      script.onload = () => setMapLoaded(true);
-      document.head.appendChild(script);
-    }
-  }, []);
+  // REMOVIENDO MAPA PARA ESTA VISTA DE GUIAS
+  // ----------------------------------------
 
   // Cargar Rutas
   const cargarRutasEnCurso = async () => {
@@ -124,73 +108,78 @@ export default function RutasActivas() {
     cargarRutasEnCurso();
   }, []);
 
-  // Inicializar o actualizar marcadores en el mapa
-  useEffect(() => {
-    if (!mapLoaded || !mapRef.current || rutas.length === 0) return;
+  const handleSubirFicha = async (rutaId, event) => {
+    const file = event.target.files[0];
+    if (!file) return;
 
-    if (!googleMapRef.current) {
-      googleMapRef.current = new window.google.maps.Map(mapRef.current, {
-        center: { lat: -33.4489, lng: -70.6693 },
-        zoom: 11,
-        mapTypeId: "roadmap",
-        styles: [
-          { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
-          { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
-          { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
-        ],
-        disableDefaultUI: false,
-      });
-    }
+    setUploadingId(rutaId);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `ficha_${rutaId}_${Date.now()}.${fileExt}`;
 
-    // Limpiar marcadores viejos
-    markersRef.current.forEach(m => m.setMap(null));
-    markersRef.current = [];
+      // 1. Subir a Supabase Storage
+      const { data, error } = await supabase.storage
+        .from("fichas_despacho")
+        .upload(fileName, file);
 
-    const bounds = new window.google.maps.LatLngBounds();
-    let hasValidCoords = false;
+      if (error) throw error;
 
-    rutas.forEach((ruta) => {
-      const lat = ruta.clientes?.latitud;
-      const lng = ruta.clientes?.longitud;
-      
-      if (lat && lng) {
-        hasValidCoords = true;
-        const pos = { lat: Number(lat), lng: Number(lng) };
-        const marker = new window.google.maps.Marker({
-          position: pos,
-          map: googleMapRef.current,
-          title: `🚜 Destino: ${ruta.clientes?.nombre || "Cliente"} (${ruta.estado})`,
-          icon: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png"
-        });
-        
-        const info = new window.google.maps.InfoWindow({
-          content: `<div style="color:#000;padding:5px;"><b>${ruta.clientes?.nombre || "Desconocido"}</b><br/>🚚 Camión: ${ruta.camiones?.patente || "S/A"}<br/>⏳ Estado: ${ruta.estado || "En Ruta"}</div>`
-        });
-        
-        marker.addListener("click", () => {
-          info.open(googleMapRef.current, marker);
-        });
+      // 2. Obtener URL pública
+      const { data: publicUrlData } = supabase.storage
+        .from("fichas_despacho")
+        .getPublicUrl(data.path);
 
-        markersRef.current.push(marker);
-        bounds.extend(pos);
+      if (publicUrlData) {
+        // 3. Actualizar la tabla de 'rutas' con la URL
+        const { error: dbError } = await supabase
+          .from("rutas")
+          .update({ ficha_despacho_url: publicUrlData.publicUrl })
+          .eq("id", rutaId);
+
+        if (dbError) throw dbError;
+        alert("Ficha de despacho subida exitosamente.");
+        cargarRutasEnCurso();
       }
-    });
+    } catch (err) {
+      console.error("Error subiendo ficha:", err);
+      alert("No se pudo subir la ficha de despacho. Verifica los permisos de almacenamiento en Supabase.");
+    } finally {
+      setUploadingId(null);
+    }
+  };
 
-    if (hasValidCoords) {
-      googleMapRef.current.fitBounds(bounds);
+  const handleFinalizarDespacho = async (ruta) => {
+    if (!ruta.ficha_despacho_url) {
+      alert("Acción bloqueada: No se puede finalizar el despacho. Debes adjuntar al menos una Ficha de Despacho física.");
+      return;
     }
 
-  }, [mapLoaded, rutas]);
+    if (window.confirm("¿Estás seguro de finalizar este despacho?")) {
+      try {
+        const { error } = await supabase
+          .from("rutas")
+          .update({ estado: "ENTREGADO" })
+          .eq("id", ruta.id);
+
+        if (error) throw error;
+        alert("Despacho finalizado con éxito.");
+        cargarRutasEnCurso();
+      } catch (err) {
+        console.error("Error al finalizar despacho:", err);
+        alert("Error al intentar finalizar el despacho.");
+      }
+    }
+  };
 
   return (
     <div style={base.container}>
       <div style={base.card}>
-        <div style={base.title}>📍 Rutas Activas (En Curso)</div>
+        <div style={base.title}>� Gestión de Guías de Despacho (Rutas en curso)</div>
         
         {loading ? (
-          <p style={{ color: "#94A3B8", fontSize: "14px" }}>Cargando rutas en curso...</p>
+          <p style={{ color: "#94A3B8", fontSize: "14px" }}>Cargando guías en curso...</p>
         ) : rutas.length === 0 ? (
-          <p style={{ color: "#94A3B8", fontSize: "14px" }}>No hay rutas en curso en este momento.</p>
+          <p style={{ color: "#94A3B8", fontSize: "14px" }}>No hay rutas pendientes de guías en este momento.</p>
         ) : (
           <>
             <div style={{ overflowX: "auto" }}>
@@ -202,6 +191,7 @@ export default function RutasActivas() {
                     <th style={base.th}>Vehículo / Conductor</th>
                     <th style={base.th}>Inicio</th>
                     <th style={base.th}>Estado</th>
+                    <th style={base.th}>Acciones / Ficha</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -228,19 +218,49 @@ export default function RutasActivas() {
                           {ruta.estado === "PENDIENTE" ? "⏳" : "🚛"} {ruta.estado || "EN CURSO"}
                         </span>
                       </td>
+                      <td style={base.td}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                          {/* Botón para subir o ver ficha */}
+                          {ruta.ficha_despacho_url ? (
+                            <a href={ruta.ficha_despacho_url} target="_blank" rel="noopener noreferrer" style={{ color: "#3B82F6", fontSize: "12px", textDecoration: "none", fontWeight: 600 }}>
+                              📄 Ver Ficha Adjunta
+                            </a>
+                          ) : (
+                            <label style={{ fontSize: "12px", color: "#10B981", cursor: "pointer", fontWeight: 600 }}>
+                              {uploadingId === ruta.id ? "⏳ Subiendo..." : "📸 Subir Ficha"}
+                              <input 
+                                type="file" 
+                                accept="image/*" 
+                                style={{ display: "none" }} 
+                                onChange={(e) => handleSubirFicha(ruta.id, e)} 
+                                disabled={uploadingId === ruta.id}
+                              />
+                            </label>
+                          )}
+
+                          {/* Botón de Finalizar Despacho */}
+                          <button
+                            onClick={() => handleFinalizarDespacho(ruta)}
+                            style={{
+                              background: ruta.ficha_despacho_url ? "#10B981" : "#4B5563",
+                              color: "#fff",
+                              border: "none",
+                              padding: "6px 12px",
+                              borderRadius: "4px",
+                              fontSize: "12px",
+                              cursor: "pointer",
+                              fontWeight: 600
+                            }}
+                            title={!ruta.ficha_despacho_url ? "Debe subir la ficha para finalizar" : "Finalizar Despacho"}
+                          >
+                            ✅ Finalizar Despacho
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
-
-            {/* Mapa de Destinos */}
-            <div style={base.mapContainer} ref={mapRef}>
-              {!mapLoaded && (
-                <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "#60A5FA" }}>
-                  Verificando Google Maps...
-                </div>
-              )}
             </div>
           </>
         )}

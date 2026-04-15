@@ -11,7 +11,9 @@ const TABLE = "incidencias";
 
 // ── Mapeo de valores de tipo/estado/prioridad ───────────────────────────────
 const TIPO_MAP = {
-  EMERGENCIA:   "BOTON_PANICO",
+  EMERGENCIA:   "EMERGENCIA",
+  ALERTA:       "ALERTA",
+  NORMAL:       "NORMAL",
   DESVIO:       "DESVIO_RUTA",
   DESVIO_RUTA:  "DESVIO_RUTA",
   ANOMALIA:     "ANOMALIA",
@@ -20,24 +22,53 @@ const TIPO_MAP = {
 
 const ESTADO_MAP = {
   PENDIENTE:  "PENDIENTE",
+  pendiente:  "PENDIENTE",
+  "en curso": "EN_GESTION",
   EN_GESTION: "EN_GESTION",
+  en_gestion: "EN_GESTION",
   ATENDIDO:   "EN_GESTION",
+  atendido:   "EN_GESTION",
   RESUELTO:   "RESUELTA",
+  resuelto:   "RESUELTA",
   RESUELTA:   "RESUELTA",
+  resuelta:   "RESUELTA",
 };
 
 const PRIORIDAD_MAP = {
   CRITICA:  "CRITICA",
+  critica:  "CRITICA",
   ALTA:     "ALTA",
+  alta:     "ALTA",
   MEDIA:    "NORMAL",
+  media:    "NORMAL",
   NORMAL:   "NORMAL",
+  normal:   "NORMAL",
   BAJA:     "BAJA",
+  baja:     "BAJA",
 };
 
 // ── Normaliza una fila de `incidencias` al formato de la UI ─────────────────
 function mapIncidencia(row) {
-  const conductor = row.conductores ?? {};
-  const driverName = conductor.usuarios?.nombre || "—";
+  console.log("Fila recibida de Supabase:", row); // Para poder ver en la consola web exactamente qué está trayendo
+
+  const conductor = row.conductores || {};
+  
+  // Probamos multiples variaciones comunes por las que Supabase puede retornar el nombre:
+  let driverName = "—";
+  if (conductor.usuarios) {
+    if (Array.isArray(conductor.usuarios) && conductor.usuarios.length > 0) {
+      driverName = conductor.usuarios[0].nombre || "—";
+    } else if (conductor.usuarios.nombre) {
+      driverName = conductor.usuarios.nombre;
+    }
+  } else if (conductor.usuario && conductor.usuario.nombre) {
+    driverName = conductor.usuario.nombre;
+  }
+
+  // Si envías el nombre directamente en la tabla incidencias, tiene prioridad
+  if (row.conductor_nombre) {
+    driverName = row.conductor_nombre;
+  }
 
   // Patente: puede estar en camiones (via rutas) o en el row directamente
   const vehiclePlate =
@@ -47,15 +78,18 @@ function mapIncidencia(row) {
     row.vehiculo_patente ??
     "—";
 
-  return {
-    // Identificadores
-    id:                row.identificación ?? row.id,
-    _original_id:      row.identificación ?? row.id,
+// Resolviendo el Enum de la base de datos
+    let computedStatus = ESTADO_MAP[row.estado?.toLowerCase()] ?? ESTADO_MAP[row.estado] ?? "PENDIENTE";
 
-    // Tipo y prioridad
-    alert_type:        TIPO_MAP[row.tipo]   ?? row.tipo   ?? "ANOMALIA",
-    priority:          PRIORIDAD_MAP[row.prioridad] ?? "ALTA",
-    status:            ESTADO_MAP[row.estado]        ?? "PENDIENTE",
+    return {
+      // Identificadores
+      id:                row.identificación ?? row.id,
+      _original_id:      row.identificación ?? row.id,
+
+      // Tipo y prioridad
+      alert_type:        TIPO_MAP[row.tipo?.toUpperCase()] ?? TIPO_MAP[row.tipo] ?? row.tipo ?? "ANOMALIA",
+      priority:          PRIORIDAD_MAP[row.prioridad] ?? "ALTA",
+      status:            computedStatus,
 
     // Datos del conductor y vehículo (CA-2)
     driver_name:       driverName,
@@ -96,6 +130,7 @@ const SELECT_QUERY = `
   *,
   conductores (
     id,
+    usuario_id,
     usuarios (
       nombre
     )
@@ -125,7 +160,47 @@ export function useAlerts() {
       if (error) {
         console.error("Error al cargar incidencias:", error.message);
       } else if (data) {
-        setAlerts(sortAlerts(data.map(mapIncidencia)));
+        // --- JOIN MANUAL DE EMERGENCIA PARA NOMBRES (Si falla Supabase) ---
+        const rows = [...data];
+        
+        // Extraemos IDs únicos de conductores si el join automático de PostgREST falló
+        const conductorIds = [...new Set(rows.map((r) => r.conductor_id).filter(Boolean))];
+        
+        if (conductorIds.length > 0) {
+          // Buscamos los datos de esos conductores
+          const { data: rawConductores } = await supabase
+            .from("conductores")
+            .select("*")
+            .in("id", conductorIds);
+            
+          if (rawConductores && rawConductores.length > 0) {
+            // Buscamos los usuarios asociados a esos conductores
+            const usuarioIds = [...new Set(rawConductores.map((c) => c.usuario_id).filter(Boolean))];
+            let rawUsuarios = [];
+            
+            if (usuarioIds.length > 0) {
+              const { data: usersData } = await supabase
+                .from("usuarios")
+                .select("id, nombre")
+                .in("id", usuarioIds);
+              rawUsuarios = usersData || [];
+            }
+            
+            // Inyectamos el nombre del conductor a las filas si es que faltaba (el fallback entra en acción)
+            rows.forEach((row) => {
+              if (row.conductor_id && !row.conductor_nombre) {
+                const cond = rawConductores.find((c) => c.id === row.conductor_id);
+                if (cond) {
+                  const usr = rawUsuarios.find((u) => u.id === cond.usuario_id);
+                  if (usr) row.conductor_nombre = usr.nombre;
+                }
+              }
+            });
+          }
+        }
+        // ------------------------------------------------------------------
+
+        setAlerts(sortAlerts(rows.map(mapIncidencia)));
       }
       setLoading(false);
     }
@@ -151,7 +226,17 @@ export function useAlerts() {
               .single();
 
             if (data) {
-              const mapped = mapIncidencia(data);
+              const row = { ...data };
+              // --- FULL JOIN MANUAL DE NUEVA FILA ---
+              if (row.conductor_id && !row.conductor_nombre) {
+                const { data: cond } = await supabase.from("conductores").select("*").eq("id", row.conductor_id).single();
+                if (cond && cond.usuario_id) {
+                  const { data: usr } = await supabase.from("usuarios").select("nombre").eq("id", cond.usuario_id).single();
+                  if (usr) row.conductor_nombre = usr.nombre;
+                }
+              }
+              // ------------------------------------
+              const mapped = mapIncidencia(row);
               if (["CRITICA", "ALTA"].includes(mapped.priority)) playAlarm();
               setAlerts((prev) => sortAlerts([mapped, ...prev]));
             }
@@ -182,7 +267,7 @@ export function useAlerts() {
     const { error } = await supabase
       .from(TABLE)
       .update({
-        estado:         "EN_GESTION",
+        estado:         "en curso", 
         atendido_por:   operatorId,
         fecha_atencion: new Date().toISOString(),
       })
@@ -200,7 +285,7 @@ export function useAlerts() {
     const { error } = await supabase
       .from(TABLE)
       .update({
-        estado:            "RESUELTO",
+        estado:            "resuelto",
         fecha_resolucion:  new Date().toISOString(),
       })
       .eq("id", alertId);
