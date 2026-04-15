@@ -1,7 +1,5 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
-
-const MAPS_API_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
 
 const base = {
   container: {
@@ -70,10 +68,6 @@ export default function GuiasDespacho() {
   const [rutas, setRutas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploadingId, setUploadingId] = useState(null);
-  const [mapLoaded, setMapLoaded] = useState(false);
-  const mapRef = useRef(null);
-  const googleMapRef = useRef(null);
-  const markersRef = useRef([]);
 
   // REMOVIENDO MAPA PARA ESTA VISTA DE GUIAS
   // ----------------------------------------

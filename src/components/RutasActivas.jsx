@@ -69,7 +69,6 @@ const base = {
 export default function RutasActivas() {
   const [rutas, setRutas] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [uploadingId, setUploadingId] = useState(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const mapRef = useRef(null);
   const googleMapRef = useRef(null);

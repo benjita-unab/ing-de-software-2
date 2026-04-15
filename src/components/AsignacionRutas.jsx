@@ -242,7 +242,6 @@ export default function AsignacionRutas() {
     setMensaje({ tipo: "", texto: "" });
 
     // Buscar carga requerida (opcional, si existe ese campo en los datos de la ruta)
-    const rutaObj = rutas.find((r) => r.id === rutaSeleccionada);
     // La columna fue eliminada temporalmente, usaremos 0
     const cargaRequeridaKg = 0;
 
