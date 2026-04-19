@@ -1,48 +1,36 @@
-import { Request, Response, NextFunction } from 'express';
-import { createTraceabilityEvent, CreateTraceabilityEventDto } from './trazabilidad.service';
-import { HttpError } from '../../middleware/errorHandler';
-
 /**
- * Validación manual simple sin librería externa.
- * Cambiar por Zod o class-validator si se prefiere.
+ * trazabilidad.controller.ts
+ *
+ * Acepta campos en español (etapa, foto, latitud, longitud) Y en inglés
+ * (stage, photoUri, latitude, longitude) para ser compatible con:
+ *   - el syncEngine existente (que usa campos en inglés)
+ *   - llamadas directas con base64 (campos en español)
+ *
+ * Responde siempre con el contract:
+ *   { success, data?, error?, warning? }
  */
-function validatePayload(body: unknown): asserts body is CreateTraceabilityEventDto {
-  const b = body as Record<string, unknown>;
 
-  const requiredFields: (keyof CreateTraceabilityEventDto)[] = [
-    'id', 'stage', 'photoUri', 'latitude', 'longitude', 'timestamp',
-  ];
+import { Request, Response, NextFunction } from 'express';
+import { createTraceabilityEvent, TraceabilityStage } from './trazabilidad.service';
+import { HttpError } from '../../middleware/errorHandler';
+import { ok } from '../../utils/response';
+import { logger } from '../../utils/logger';
 
-  for (const field of requiredFields) {
-    if (b[field] === undefined || b[field] === null || b[field] === '') {
-      throw new HttpError(400, `Missing required field: ${field}`);
-    }
-  }
+const LOG = 'Trazabilidad.Controller';
 
-  if (typeof b.latitude !== 'number' || typeof b.longitude !== 'number') {
-    throw new HttpError(400, 'latitude and longitude must be numbers');
-  }
-
-  const validStages = ['Carga', 'Transito', 'Entrega', 'Devolucion'];
-  if (!validStages.includes(b.stage as string)) {
-    throw new HttpError(
-      400,
-      `Invalid stage "${b.stage}". Must be one of: ${validStages.join(', ')}`
-    );
-  }
-}
+const VALID_STAGES: TraceabilityStage[] = ['Carga', 'Transito', 'Entrega', 'Devolucion'];
 
 /**
  * POST /api/trazabilidad
- * Body JSON:
- * {
- *   "id": "uuid-del-viaje",
- *   "stage": "Carga" | "Transito" | "Entrega" | "Devolucion",
- *   "photoUri": "https://...",
- *   "latitude": -33.4489,
- *   "longitude": -70.6693,
- *   "timestamp": "2026-04-14T12:00:00Z"
- * }
+ *
+ * Campos aceptados (español o inglés):
+ *   id        — UUID del evento (obligatorio, generado en frontend)
+ *   etapa | stage        — etapa de trazabilidad
+ *   foto  | fotoBase64   — imagen en base64
+ *   photoUri             — URL ya subida (compat. syncEngine)
+ *   latitud  | latitude
+ *   longitud | longitude
+ *   timestamp            — ISO 8601
  */
 export async function createEventController(
   req: Request,
@@ -50,14 +38,60 @@ export async function createEventController(
   next: NextFunction
 ): Promise<void> {
   try {
-    validatePayload(req.body);
+    const b = req.body as Record<string, unknown>;
 
-    const event = await createTraceabilityEvent(req.body);
+    // ── Normalizar campos (español / inglés) ──────────────────────────────────
+    const id        = b.id as string | undefined;
+    const stage     = (b.etapa ?? b.stage) as string | undefined;
+    const fotoBase64 = (b.foto ?? b.fotoBase64) as string | undefined;
+    const photoUri  = b.photoUri as string | undefined;
+    const latitud   = Number(b.latitud  ?? b.latitude);
+    const longitud  = Number(b.longitud ?? b.longitude);
+    const timestamp = b.timestamp as string | undefined;
 
-    res.status(201).json({
-      message: 'Traceability event created',
-      event,
+    // ── Validaciones ──────────────────────────────────────────────────────────
+    if (!id || typeof id !== 'string' || id.trim() === '') {
+      throw new HttpError(400, 'Campo obligatorio: id (UUID generado en el frontend)');
+    }
+    if (!stage) {
+      throw new HttpError(400, 'Campo obligatorio: etapa (o stage)');
+    }
+    if (!VALID_STAGES.includes(stage as TraceabilityStage)) {
+      throw new HttpError(
+        400,
+        `Etapa inválida: "${stage}". Valores aceptados: ${VALID_STAGES.join(', ')}`
+      );
+    }
+    if (!fotoBase64 && !photoUri) {
+      throw new HttpError(400, 'Se requiere foto (base64) o photoUri (URL ya subida)');
+    }
+    if (isNaN(latitud) || isNaN(longitud)) {
+      throw new HttpError(400, 'latitud y longitud deben ser números');
+    }
+    if (!timestamp) {
+      throw new HttpError(400, 'Campo obligatorio: timestamp (ISO 8601)');
+    }
+
+    logger.info(LOG, `Solicitud recibida. id=${id}, stage=${stage}`);
+
+    const result = await createTraceabilityEvent({
+      id: id.trim(),
+      stage: stage as TraceabilityStage,
+      fotoBase64,
+      photoUri,
+      latitud,
+      longitud,
+      timestamp,
     });
+
+    const statusCode = result.alreadyExisted ? 200 : 201;
+
+    res.status(statusCode).json(
+      ok(
+        { id: result.id, trip_id: result.trip_id },
+        result.alreadyExisted ? 'Evento ya registrado (idempotente)' : undefined
+      )
+    );
   } catch (err) {
     next(err);
   }

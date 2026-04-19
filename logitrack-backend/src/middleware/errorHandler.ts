@@ -36,10 +36,9 @@ export function errorHandler(
 ): void {
   if (err instanceof HttpError) {
     res.status(err.statusCode).json({
-      error: {
-        message: err.message,
-        ...(err.details ? { details: err.details } : {}),
-      },
+      success: false,
+      error: err.message,
+      ...(err.details ? { details: err.details } : {}),
     });
     return;
   }
@@ -47,6 +46,7 @@ export function errorHandler(
   // Error no controlado — loguear y devolver 500 genérico
   console.error('[Unhandled Error]', err);
   res.status(500).json({
-    error: { message: 'Internal server error' },
+    success: false,
+    error: 'Internal server error',
   });
 }

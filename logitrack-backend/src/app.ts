@@ -7,8 +7,11 @@ import { config } from './config';
 import { errorHandler } from './middleware/errorHandler';
 
 // Módulos de rutas
-import storageRoutes from './modules/storage/storage.routes';
+import storageRoutes      from './modules/storage/storage.routes';
 import trazabilidadRoutes from './modules/trazabilidad/trazabilidad.routes';
+import signaturesRoutes   from './modules/signatures/signatures.routes';
+import dispatchRoutes     from './modules/dispatch/dispatch.routes';
+import routesRoutes       from './modules/routes/routes.routes';
 
 export function createApp(): Application {
   const app = express();
@@ -35,12 +38,15 @@ export function createApp(): Application {
   });
 
   // ─── API Routes ─────────────────────────────────────────────────────────────
-  app.use('/api/storage', storageRoutes);
+  app.use('/api/storage',     storageRoutes);
   app.use('/api/trazabilidad', trazabilidadRoutes);
+  app.use('/api/signatures',  signaturesRoutes);
+  app.use('/api/dispatch',    dispatchRoutes);
+  app.use('/api/routes',      routesRoutes);
 
   // ─── 404 Handler ────────────────────────────────────────────────────────────
   app.use((_req: Request, res: Response) => {
-    res.status(404).json({ error: { message: 'Route not found' } });
+    res.status(404).json({ success: false, error: 'Endpoint not found' });
   });
 
   // ─── Centralized Error Handler ──────────────────────────────────────────────
