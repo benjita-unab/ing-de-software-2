@@ -16,9 +16,21 @@ const TIPO_MAP = {
   DESVIO_RUTA:  "DESVIO_RUTA",
   ANOMALIA:     "ANOMALIA",
   MANTENCION:   "MANTENCION",
+  // New values in lowercase/regular form
+  emergencia:   "BOTON_PANICO",
+  desvio:       "DESVIO_RUTA",
+  desvio_ruta:  "DESVIO_RUTA",
+  anomalia:     "ANOMALIA",
+  mantencion:   "MANTENCION",
 };
 
 const ESTADO_MAP = {
+  // New values based on backend update
+  pendiente:  "PENDIENTE",
+  "en curso": "EN_GESTION",
+  resuelto:   "RESUELTA",
+
+  // Legacy values (just in case)
   PENDIENTE:  "PENDIENTE",
   EN_GESTION: "EN_GESTION",
   ATENDIDO:   "EN_GESTION",
@@ -182,7 +194,7 @@ export function useAlerts() {
     const { error } = await supabase
       .from(TABLE)
       .update({
-        estado:         "EN_GESTION",
+        estado:         "en curso",
         atendido_por:   operatorId,
         fecha_atencion: new Date().toISOString(),
       })
@@ -200,7 +212,7 @@ export function useAlerts() {
     const { error } = await supabase
       .from(TABLE)
       .update({
-        estado:            "RESUELTO",
+        estado:            "resuelto",
         fecha_resolucion:  new Date().toISOString(),
       })
       .eq("id", alertId);
