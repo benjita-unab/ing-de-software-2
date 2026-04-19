@@ -80,7 +80,7 @@ export default function GuiasDespacho() {
       .from("rutas")
       .select(`
         *,
-        clientes(nombre, latitud, longitud), 
+        clientes(nombre), 
         conductores(usuario_id, rut, usuarios(nombre)),
         camiones(patente)
       `)
