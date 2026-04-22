@@ -4,6 +4,8 @@ import { supabase } from "../lib/supabaseClient";
 const base = {
   container: {
     minHeight: "100vh",
+    maxHeight: "100vh",
+    overflowY: "auto",
     background: "#0a0e1a",
     color: "#fff",
     padding: "20px",

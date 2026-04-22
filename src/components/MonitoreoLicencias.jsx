@@ -170,7 +170,7 @@ export default function MonitoreoLicencias() {
         throw new Error(`Error guardando metadatos: ${dbError.message}`);
       }
 
-      setSuccessText("Licencia cargada y registrada correctamente (estado pending_review).");
+      setSuccessText("Licencia cargada y registrada correctamente.");
       resetForm();
     } catch (err) {
       console.error("MonitoreoLicencias error:", err);

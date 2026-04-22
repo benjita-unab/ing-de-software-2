@@ -66,6 +66,32 @@ export default function FormularioCliente({ onGuardado }) {
   });
   const [loading, setLoading] = useState(false);
 
+  const formatRut = (value) => {
+    let rut = value.replace(/[^0-9kK]/g, "").toUpperCase();
+    if (rut.length > 9) {
+      rut = rut.slice(0, 9);
+    }
+    if (rut.length <= 1) return rut;
+    const dv = rut.slice(-1);
+    let cuerpo = rut.slice(0, -1);
+    cuerpo = cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    return `${cuerpo}-${dv}`;
+  };
+
+  const formatTelefono = (value) => {
+    let numbers = value.replace(/\D/g, "");
+    if (numbers.startsWith("56")) {
+      numbers = numbers.slice(2);
+    }
+    if (numbers.length > 9) {
+      numbers = numbers.slice(0, 9);
+    }
+    if (numbers.length === 0) return "";
+    if (numbers.length <= 1) return `+56 ${numbers}`;
+    if (numbers.length <= 5) return `+56 ${numbers.slice(0, 1)} ${numbers.slice(1)}`;
+    return `+56 ${numbers.slice(0, 1)} ${numbers.slice(1, 5)} ${numbers.slice(5, 9)}`;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -127,7 +153,10 @@ export default function FormularioCliente({ onGuardado }) {
               style={base.input}
               placeholder="Ej: 76.000.000-K" 
               value={formData.rut}
-              onChange={(e) => setFormData({...formData, rut: e.target.value})}
+              onChange={(e) => {
+                const formattedRut = formatRut(e.target.value);
+                setFormData({...formData, rut: formattedRut});
+              }}
             />
           </div>
           <div>
@@ -136,7 +165,10 @@ export default function FormularioCliente({ onGuardado }) {
               style={base.input}
               placeholder="+56 9 1234 5678" 
               value={formData.telefono}
-              onChange={(e) => setFormData({...formData, telefono: e.target.value})}
+              onChange={(e) => {
+                const formattedPhone = formatTelefono(e.target.value);
+                setFormData({...formData, telefono: formattedPhone});
+              }}
             />
           </div>
         </div>
