@@ -1,22 +1,30 @@
 version: "3.8"
 
 services:
-  logitrack:
+  backend-next:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        # Estas variables se leen del archivo .env en la misma carpeta
-        REACT_APP_SUPABASE_URL: ${REACT_APP_SUPABASE_URL}
-        REACT_APP_SUPABASE_ANON_KEY: ${REACT_APP_SUPABASE_ANON_KEY}
-        REACT_APP_GOOGLE_MAPS_API_KEY: ${REACT_APP_GOOGLE_MAPS_API_KEY}
-    image: logitrack:latest
-    container_name: logitrack-app
+    image: logitrack-backend-next:latest
+    container_name: logitrack-backend-next
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL}
     ports:
-      - "3000:80"      # Accede en http://localhost:3000
+      - "3000:3000"
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: logitrack-backend-proxy
+    depends_on:
+      - backend-next
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    restart: unless-stopped

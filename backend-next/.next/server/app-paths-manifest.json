@@ -1,0 +1,7 @@
+{
+  "/api/trazabilidad/route": "app/api/trazabilidad/route.js",
+  "/api/storage/upload/route": "app/api/storage/upload/route.js",
+  "/api/email/enviar-qr/route": "app/api/email/enviar-qr/route.js",
+  "/api/routes/[id]/route": "app/api/routes/[id]/route.js",
+  "/api/dispatch/close/route": "app/api/dispatch/close/route.js"
+}

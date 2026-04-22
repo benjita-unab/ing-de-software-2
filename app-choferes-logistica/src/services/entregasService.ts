@@ -1,5 +1,5 @@
-import { supabase } from "../lib/supabaseClient";
 import { generateOtpCode } from "../utils/generateOtpCode";
+import { bffFetch } from "./bffService";
 
 export type EntregaCreateInput = {
   ruta_id: string;
@@ -11,18 +11,18 @@ export type EntregaCreateInput = {
 export async function crearEntregaConOtp(input: EntregaCreateInput) {
   const codigo_otp = generateOtpCode(6);
 
-  const { data, error } = await supabase
-    .from("entregas")
-    .insert({
+  const response = await bffFetch("/api/entregas", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
       ...input,
-      codigo_otp,
+      codigo_otp
     })
-    .select("id, ruta_id, codigo_otp")
-    .single();
-
-  if (error) {
-    throw new Error(`No se pudo crear la entrega: ${error.message}`);
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(`No se pudo crear la entrega: ${payload?.error ?? "error backend"}`);
   }
 
-  return data;
+  return response.json();
 }

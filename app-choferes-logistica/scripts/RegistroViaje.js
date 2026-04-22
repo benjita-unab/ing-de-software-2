@@ -14,15 +14,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
 import * as FileSystem from 'expo-file-system/legacy';
-import { decode } from 'base64-arraybuffer';
-import { createClient } from '@supabase/supabase-js';
+import { syncTraceabilityRecords } from '../src/services/syncEngine';
 
 const ETAPAS = ['Carga', 'Salida', 'Transito', 'Entrega'];
 const STORAGE_KEY = 'hu1_traceability_records';
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-const supabase =
-  SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
 function ProgressSteps({ etapaActual }) {
   return (
@@ -201,80 +196,6 @@ export default function RegistroViaje({ onSyncComplete }) {
     }
   };
 
-  const syncWithSupabase = async (recordsToSync) => {
-    if (!supabase) {
-      throw new Error('Supabase no configurado');
-    }
-    const syncedIds = [];
-
-    for (const record of recordsToSync) {
-      const ext = record.photoUri?.split('.').pop()?.split('?')[0]?.toLowerCase() || 'jpg';
-      const fileExtension = ['jpg', 'jpeg', 'png', 'webp'].includes(ext) ? ext : 'jpg';
-      const filePath = `${record.stage}/${record.id}.${fileExtension}`;
-
-      // --- NUEVA LÓGICA AGRESIVA PARA ANDROID ---
-      try {
-        // 1. Validar que el archivo existe
-        const fileInfo = await FileSystem.getInfoAsync(record.photoUri);
-        if (!fileInfo.exists) {
-          throw new Error(`Archivo no encontrado: ${record.id}`);
-        }
-
-        // 2. Leer como Base64 (Única forma 100% segura en Android)
-        const base64 = await FileSystem.readAsStringAsync(record.photoUri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-
-        // 3. Subir a Supabase Storage (ignorar error RLS temporalmente para que pueda completar el flujo de insert en tabla)
-        const { error: uploadError } = await supabase.storage
-          .from('fotos_trazabilidad')
-          .upload(filePath, decode(base64), {
-            contentType: 'image/jpeg',
-            upsert: true, // Cambiar a true para reescribir si ya existe
-          });
-
-        if (uploadError) {
-          console.warn("Storage upload warning (RLS issue):", uploadError.message);
-          // Si el error es de políticas (RLS), vamos a permitir que el código continúe sumando a la DB.
-          // Para solucionarlo permanentemente, debes deshabilitar RLS en el bucket 'fotos_trazabilidad'
-          if (!uploadError.message.includes('row-level security policy')) {
-            throw uploadError;
-          }
-        }
-      } catch (uploadCatchError) {
-        console.error('Error en subida física:', uploadCatchError);
-        throw uploadCatchError; // Re-lanzar para el try/catch principal
-      }
-
-      const { data: insertData, error: insertError } = await supabase
-        .from('traceability_events')
-        .insert([
-          {
-            id: record.id,
-            etapa: record.stage,
-            foto_uri: filePath,
-            latitud: record.latitude,
-            longitud: record.longitude,
-            timestamp_evento: record.timestamp,
-          },
-        ])
-        .select('id');
-
-      if (insertError) {
-        // En reintentos offline, un id existente puede indicar sincronizacion previa exitosa.
-        if (insertError.code === '23505') {
-          syncedIds.push(record.id);
-          continue;
-        }
-        throw new Error(`Error al insertar evidencia (${record.id}): ${insertError.message}`);
-      }
-
-      syncedIds.push(insertData?.[0]?.id || record.id);
-    }
-
-    return syncedIds;
-  };
-
   const handleSyncNow = async () => {
     try {
       const unsyncedRecords = registros.filter((record) => !record.synced);
@@ -283,14 +204,8 @@ export default function RegistroViaje({ onSyncComplete }) {
         return;
       }
 
-      if (!supabase) {
-        throw new Error(
-          'Define EXPO_PUBLIC_SUPABASE_URL y EXPO_PUBLIC_SUPABASE_ANON_KEY para sincronizar.'
-        );
-      }
-
       setIsSyncing(true);
-      const syncedIds = await syncWithSupabase(unsyncedRecords);
+      const syncedIds = await syncTraceabilityRecords(unsyncedRecords);
       const nextRecords = registros.map((record) =>
         syncedIds.includes(record.id) ? { ...record, synced: true } : record
       );

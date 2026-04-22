@@ -5,76 +5,59 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useState } from "react";
-import { supabase } from "../lib/supabaseClient";
 
 export function useAuth() {
   const [session, setSession] = useState(null);
   const [operator, setOperator] = useState(null);
   const [loading, setLoading] = useState(true);
+  const API_URL = (process.env.REACT_APP_API_URL || process.env.NEXT_PUBLIC_API_URL || "")
+    .replace(/\/$/, "")
+    .replace(/\/api$/, "");
 
   useEffect(() => {
-    // Obtener sesión inicial
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session) {
-        fetchOperator(session.user.id);
-      } else {
-        setLoading(false);
-      }
+    const token = localStorage.getItem("logitrack_access_token");
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+    setSession({ access_token: token, user: { id: "operator" } });
+    setOperator({
+      id: "operator",
+      full_name: "Operador",
+      branch: "",
+      role: "operator"
     });
-
-    // Escuchar cambios de sesión (login/logout)
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      if (session) {
-        fetchOperator(session.user.id);
-      } else {
-        setOperator(null);
-        setLoading(false);
-      }
-    });
-
-    return () => subscription.unsubscribe();
+    setLoading(false);
   }, []);
 
-  async function fetchOperator(userId) {
-    const { data, error } = await supabase
-      .from("operators")
-      .select("*")
-      .eq("id", userId)
-      .single();
-
-    if (!error && data) {
-      setOperator(data);
-    } else {
-      // Si no existe perfil en operators, usar datos básicos de auth
-      const { data: userData } = await supabase.auth.getUser();
-      if (userData?.user) {
-        setOperator({
-          id: userData.user.id,
-          full_name: userData.user.user_metadata?.full_name
-            || userData.user.email?.split("@")[0]
-            || "Operador",
-          branch: "",
-          role: "operator",
-        });
-      }
-    }
-    setLoading(false);
-  }
-
   async function signIn(email, password) {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
+    if (!API_URL) {
+      return new Error("Falta REACT_APP_API_URL o NEXT_PUBLIC_API_URL.");
+    }
+    const response = await fetch(`${API_URL}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password })
     });
-    return error;
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return new Error(payload?.error || "Credenciales inválidas");
+    }
+    localStorage.setItem("logitrack_access_token", payload.accessToken);
+    setSession({ access_token: payload.accessToken, user: payload.user });
+    setOperator({
+      id: payload.user?.id || "operator",
+      full_name: payload.user?.user_metadata?.full_name || payload.user?.email || "Operador",
+      branch: "",
+      role: payload.user?.role || "operator"
+    });
+    return null;
   }
 
   async function signOut() {
-    await supabase.auth.signOut();
+    localStorage.removeItem("logitrack_access_token");
+    setSession(null);
+    setOperator(null);
   }
 
   return { session, operator, loading, signIn, signOut };

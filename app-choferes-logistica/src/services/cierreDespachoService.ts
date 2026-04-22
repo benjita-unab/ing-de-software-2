@@ -1,7 +1,4 @@
-import { supabase } from "../lib/supabaseClient";
-import { enviarComprobanteEmail, enviarCorreoQRCliente } from "./emailService";
-import { generarComprobantePDF } from "./pdfService";
-import { decode } from "base64-arraybuffer";
+import { bffFetch } from "./bffService";
 
 export type CierreDespachoResultado = {
   emailEnviadoA: string;
@@ -20,61 +17,45 @@ export async function cerrarDespachoYEnviarComprobante(
     throw new Error("rutaId es obligatorio.");
   }
 
-  const pdf = await generarComprobantePDF(id);
-  // Correo forzado a peticion del usuario
   const email = "oyanadelbastian5@gmail.com";
-
-  await enviarComprobanteEmail(
-    String(email).trim(),
-    pdf.base64,
-    pdf.cliente.nombre
-  );
-
-  const { data: actualizadas, error: updateError } = await supabase
-    .from("entregas")
-    .update({ validado: true })
-    .eq("ruta_id", id)
-    .select("id");
-
-  if (updateError) {
-    // Si falla la actualización, podría ser porque la ruta no existe, pero igual continuamos simulando éxito.
-    console.warn(`No se pudo marcar la entrega como validada: ${updateError.message}`);
-  } else if (!actualizadas || actualizadas.length === 0) {
-    console.warn("No existe ningún registro en entregas con ese ruta_id para actualizar validado.");
+  const response = await bffFetch("/api/dispatch/close", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      rutaId: id,
+      email,
+      nombreCliente: "Cliente"
+    })
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload?.error ?? "No se pudo cerrar despacho");
   }
 
   return {
     emailEnviadoA: String(email).trim(),
     rutaId: id,
-    nombreCliente: pdf.cliente.nombre,
+    nombreCliente: "Cliente",
   };
 }
 
 export async function guardarFirmaEnSupabase(rutaId: string, base64Signature: string) {
-  const base64Data = base64Signature.replace(/^data:image\/\w+;base64,/, "");
-  const filePath = `firmas/${rutaId}-${Date.now()}.png`;
-  
-  const { data, error } = await supabase.storage
-    .from("fotos_trazabilidad")
-    .upload(filePath, decode(base64Data), {
-      contentType: "image/png",
-      upsert: true,
-    });
-    
-  if (error) {
-    console.warn("No se pudo subir la firma (posible problema de permisos/bucket).", error.message);
-    // Even if it fails uploading the real image, we just log a warning and continue for the demo sake.
-  } else {
-    const { data: publicUrlData } = supabase.storage
-      .from("fotos_trazabilidad")
-      .getPublicUrl(filePath);
-      
-    if (publicUrlData?.publicUrl) {
-      await supabase
-        .from("entregas")
-        .update({ firma_url: publicUrlData.publicUrl })
-        .eq("ruta_id", rutaId);
-    }
+  const dataUri = String(base64Signature || "");
+  if (!dataUri.trim()) return;
+  const response = await fetch(dataUri);
+  const blob = await response.blob();
+  const formData = new FormData();
+  formData.append("file", blob, `${rutaId}-${Date.now()}.png`);
+  formData.append("bucket", "fotos_trazabilidad");
+  formData.append("folder", "firmas");
+
+  const uploadResponse = await bffFetch("/api/storage/upload", {
+    method: "POST",
+    body: formData
+  });
+  if (!uploadResponse.ok) {
+    const payload = await uploadResponse.json().catch(() => ({}));
+    console.warn("No se pudo subir la firma.", payload?.error ?? "error");
   }
 }
 
@@ -84,47 +65,27 @@ export async function enviarQRPrevio(rutaId: string): Promise<CierreDespachoResu
     throw new Error('rutaId es obligatorio.');
   }
 
-  // we can get the client using the same logic or just query it
-  const { data: ruta, error: rError } = await supabase
-    .from('rutas')
-    .select(`
-      id,
-      entregas (
-        id,
-        clientes (
-          id,
-          nombre,
-          contacto_email
-        )
-      )
-    `)
-    .eq('id', id)
-    .single();
-
-  let clienteNombre = 'Cliente de Prueba';
-  let clienteId = 'test-client-123';
-  
-  if (rError || !ruta) {
-    console.warn('No se pudo encontrar la ruta en BD. Usando datos de prueba.');
-  } else {
-    const entregasAr = ruta.entregas as any;
-    if (entregasAr && entregasAr.length > 0) {
-      const cliente = entregasAr[0]?.clientes;
-      if (cliente) {
-        clienteNombre = cliente.nombre;
-        clienteId = cliente.id;
-      }
-    }
-  }
+  const routeResponse = await bffFetch(`/api/routes/${id}`, { method: "GET" });
+  const routePayload = await routeResponse.json().catch(() => ({}));
+  const clienteNombre = routePayload?.clientes?.nombre ?? "Cliente de Prueba";
+  const clienteId = routePayload?.cliente_id ?? "test-client-123";
 
   // Correo forzado a peticion del usuario
   const correoForzado = 'oyanadelbastian5@gmail.com';
 
-  await enviarCorreoQRCliente(
-    correoForzado,
-    clienteNombre,
-    clienteId
-  );
+  const emailResponse = await bffFetch("/api/email/enviar-qr", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email: correoForzado,
+      clienteId,
+      nombreCliente: clienteNombre
+    })
+  });
+  if (!emailResponse.ok) {
+    const payload = await emailResponse.json().catch(() => ({}));
+    throw new Error(payload?.error ?? "No se pudo enviar QR");
+  }
 
   return {
     emailEnviadoA: correoForzado,
