@@ -18,8 +18,8 @@ import { useAlerts } from "../hooks/useAlerts";
 
 export default function OperatorDashboard({ operator, onSignOut }) {
   const { alerts, loading, acknowledgeAlert, resolveAlert: rawResolveAlert } = useAlerts();
-  const [activeSection, setActiveSection]   = useState("alertas");
-  const [selectedAlert, setSelectedAlert]   = useState(null);
+  const [activeSection, setActiveSection] = useState("alertas");
+  const [selectedAlert, setSelectedAlert] = useState(null);
 
   const handleResolveAlert = async (alertId) => {
     const success = await rawResolveAlert(alertId);
@@ -156,11 +156,11 @@ export default function OperatorDashboard({ operator, onSignOut }) {
 // ─── TopBar ─────────────────────────────────────────────────────────────────
 function TopBar({ urgentCount, section, operator }) {
   const SECTION_LABELS = {
-    alertas:   "🚨 Gestión de Alertas Críticas",
-    rutas:     "🗺️ Rutas Activas",
+    alertas: "🚨 Gestión de Alertas Críticas",
+    rutas: "🗺️ Rutas Activas",
     despachos: "📋 Guías de Despacho",
-    camiones:  "🚛 Estado de Flota",
-    mensajes:  "💬 Mensajería",
+    camiones: "🚛 Estado de Flota",
+    mensajes: "💬 Mensajería",
   };
 
   return (
@@ -207,30 +207,6 @@ function TopBar({ urgentCount, section, operator }) {
           </span>
         </div>
       )}
-
-      {/* Indicador de conexión Realtime */}
-      <div
-        style={{
-          marginLeft: urgentCount > 0 ? "0" : "auto",
-          display: "flex",
-          alignItems: "center",
-          gap: "5px",
-          fontSize: "11px",
-          color: "#2e7d32",
-          fontFamily: "'DM Mono', monospace",
-        }}
-      >
-        <div
-          style={{
-            width: 7,
-            height: 7,
-            borderRadius: "50%",
-            background: "#4caf50",
-            animation: "pulse 2s infinite",
-          }}
-        />
-        REALTIME
-      </div>
     </header>
   );
 }

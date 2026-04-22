@@ -84,7 +84,7 @@ export default function GuiasDespacho() {
         conductores(usuario_id, rut, usuarios(nombre)),
         camiones(patente)
       `)
-      .not("conductor_id", "is", null) 
+      .not("conductor_id", "is", null)
       .neq("estado", "ENTREGADO")
       .order("created_at", { ascending: false });
 
@@ -168,8 +168,8 @@ export default function GuiasDespacho() {
   return (
     <div style={base.container}>
       <div style={base.card}>
-        <div style={base.title}>� Gestión de Guías de Despacho (Rutas en curso)</div>
-        
+        <div style={base.title}>📑 Gestión de Guías de Despacho (Rutas en curso)</div>
+
         {loading ? (
           <p style={{ color: "#94A3B8", fontSize: "14px" }}>Cargando guías en curso...</p>
         ) : rutas.length === 0 ? (
@@ -192,15 +192,15 @@ export default function GuiasDespacho() {
                   {rutas.map((ruta) => (
                     <tr key={ruta.id}>
                       <td style={base.td}>
-                        <span style={{color: "#94A3B8"}}>#{String(ruta.id).substring(0, 8)}</span>
+                        <span style={{ color: "#94A3B8" }}>#{String(ruta.id).substring(0, 8)}</span>
                       </td>
                       <td style={base.td}>
-                        <div style={{fontWeight: 500}}>{ruta.clientes?.nombre || "Sin Asignar"}</div>
-                        <div style={{fontSize: "11px", color: "#94A3B8", marginTop: "4px"}}>🛑 {ruta.destino}</div>
+                        <div style={{ fontWeight: 500 }}>{ruta.clientes?.nombre || "Sin Asignar"}</div>
+                        <div style={{ fontSize: "11px", color: "#94A3B8", marginTop: "4px" }}>🛑 {ruta.destino}</div>
                       </td>
                       <td style={base.td}>
-                        <div style={{fontWeight: 500}}>🚚 {ruta.camiones?.patente || "-"}</div>
-                        <div style={{fontSize: "11px", color: "#94A3B8", marginTop: "4px"}}>
+                        <div style={{ fontWeight: 500 }}>🚚 {ruta.camiones?.patente || "-"}</div>
+                        <div style={{ fontSize: "11px", color: "#94A3B8", marginTop: "4px" }}>
                           👤 {ruta.conductores?.usuarios?.nombre || ruta.conductores?.rut || "N/A"}
                         </div>
                       </td>
@@ -208,7 +208,7 @@ export default function GuiasDespacho() {
                         {ruta.created_at ? new Date(ruta.created_at).toLocaleString('es-CL', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' }) : "N/A"}
                       </td>
                       <td style={base.td}>
-                        <span style={{...base.badge, background: ruta.estado === "PENDIENTE" ? "#F59E0B" : "#2563EB", color: "#fff"}}>
+                        <span style={{ ...base.badge, background: ruta.estado === "PENDIENTE" ? "#F59E0B" : "#2563EB", color: "#fff" }}>
                           {ruta.estado === "PENDIENTE" ? "⏳" : "🚛"} {ruta.estado || "EN CURSO"}
                         </span>
                       </td>
@@ -222,11 +222,11 @@ export default function GuiasDespacho() {
                           ) : (
                             <label style={{ fontSize: "12px", color: "#10B981", cursor: "pointer", fontWeight: 600 }}>
                               {uploadingId === ruta.id ? "⏳ Subiendo..." : "📸 Subir Ficha"}
-                              <input 
-                                type="file" 
-                                accept="image/*" 
-                                style={{ display: "none" }} 
-                                onChange={(e) => handleSubirFicha(ruta.id, e)} 
+                              <input
+                                type="file"
+                                accept="image/*"
+                                style={{ display: "none" }}
+                                onChange={(e) => handleSubirFicha(ruta.id, e)}
                                 disabled={uploadingId === ruta.id}
                               />
                             </label>
