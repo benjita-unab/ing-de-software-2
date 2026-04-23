@@ -73,6 +73,7 @@ export default function AlertCard({
 
   return (
     <div
+      className="alert-card"
       onClick={() => onSelect?.(alert)}
       style={{
         background: isSelected ? `${cfg.border}18` : cfg.bg,

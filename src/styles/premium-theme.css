@@ -1,0 +1,482 @@
+:root {
+  --bg-base: #08080c;
+  --accent-blue: #12185c;
+  --accent-purple: #3a0ca3;
+  --neon-violet: #f72585;
+  --neon-cyan: #4cc9f0;
+  --text-strong: #ffffff;
+  --text-soft: rgba(255, 255, 255, 0.7);
+  --border-soft: rgba(255, 255, 255, 0.986);
+  --card-bg: rgba(8, 8, 12, 0.7);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  overflow: hidden;
+  background: var(--bg-base);
+  color: var(--text-strong);
+  font-family: "Inter", "Poppins", "Segoe UI", sans-serif;
+}
+
+.premium-app {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  color: var(--text-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.premium-app::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  background:
+    radial-gradient(circle at 8% 12%, rgba(76, 201, 240, 0.2) 0%, transparent 24%),
+    radial-gradient(circle at 18% 26%, rgba(58, 12, 163, 0.75) 0%, transparent 46%),
+    radial-gradient(circle at 78% 18%, rgba(247, 37, 133, 0.28) 0%, transparent 36%),
+    radial-gradient(circle at 82% 82%, rgba(18, 24, 92, 0.65) 0%, transparent 44%),
+    linear-gradient(160deg, #08080c 0%, #12185c 52%, #3a0ca3 100%);
+  filter: blur(1px);
+}
+
+.premium-app::after {
+  content: "";
+  position: absolute;
+  inset: auto -12% -28% -10%;
+  height: 60%;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 90% at 12% 100%, rgba(247, 37, 133, 0.45) 0%, rgba(247, 37, 133, 0) 56%),
+    radial-gradient(85% 70% at 38% 100%, rgba(76, 201, 240, 0.24) 0%, rgba(76, 201, 240, 0) 66%),
+    radial-gradient(95% 88% at 70% 100%, rgba(58, 12, 163, 0.62) 0%, rgba(58, 12, 163, 0) 62%),
+    radial-gradient(100% 76% at 96% 100%, rgba(18, 24, 92, 0.88) 0%, rgba(18, 24, 92, 0) 62%);
+  opacity: 0.65;
+}
+
+.premium-decor {
+  position: absolute;
+  border-radius: 999px;
+  border: 2px solid rgba(76, 201, 240, 0.75);
+  box-shadow: 0 0 20px rgba(76, 201, 240, 0.3);
+  pointer-events: none;
+}
+
+.premium-decor.one {
+  width: 120px;
+  height: 120px;
+  top: 72px;
+  right: 24%;
+  border-color: rgba(76, 201, 240, 0.7);
+  border-left-color: transparent;
+  transform: rotate(-22deg);
+}
+
+.premium-decor.two {
+  width: 80px;
+  height: 80px;
+  bottom: 16%;
+  left: 34%;
+  border-color: rgba(247, 37, 133, 0.75);
+  border-right-color: transparent;
+  box-shadow: 0 0 20px rgba(247, 37, 133, 0.35);
+}
+
+.premium-decor.three {
+  width: 54px;
+  height: 54px;
+  top: 200px;
+  left: 20%;
+  border-color: rgba(76, 201, 240, 0.68);
+  border-top-color: transparent;
+}
+
+.stellar-shell {
+  width: min(98vw, 1600px);
+  height: min(97vh, 960px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: linear-gradient(145deg, rgba(6, 8, 20, 0.78), rgba(20, 8, 46, 0.7));
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5), inset 0 0 40px rgba(76, 201, 240, 0.06);
+  backdrop-filter: blur(12px);
+}
+
+.glass-nav {
+  backdrop-filter: blur(16px);
+  background: linear-gradient(135deg, rgba(9, 11, 28, 0.74), rgba(25, 12, 58, 0.5));
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow:
+    inset 0 0 0 1px rgba(76, 201, 240, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+.premium-card {
+  background: linear-gradient(145deg, rgba(9, 9, 17, 0.78), rgba(26, 10, 55, 0.68));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  box-shadow:
+    0 20px 50px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(76, 201, 240, 0.09),
+    inset 0 0 18px rgba(247, 37, 133, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(14px) saturate(120%);
+}
+
+.premium-pill-btn {
+  border: 1px solid rgba(76, 201, 240, 0.28);
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(247, 37, 133, 0.5), rgba(58, 12, 163, 0.9), rgba(18, 24, 92, 0.95));
+  color: var(--text-strong);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: all 0.25s ease;
+}
+
+.premium-pill-btn:hover {
+  border-color: rgba(247, 37, 133, 0.7);
+  box-shadow: 0 0 20px rgba(247, 37, 133, 0.35), 0 0 30px rgba(76, 201, 240, 0.2);
+  transform: translateY(-1px);
+}
+
+.premium-title {
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.premium-nav-link {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.78);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 6px 9px;
+  cursor: pointer;
+  transition: all 0.22s ease;
+  white-space: nowrap;
+}
+
+.premium-nav-link:hover {
+  color: #fff;
+  border-color: rgba(76, 201, 240, 0.5);
+  box-shadow: 0 0 14px rgba(76, 201, 240, 0.2);
+}
+
+.premium-nav-link.active {
+  color: #fff;
+  border-color: rgba(76, 201, 240, 0.7);
+  background: linear-gradient(135deg, rgba(58, 12, 163, 0.55), rgba(18, 24, 92, 0.5));
+  box-shadow: 0 0 16px rgba(247, 37, 133, 0.25);
+}
+
+.premium-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(76, 201, 240, 0.35) transparent;
+}
+
+.premium-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.premium-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(76, 201, 240, 0.45), rgba(247, 37, 133, 0.4));
+  border-radius: 12px;
+}
+
+.premium-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.premium-app.light-mode {
+  --text-strong: #0f172a;
+}
+
+.premium-app.light-mode::before {
+  background:
+    radial-gradient(circle at 8% 12%, rgba(56, 189, 248, 0.2) 0%, transparent 24%),
+    radial-gradient(circle at 22% 30%, rgba(147, 197, 253, 0.38) 0%, transparent 44%),
+    radial-gradient(circle at 78% 16%, rgba(192, 132, 252, 0.26) 0%, transparent 38%),
+    linear-gradient(155deg, #f8fafc 0%, #e2e8f0 55%, #dbeafe 100%);
+}
+
+.premium-app.light-mode::after {
+  background:
+    radial-gradient(120% 90% at 14% 100%, rgba(147, 197, 253, 0.26) 0%, rgba(147, 197, 253, 0) 56%),
+    radial-gradient(88% 74% at 56% 100%, rgba(196, 181, 253, 0.22) 0%, rgba(196, 181, 253, 0) 62%);
+  opacity: 0.75;
+}
+
+.premium-app.light-mode .stellar-shell {
+  width: min(99vw, 1720px);
+  height: min(98vh, 1080px);
+  padding: 8px;
+  gap: 10px;
+  border-radius: 16px;
+  color: #0f172a;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.56), rgba(248, 250, 252, 0.46));
+  box-shadow:
+    0 24px 60px rgba(15, 23, 42, 0.12),
+    inset 0 0 20px rgba(56, 189, 248, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(18px) saturate(140%);
+}
+
+.premium-app.light-mode .glass-nav {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.58), rgba(241, 245, 249, 0.48));
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  box-shadow:
+    inset 0 0 0 1px rgba(148, 163, 184, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(16px) saturate(150%);
+}
+
+.premium-app.light-mode .premium-card {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.62), rgba(241, 245, 249, 0.52));
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  box-shadow:
+    0 12px 24px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 0 24px rgba(191, 219, 254, 0.28);
+  backdrop-filter: blur(16px) saturate(145%);
+}
+
+.premium-app.light-mode .premium-nav-link {
+  color: rgba(15, 23, 42, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+}
+
+.premium-app.light-mode .premium-nav-link:hover {
+  color: #0f172a;
+  border-color: rgba(59, 130, 246, 0.6);
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.2);
+}
+
+.premium-app.light-mode .premium-nav-link.active {
+  color: #0f172a;
+  border-color: rgba(59, 130, 246, 0.7);
+  background: linear-gradient(135deg, rgba(191, 219, 254, 0.9), rgba(224, 231, 255, 0.9));
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.2);
+}
+
+.premium-app.light-mode .premium-pill-btn {
+  color: #ffffff;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.9), rgba(79, 70, 229, 0.88));
+}
+
+/* Ajustes globales de legibilidad para modo claro */
+.premium-app.light-mode .premium-decor {
+  opacity: 0.35;
+}
+
+.premium-app.light-mode .stellar-shell h1,
+.premium-app.light-mode .stellar-shell h2,
+.premium-app.light-mode .stellar-shell h3,
+.premium-app.light-mode .stellar-shell h4,
+.premium-app.light-mode .stellar-shell p,
+.premium-app.light-mode .stellar-shell label,
+.premium-app.light-mode .stellar-shell small,
+.premium-app.light-mode .stellar-shell strong,
+.premium-app.light-mode .stellar-shell td,
+.premium-app.light-mode .stellar-shell th {
+  color: #0f172a !important;
+}
+
+.premium-app.light-mode .stellar-shell [style*="rgba(255,255,255,0.7)"],
+.premium-app.light-mode .stellar-shell [style*="rgba(255,255,255,0.64)"],
+.premium-app.light-mode .stellar-shell [style*="rgba(255,255,255,0.62)"] {
+  color: rgba(15, 23, 42, 0.65) !important;
+}
+
+.premium-app.light-mode .stellar-shell [style*="background: #111827"],
+.premium-app.light-mode .stellar-shell [style*="background:#111827"],
+.premium-app.light-mode .stellar-shell [style*="background: \"#111827\""] {
+  background: rgba(255, 255, 255, 0.58) !important;
+}
+
+.premium-app.light-mode .stellar-shell [style*="background: \"rgba(8,8,12"],
+.premium-app.light-mode .stellar-shell [style*="background: rgba(8,8,12"] {
+  background: rgba(255, 255, 255, 0.56) !important;
+}
+
+.premium-app.light-mode .stellar-shell [style*="background: \"#0a0e1a\""],
+.premium-app.light-mode .stellar-shell [style*="background: #0a0e1a"],
+.premium-app.light-mode .stellar-shell [style*="background:#0a0e1a"],
+.premium-app.light-mode .stellar-shell [style*="background: \"#060910\""],
+.premium-app.light-mode .stellar-shell [style*="background: #060910"] {
+  background: rgba(255, 255, 255, 0.52) !important;
+}
+
+.premium-app.light-mode .stellar-shell [style*="border: \"1px solid rgba(255,255,255"],
+.premium-app.light-mode .stellar-shell [style*="border: 1px solid rgba(255,255,255"] {
+  border-color: rgba(148, 163, 184, 0.35) !important;
+}
+
+.premium-app.light-mode .stellar-shell input,
+.premium-app.light-mode .stellar-shell select,
+.premium-app.light-mode .stellar-shell textarea {
+  background: rgba(255, 255, 255, 0.72) !important;
+  color: #0f172a !important;
+  border: 1px solid rgba(148, 163, 184, 0.45) !important;
+  backdrop-filter: blur(10px) saturate(120%);
+}
+
+/* input[type=date]: WebKit pinta los campos internos aparte; sin esto queda texto claro sobre fondo claro */
+.premium-app.light-mode .stellar-shell input[type="date"] {
+  color-scheme: light;
+  -webkit-text-fill-color: #0f172a !important;
+}
+
+.premium-app.light-mode .stellar-shell input[type="date"]::-webkit-datetime-edit,
+.premium-app.light-mode .stellar-shell input[type="date"]::-webkit-datetime-edit-fields-wrapper {
+  color: #0f172a;
+  -webkit-text-fill-color: #0f172a;
+}
+
+.premium-app.light-mode .stellar-shell input[type="date"]::-webkit-datetime-edit-text,
+.premium-app.light-mode .stellar-shell input[type="date"]::-webkit-datetime-edit-month-field,
+.premium-app.light-mode .stellar-shell input[type="date"]::-webkit-datetime-edit-day-field,
+.premium-app.light-mode .stellar-shell input[type="date"]::-webkit-datetime-edit-year-field {
+  color: #0f172a;
+  -webkit-text-fill-color: #0f172a;
+}
+
+.premium-app.light-mode .stellar-shell input[type="date"]::-webkit-calendar-picker-indicator {
+  opacity: 0.75;
+  filter: invert(0.25);
+}
+
+.premium-app.light-mode .stellar-shell table {
+  background: rgba(255, 255, 255, 0.56) !important;
+  backdrop-filter: blur(10px) saturate(120%);
+}
+
+.premium-app.light-mode .stellar-shell thead tr,
+.premium-app.light-mode .stellar-shell th {
+  background: rgba(226, 232, 240, 0.42) !important;
+  color: #0f172a !important;
+}
+
+.premium-app.light-mode .stellar-shell td {
+  border-bottom-color: rgba(148, 163, 184, 0.35) !important;
+}
+
+/* Alertas: forzar recuadros claros en modo claro */
+.premium-app.light-mode .stellar-shell [style*="box-shadow: 0 0 18px"],
+.premium-app.light-mode .stellar-shell [style*="box-shadow: 0 0 24px"],
+.premium-app.light-mode .stellar-shell [style*="box-shadow: 0 2px 8px"] {
+  box-shadow:
+    0 10px 20px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+}
+
+/* Liquid glass claro específico para componentes con fondos oscuros */
+.premium-app.light-mode .client-form-card,
+.premium-app.light-mode .alert-queue,
+.premium-app.light-mode .alert-detail-panel,
+.premium-app.light-mode .alert-card {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.62), rgba(241, 245, 249, 0.5)) !important;
+  border-color: rgba(148, 163, 184, 0.36) !important;
+  box-shadow:
+    0 12px 24px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 0 20px rgba(147, 197, 253, 0.2) !important;
+  backdrop-filter: blur(16px) saturate(145%);
+}
+
+.premium-app.light-mode .alert-queue h2,
+.premium-app.light-mode .alert-queue p,
+.premium-app.light-mode .alert-queue span,
+.premium-app.light-mode .alert-card p,
+.premium-app.light-mode .alert-card span,
+.premium-app.light-mode .alert-card div,
+.premium-app.light-mode .alert-detail-panel p,
+.premium-app.light-mode .alert-detail-panel span,
+.premium-app.light-mode .alert-detail-panel div {
+  color: #0f172a !important;
+}
+
+.premium-app.light-mode .alert-search-input {
+  background: rgba(255, 255, 255, 0.76) !important;
+  color: #0f172a !important;
+  border: 1px solid rgba(148, 163, 184, 0.45) !important;
+  box-shadow: inset 0 0 10px rgba(148, 163, 184, 0.16) !important;
+}
+
+.premium-app.light-mode .alert-card button,
+.premium-app.light-mode .alert-detail-panel button,
+.premium-app.light-mode .alert-card a,
+.premium-app.light-mode .alert-detail-panel a {
+  background: rgba(255, 255, 255, 0.65) !important;
+  color: #0f172a !important;
+  border: 1px solid rgba(148, 163, 184, 0.45) !important;
+}
+
+.premium-app.light-mode .coord-selector p {
+  color: rgba(15, 23, 42, 0.72) !important;
+}
+
+/* Paneles operador (asignación, guías, historial, rutas activas, RRHH): cristal claro */
+.premium-app.light-mode .operator-glass-card {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.68), rgba(241, 245, 249, 0.52)) !important;
+  border: 1px solid rgba(148, 163, 184, 0.38) !important;
+  box-shadow:
+    0 14px 34px rgba(15, 23, 42, 0.09),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 0 28px rgba(191, 219, 254, 0.28) !important;
+  backdrop-filter: blur(18px) saturate(155%) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(155%) !important;
+}
+
+.premium-app.light-mode .operator-section {
+  padding: 8px 10px !important;
+}
+
+.premium-app.light-mode .operator-glass-card table {
+  font-size: 15px;
+}
+
+.premium-app.light-mode .operator-glass-card th {
+  font-size: 14px !important;
+  padding: 12px 12px !important;
+}
+
+.premium-app.light-mode .operator-glass-card td {
+  font-size: 15px !important;
+  padding: 14px 12px !important;
+}
+
+/* RRHH / Monitoreo licencias: etiquetas con color oscuro en modo claro (inline seguía en blanco) */
+.premium-app.light-mode .operator-glass-card .rrhh-field-label {
+  color: rgba(15, 23, 42, 0.82) !important;
+}
+
+.premium-app.light-mode .coord-map-container {
+  border: 1px solid rgba(148, 163, 184, 0.42) !important;
+  background: rgba(255, 255, 255, 0.5) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}

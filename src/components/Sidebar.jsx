@@ -28,40 +28,42 @@ export default function Sidebar({
   return (
     <aside
       style={{
-        width: "220px",
-        background: "#060910",
-        borderRight: "1px solid #1e2a3a",
+        width: "250px",
         display: "flex",
         flexDirection: "column",
         flexShrink: 0,
         height: "100%",
+        borderRadius: "18px",
+        overflow: "hidden",
       }}
+      className="glass-nav"
     >
       {/* Logo */}
       <div
         style={{
-          padding: "24px 20px 20px",
-          borderBottom: "1px solid #1e2a3a",
+          padding: "24px 20px 16px",
+          borderBottom: "1px solid rgba(255,255,255,0.12)",
         }}
       >
         <div style={{ fontSize: "20px", marginBottom: "4px" }}>🚚</div>
         <div
           style={{
             color: "#fff",
-            fontWeight: 700,
-            fontSize: "15px",
-            fontFamily: "'Syne', sans-serif",
+            fontWeight: 800,
+            fontSize: "16px",
             lineHeight: 1.2,
+            letterSpacing: "0.12em",
+            textTransform: "uppercase",
           }}
         >
           LogiTrack
         </div>
         <div
           style={{
-            color: "#556",
-            fontSize: "11px",
+            color: "rgba(255,255,255,0.65)",
+            fontSize: "10px",
             marginTop: "2px",
-            fontFamily: "'DM Mono', monospace",
+            letterSpacing: "0.18em",
           }}
         >
           PANEL OPERADOR
@@ -69,7 +71,7 @@ export default function Sidebar({
       </div>
 
       {/* Navegación */}
-      <nav style={{ flex: 1, padding: "12px 10px" }}>
+      <nav style={{ flex: 1, padding: "12px 10px", overflow: "auto" }} className="premium-scroll">
         {NAV_ITEMS.map((item) => {
           const isActive  = activeSection === item.id;
           const showBadge = item.badge && urgentCount > 0;
@@ -82,19 +84,21 @@ export default function Sidebar({
                 alignItems: "center",
                 gap: "10px",
                 width: "100%",
-                background: isActive ? "#1565c022" : "transparent",
-                border: isActive ? "1px solid #1565c044" : "1px solid transparent",
-                borderRadius: "8px",
+                background: isActive ? "linear-gradient(135deg, rgba(58,12,163,0.45), rgba(18,24,92,0.6))" : "rgba(0,0,0,0.05)",
+                border: isActive ? "1px solid rgba(76,201,240,0.55)" : "1px solid transparent",
+                borderRadius: "999px",
                 padding: "10px 12px",
                 cursor: "pointer",
                 marginBottom: "4px",
-                color: isActive ? "#fff" : "#778",
-                fontFamily: "'Syne', sans-serif",
-                fontSize: "13px",
+                color: isActive ? "#fff" : "rgba(255,255,255,0.78)",
+                fontSize: "11px",
                 fontWeight: isActive ? 700 : 400,
                 textAlign: "left",
                 transition: "all 0.15s ease",
                 position: "relative",
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+                boxShadow: isActive ? "0 0 16px rgba(76,201,240,0.2)" : "none",
               }}
             >
               <span style={{ fontSize: "16px" }}>{item.icon}</span>
@@ -102,7 +106,7 @@ export default function Sidebar({
               {showBadge && (
                 <span
                   style={{
-                    background: "#ff1744",
+                    background: "#f72585",
                     color: "#fff",
                     fontSize: "10px",
                     fontWeight: 700,
@@ -128,7 +132,7 @@ export default function Sidebar({
       <div
         style={{
           padding: "16px 20px",
-          borderTop: "1px solid #1e2a3a",
+          borderTop: "1px solid rgba(255,255,255,0.12)",
         }}
       >
         {/* Avatar inicial */}
@@ -138,7 +142,7 @@ export default function Sidebar({
               width: 32,
               height: 32,
               borderRadius: "50%",
-              background: "linear-gradient(135deg, #1565c0, #1976d2)",
+              background: "linear-gradient(135deg, #12185c, #3a0ca3)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -153,10 +157,9 @@ export default function Sidebar({
           <div style={{ minWidth: 0 }}>
             <div
               style={{
-                color: "#ccc",
+                color: "#fff",
                 fontSize: "13px",
                 fontWeight: 600,
-                fontFamily: "'Syne', sans-serif",
                 whiteSpace: "nowrap",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
@@ -167,10 +170,10 @@ export default function Sidebar({
             {operator?.branch && (
               <div
                 style={{
-                  color: "#445",
+                  color: "rgba(255,255,255,0.65)",
                   fontSize: "10px",
-                  fontFamily: "'DM Mono', monospace",
                   marginTop: "1px",
+                  letterSpacing: "0.08em",
                 }}
               >
                 {operator.branch}
@@ -184,17 +187,16 @@ export default function Sidebar({
           onClick={onSignOut}
           style={{
             width: "100%",
-            background: "transparent",
-            border: "1px solid #1e2a3a",
-            borderRadius: "7px",
+            borderRadius: "999px",
             padding: "7px",
-            color: "#445",
+            color: "#fff",
             fontSize: "11px",
             cursor: "pointer",
-            fontFamily: "'DM Mono', monospace",
             transition: "border-color 0.2s, color 0.2s",
-            letterSpacing: "0.04em",
+            letterSpacing: "0.1em",
+            textTransform: "uppercase",
           }}
+          className="premium-pill-btn"
         >
           ⎋ Cerrar sesión
         </button>

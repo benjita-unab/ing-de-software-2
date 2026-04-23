@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import SelectorCoordenadas from "./SelectorCoordenadas";
 
@@ -56,6 +56,10 @@ const base = {
 };
 
 export default function FormularioCliente({ onGuardado }) {
+  const MAPS_API_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
+  const direccionInputRef = useRef(null);
+  const autocompleteRef = useRef(null);
+  const geocoderRef = useRef(null);
   const [formData, setFormData] = useState({
     nombre: "",
     rut: "",
@@ -65,6 +69,89 @@ export default function FormularioCliente({ onGuardado }) {
     longitud: -70.6693
   });
   const [loading, setLoading] = useState(false);
+  const [mapsError, setMapsError] = useState("");
+
+  useEffect(() => {
+    if (!MAPS_API_KEY) {
+      setMapsError("Configura REACT_APP_GOOGLE_MAPS_API_KEY para autocompletar direcciones.");
+      return;
+    }
+
+    const initAutocomplete = () => {
+      if (!direccionInputRef.current || !window.google?.maps) return;
+      if (!geocoderRef.current) {
+        geocoderRef.current = new window.google.maps.Geocoder();
+      }
+      if (!window.google.maps.places) {
+        setMapsError("Places bloqueado. Puedes escribir dirección y presionar Enter para ubicar en el mapa.");
+        return;
+      }
+      if (autocompleteRef.current) return;
+
+      autocompleteRef.current = new window.google.maps.places.Autocomplete(
+        direccionInputRef.current,
+        {
+          fields: ["formatted_address", "geometry", "name"],
+          componentRestrictions: { country: "cl" },
+          types: ["address"],
+        }
+      );
+
+      autocompleteRef.current.addListener("place_changed", () => {
+        const place = autocompleteRef.current.getPlace();
+        const direccionSeleccionada = place.formatted_address || place.name || "";
+        const lat = place.geometry?.location?.lat?.();
+        const lng = place.geometry?.location?.lng?.();
+
+        setFormData((prev) => ({
+          ...prev,
+          direccion: direccionSeleccionada || prev.direccion,
+          latitud: Number.isFinite(lat) ? lat : prev.latitud,
+          longitud: Number.isFinite(lng) ? lng : prev.longitud,
+        }));
+      });
+    };
+
+    if (window.google?.maps?.places) {
+      initAutocomplete();
+      return;
+    }
+
+    const scriptId = "google-maps-script";
+    const existingScript = document.getElementById(scriptId);
+    if (existingScript) {
+      existingScript.addEventListener("load", initAutocomplete);
+      return () => existingScript.removeEventListener("load", initAutocomplete);
+    }
+
+    const script = document.createElement("script");
+    script.id = scriptId;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${MAPS_API_KEY}&libraries=places&v=weekly`;
+    script.async = true;
+    script.defer = true;
+    script.onload = initAutocomplete;
+    script.onerror = () => setMapsError("No se pudo cargar Google Places para autocompletado.");
+    document.head.appendChild(script);
+  }, [MAPS_API_KEY]);
+
+  const geocodeDireccion = (direccion) => {
+    if (!direccion || !window.google?.maps || !geocoderRef.current) return;
+    geocoderRef.current.geocode(
+      { address: direccion, componentRestrictions: { country: "CL" } },
+      (results, status) => {
+        if (status === "OK" && results?.[0]) {
+          const location = results[0].geometry.location;
+          setFormData((prev) => ({
+            ...prev,
+            direccion: results[0].formatted_address || prev.direccion,
+            latitud: location.lat(),
+            longitud: location.lng(),
+          }));
+          setMapsError("");
+        }
+      }
+    );
+  };
 
   const formatRut = (value) => {
     let rut = value.replace(/[^0-9kK]/g, "").toUpperCase();
@@ -125,15 +212,22 @@ export default function FormularioCliente({ onGuardado }) {
   };
 
   const handleCoordenadas = (coords) => {
-    setFormData({
-      ...formData,
+    setFormData((prev) => ({
+      ...prev,
       latitud: coords.lat,
-      longitud: coords.lng
-    });
-  }
+      longitud: coords.lng,
+    }));
+  };
+
+  const handleAddressResolved = (direccion) => {
+    setFormData((prev) => ({
+      ...prev,
+      direccion: direccion || prev.direccion,
+    }));
+  };
 
   return (
-    <div style={base.container}>
+    <div style={base.container} className="client-form-card">
       <div style={base.title}>👤 Registrar Nuevo Cliente</div>
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column' }}>
         
@@ -174,11 +268,25 @@ export default function FormularioCliente({ onGuardado }) {
         </div>
 
         <label style={base.label}>Dirección Base</label>
+        {mapsError && (
+          <div style={{ color: "#fca5a5", fontSize: "11px", marginBottom: "8px" }}>
+            {mapsError}
+          </div>
+        )}
         <input 
+          ref={direccionInputRef}
           style={base.input}
-          placeholder="Av. Providencia 1234, Santiago" 
+          placeholder="Escribe y selecciona una dirección sugerida..." 
           value={formData.direccion}
           onChange={(e) => setFormData({...formData, direccion: e.target.value})}
+          onBlur={(e) => geocodeDireccion(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              geocodeDireccion(formData.direccion);
+            }
+          }}
+          autoComplete="off"
         />
 
         <label style={base.label}>Ubicación Exacta de Entrega</label>
@@ -186,6 +294,7 @@ export default function FormularioCliente({ onGuardado }) {
           latInicial={formData.latitud} 
           lngInicial={formData.longitud} 
           onSelectUbicacion={handleCoordenadas}
+          onAddressResolved={handleAddressResolved}
         />
 
         <button type="submit" style={{...base.button, opacity: loading ? 0.7 : 1}} disabled={loading}>

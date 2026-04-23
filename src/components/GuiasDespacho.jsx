@@ -3,27 +3,30 @@ import { supabase } from "../lib/supabaseClient";
 
 const base = {
   container: {
-    minHeight: "100vh",
-    maxHeight: "100vh",
+    minHeight: "100%",
+    maxHeight: "100%",
     overflowY: "auto",
-    background: "#0a0e1a",
+    background: "transparent",
     color: "#fff",
-    padding: "20px",
-    fontFamily: "'Syne', 'DM Mono', sans-serif",
+    padding: "10px",
+    fontFamily: "'Inter', 'Poppins', sans-serif",
   },
   card: {
-    background: "#111827",
-    border: "1px solid #1e2a3a",
-    borderRadius: "12px",
-    padding: "20px",
-    marginBottom: "20px",
+    background: "rgba(8,8,12,0.72)",
+    border: "1px solid rgba(255,255,255,0.12)",
+    borderRadius: "16px",
+    padding: "18px",
+    marginBottom: "14px",
     boxShadow: "0 10px 30px rgba(0,0,0,0.45)",
+    backdropFilter: "blur(10px)",
   },
   title: {
-    fontSize: "18px",
-    fontWeight: 600,
-    color: "#60A5FA",
+    fontSize: "16px",
+    fontWeight: 800,
+    color: "#fff",
     marginBottom: "16px",
+    letterSpacing: "0.12em",
+    textTransform: "uppercase",
   },
   table: {
     width: "100%",
@@ -32,17 +35,17 @@ const base = {
   },
   th: {
     textAlign: "left",
-    padding: "10px",
-    borderBottom: "1px solid #1e2a3a",
-    color: "#94A3B8",
-    fontSize: "13px",
+    padding: "12px",
+    borderBottom: "1px solid rgba(255,255,255,0.12)",
+    color: "rgba(255,255,255,0.75)",
+    fontSize: "14px",
     fontWeight: 600,
-    background: "#0F172A",
+    background: "rgba(255,255,255,0.03)",
   },
   td: {
-    padding: "12px 10px",
-    borderBottom: "1px solid #1e2a3a",
-    fontSize: "13px",
+    padding: "14px 12px",
+    borderBottom: "1px solid rgba(255,255,255,0.08)",
+    fontSize: "15px",
     color: "#e2e8f0"
   },
   badge: {
@@ -51,15 +54,16 @@ const base = {
     borderRadius: "4px",
     fontSize: "11px",
     fontWeight: 600,
-    background: "#2563EB",
-    color: "#DBEAFE",
+    background: "rgba(58,12,163,0.45)",
+    color: "#ffffff",
+    border: "1px solid rgba(76,201,240,0.45)",
   },
   mapContainer: {
     width: "100%",
     height: "350px",
     borderRadius: "8px",
-    border: "1px solid #1e2a3a",
-    background: "#0F172A",
+    border: "1px solid rgba(255,255,255,0.12)",
+    background: "rgba(8,8,12,0.7)",
     marginTop: "20px",
     position: "relative",
     overflow: "hidden"
@@ -168,8 +172,8 @@ export default function GuiasDespacho() {
   };
 
   return (
-    <div style={base.container}>
-      <div style={base.card}>
+    <div style={base.container} className="premium-scroll operator-section">
+      <div style={base.card} className="operator-glass-card">
         <div style={base.title}>📑 Gestión de Guías de Despacho (Rutas en curso)</div>
 
         {loading ? (
@@ -198,11 +202,11 @@ export default function GuiasDespacho() {
                       </td>
                       <td style={base.td}>
                         <div style={{ fontWeight: 500 }}>{ruta.clientes?.nombre || "Sin Asignar"}</div>
-                        <div style={{ fontSize: "11px", color: "#94A3B8", marginTop: "4px" }}>🛑 {ruta.destino}</div>
+                        <div style={{ fontSize: "13px", color: "#94A3B8", marginTop: "4px" }}>🛑 {ruta.destino}</div>
                       </td>
                       <td style={base.td}>
                         <div style={{ fontWeight: 500 }}>🚚 {ruta.camiones?.patente || "-"}</div>
-                        <div style={{ fontSize: "11px", color: "#94A3B8", marginTop: "4px" }}>
+                        <div style={{ fontSize: "13px", color: "#94A3B8", marginTop: "4px" }}>
                           👤 {ruta.conductores?.usuarios?.nombre || ruta.conductores?.rut || "N/A"}
                         </div>
                       </td>
@@ -218,11 +222,11 @@ export default function GuiasDespacho() {
                         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                           {/* Botón para subir o ver ficha */}
                           {ruta.ficha_despacho_url ? (
-                            <a href={ruta.ficha_despacho_url} target="_blank" rel="noopener noreferrer" style={{ color: "#3B82F6", fontSize: "12px", textDecoration: "none", fontWeight: 600 }}>
+                            <a href={ruta.ficha_despacho_url} target="_blank" rel="noopener noreferrer" style={{ color: "#3B82F6", fontSize: "14px", textDecoration: "none", fontWeight: 600 }}>
                               📄 Ver Ficha Adjunta
                             </a>
                           ) : (
-                            <label style={{ fontSize: "12px", color: "#10B981", cursor: "pointer", fontWeight: 600 }}>
+                            <label style={{ fontSize: "14px", color: "#10B981", cursor: "pointer", fontWeight: 600 }}>
                               {uploadingId === ruta.id ? "⏳ Subiendo..." : "📸 Subir Ficha"}
                               <input
                                 type="file"
@@ -241,9 +245,9 @@ export default function GuiasDespacho() {
                               background: ruta.ficha_despacho_url ? "#10B981" : "#4B5563",
                               color: "#fff",
                               border: "none",
-                              padding: "6px 12px",
-                              borderRadius: "4px",
-                              fontSize: "12px",
+                              padding: "8px 14px",
+                              borderRadius: "8px",
+                              fontSize: "14px",
                               cursor: "pointer",
                               fontWeight: 600
                             }}

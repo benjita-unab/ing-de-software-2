@@ -15,27 +15,32 @@ import {
 
 const base = {
   container: {
-    minHeight: "100vh",
-    maxHeight: "100vh",
+    height: "100%",
+    minHeight: 0,
+    maxHeight: "100%",
     overflowY: "auto",
-    background: "#0a0e1a",
+    background: "transparent",
     color: "#fff",
-    padding: "20px",
-    fontFamily: "'Syne', 'DM Mono', sans-serif",
+    padding: "10px",
+    boxSizing: "border-box",
+    fontFamily: "'Inter', 'Poppins', sans-serif",
   },
   card: {
-    background: "#111827",
-    border: "1px solid #1e2a3a",
-    borderRadius: "12px",
-    padding: "20px",
-    marginBottom: "20px",
+    background: "rgba(8,8,12,0.72)",
+    border: "1px solid rgba(255,255,255,0.12)",
+    borderRadius: "16px",
+    padding: "18px",
+    marginBottom: "14px",
     boxShadow: "0 10px 30px rgba(0,0,0,0.45)",
+    backdropFilter: "blur(10px)",
   },
   subtitle: {
     fontSize: "16px",
-    fontWeight: 600,
-    color: "#60A5FA",
+    fontWeight: 800,
+    color: "#fff",
     marginBottom: "16px",
+    letterSpacing: "0.12em",
+    textTransform: "uppercase",
   },
   grid: {
     display: "grid",
@@ -44,21 +49,21 @@ const base = {
   },
   label: {
     display: "block",
-    fontSize: "13px",
+    fontSize: "14px",
     color: "#94A3B8",
     marginBottom: "8px",
     fontWeight: 500,
   },
   select: {
     width: "100%",
-    padding: "10px 12px",
-    borderRadius: "8px",
-    border: "1px solid #334155",
-    background: "#0F172A",
+    padding: "12px 14px",
+    borderRadius: "999px",
+    border: "1px solid rgba(255,255,255,0.16)",
+    background: "rgba(8,8,12,0.8)",
     color: "#F8FAFC",
     marginBottom: "14px",
     outline: "none",
-    fontSize: "13px",
+    fontSize: "15px",
     fontFamily: "inherit",
     cursor: "pointer",
   },
@@ -73,7 +78,7 @@ const base = {
     fontFamily: "inherit",
   },
   buttonPrimary: {
-    background: "#0EA5E9",
+    background: "linear-gradient(135deg, #3a0ca3, #12185c)",
     color: "#fff",
   },
   buttonDanger: {
@@ -91,9 +96,9 @@ const base = {
     fontSize: "13px",
   },
   alertSuccess: {
-    background: "#0F766E",
+    background: "rgba(18,24,92,0.6)",
     color: "#D1FAE5",
-    border: "1px solid #14b8a6",
+    border: "1px solid rgba(76,201,240,0.45)",
   },
   alertError: {
     background: "#7F1D1D",
@@ -112,17 +117,17 @@ const base = {
   },
   th: {
     textAlign: "left",
-    padding: "10px",
-    borderBottom: "1px solid #1e2a3a",
-    color: "#94A3B8",
-    fontSize: "12px",
+    padding: "12px",
+    borderBottom: "1px solid rgba(255,255,255,0.12)",
+    color: "rgba(255,255,255,0.75)",
+    fontSize: "14px",
     fontWeight: 600,
-    background: "#0F172A",
+    background: "rgba(255,255,255,0.03)",
   },
   td: {
-    padding: "10px",
-    borderBottom: "1px solid #1e2a3a",
-    fontSize: "13px",
+    padding: "12px",
+    borderBottom: "1px solid rgba(255,255,255,0.08)",
+    fontSize: "15px",
   },
   badge: {
     display: "inline-block",
@@ -156,7 +161,7 @@ const base = {
     display: "flex",
     alignItems: "center",
     gap: "8px",
-    color: "#60A5FA",
+    color: "#4cc9f0",
   },
 };
 
@@ -296,7 +301,7 @@ export default function AsignacionRutas() {
   };
 
   return (
-    <div style={base.container}>
+    <div style={base.container} className="premium-scroll operator-section">
       <style>{`
         @keyframes spin {
           to { transform: rotate(360deg); }
@@ -304,7 +309,7 @@ export default function AsignacionRutas() {
       `}</style>
 
       {/* PANEL DE ASIGNACIÓN */}
-      <div style={base.card}>
+      <div style={base.card} className="operator-glass-card">
         <div style={base.subtitle}>📋 Asignar Conductor a Ruta</div>
 
         {mensaje.texto && (
@@ -440,7 +445,7 @@ export default function AsignacionRutas() {
       </div>
 
       {/* TABLA DE RUTAS DISPONIBLES */}
-      <div style={base.card}>
+      <div style={base.card} className="operator-glass-card">
         <div style={base.subtitle}>
           📍 Rutas Disponibles ({rutas.length})
         </div>
@@ -485,7 +490,7 @@ export default function AsignacionRutas() {
       </div>
 
       {/* TABLA DE CONDUCTORES */}
-      <div style={base.card}>
+      <div style={base.card} className="operator-glass-card">
         <div style={base.subtitle}>
           👥 Conductores Activos ({conductores.length})
         </div>

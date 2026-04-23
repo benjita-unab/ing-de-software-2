@@ -10,55 +10,59 @@ const DRIVERS_TEMP = [
 const base = {
   dashboard: {
     minHeight: "100%",
-    background: "#0F172A",
+    background: "transparent",
     color: "#E2E8F0",
-    padding: "24px",
-    fontFamily: "Inter, system-ui, sans-serif",
+    padding: "10px",
+    fontFamily: "'Inter', 'Poppins', sans-serif",
+    overflow: "auto",
   },
   card: {
     width: "100%",
-    maxWidth: "680px",
+    maxWidth: "min(960px, 100%)",
     margin: "0 auto",
-    borderRadius: "16px",
-    border: "1px solid #1E293B",
-    background: "#111827",
+    borderRadius: "18px",
+    border: "1px solid rgba(255,255,255,0.12)",
+    background: "rgba(8,8,12,0.72)",
     boxShadow: "0 10px 30px rgba(0,0,0,0.45)",
-    padding: "24px",
+    padding: "22px",
+    backdropFilter: "blur(10px)",
   },
   label: {
     display: "block",
-    color: "#94A3B8",
+    color: "rgba(255,255,255,0.7)",
     marginBottom: "8px",
-    fontSize: "0.92rem",
+    fontSize: "1rem",
   },
   input: {
     width: "100%",
-    padding: "10px 12px",
-    borderRadius: "10px",
-    border: "1px solid #334155",
-    background: "#0F172A",
+    padding: "12px 14px",
+    borderRadius: "999px",
+    border: "1px solid rgba(255,255,255,0.16)",
+    background: "rgba(8,8,12,0.8)",
     color: "#F8FAFC",
     marginBottom: "16px",
     outline: "none",
+    fontSize: "15px",
   },
   select: {
     width: "100%",
-    padding: "10px 12px",
-    borderRadius: "10px",
-    border: "1px solid #334155",
-    background: "#0F172A",
+    padding: "12px 14px",
+    borderRadius: "999px",
+    border: "1px solid rgba(255,255,255,0.16)",
+    background: "rgba(8,8,12,0.8)",
     color: "#F8FAFC",
     marginBottom: "16px",
+    fontSize: "15px",
   },
   button: {
     width: "100%",
-    padding: "12px 14px",
+    padding: "14px 16px",
     border: "none",
-    borderRadius: "10px",
-    background: "#0EA5E9",
+    borderRadius: "999px",
+    background: "linear-gradient(135deg, #3a0ca3, #12185c)",
     color: "#FFFFFF",
     fontWeight: 700,
-    fontSize: "0.95rem",
+    fontSize: "1.05rem",
     cursor: "pointer",
     transition: "filter 0.2s ease",
   },
@@ -67,24 +71,26 @@ const base = {
     cursor: "not-allowed",
   },
   messageSuccess: {
-    background: "#0F766E",
+    background: "rgba(18,24,92,0.55)",
     color: "#D1FAE5",
     borderRadius: "10px",
     padding: "10px 12px",
     marginBottom: "14px",
   },
   messageError: {
-    background: "#991B1B",
+    background: "rgba(247,37,133,0.25)",
     color: "#FEE2E2",
     borderRadius: "10px",
     padding: "10px 12px",
     marginBottom: "14px",
   },
   subtitle: {
-    color: "#60A5FA",
+    color: "#fff",
     marginBottom: "16px",
-    fontSize: "1.08rem",
-    fontWeight: 600,
+    fontSize: "1.05rem",
+    fontWeight: 800,
+    letterSpacing: "0.12em",
+    textTransform: "uppercase",
   },
 };
 
@@ -97,6 +103,24 @@ export default function MonitoreoLicencias() {
   const [errorText, setErrorText] = useState("");
 
   const fileInputRef = useRef(null);
+  const expiryDateRef = useRef(null);
+
+  const openExpiryDatePicker = () => {
+    const el = expiryDateRef.current;
+    if (!el || el.disabled) return;
+    if (typeof el.showPicker === "function") {
+      try {
+        const maybePromise = el.showPicker();
+        if (maybePromise != null && typeof maybePromise.catch === "function") {
+          maybePromise.catch(() => el.focus());
+        }
+      } catch {
+        el.focus();
+      }
+    } else {
+      el.focus();
+    }
+  };
 
   const resetForm = () => {
     setDriverId("");
@@ -181,15 +205,15 @@ export default function MonitoreoLicencias() {
   };
 
   return (
-    <div style={base.dashboard}>
-      <div style={base.card}>
+    <div style={base.dashboard} className="premium-scroll operator-section">
+      <div style={base.card} className="operator-glass-card">
         <h2 style={base.subtitle}>Monitoreo de licencias</h2>
 
         {errorText && <div style={base.messageError}>{errorText}</div>}
         {successText && <div style={base.messageSuccess}>{successText}</div>}
 
         <form onSubmit={handleSubmit}>
-          <label htmlFor="driverSelect" style={base.label}>
+          <label htmlFor="driverSelect" className="rrhh-field-label" style={base.label}>
             Selector de Chofer
           </label>
           <select
@@ -207,7 +231,7 @@ export default function MonitoreoLicencias() {
             ))}
           </select>
 
-          <label htmlFor="licenseFile" style={base.label}>
+          <label htmlFor="licenseFile" className="rrhh-field-label" style={base.label}>
             Carga de Documento
           </label>
           <input
@@ -220,17 +244,24 @@ export default function MonitoreoLicencias() {
             disabled={isLoading}
           />
 
-          <label htmlFor="expiryDate" style={base.label}>
-            Fecha de Vencimiento
-          </label>
-          <input
-            id="expiryDate"
-            type="date"
-            value={expiryDate}
-            onChange={(e) => setExpiryDate(e.target.value)}
-            style={base.input}
-            disabled={isLoading}
-          />
+          <div style={{ marginBottom: "16px", cursor: "pointer" }} onClick={openExpiryDatePicker}>
+            <span className="rrhh-field-label" style={{ ...base.label, display: "block" }}>
+              Fecha de Vencimiento
+            </span>
+            <input
+              ref={expiryDateRef}
+              id="expiryDate"
+              type="date"
+              value={expiryDate}
+              onChange={(e) => setExpiryDate(e.target.value)}
+              onClick={(e) => {
+                e.stopPropagation();
+                openExpiryDatePicker();
+              }}
+              style={{ ...base.input, marginBottom: 0, cursor: "pointer" }}
+              disabled={isLoading}
+            />
+          </div>
 
           <button
             type="submit"
