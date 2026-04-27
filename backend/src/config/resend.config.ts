@@ -30,8 +30,8 @@ export class ResendConfigService {
       });
 
       return response;
-    } catch (error) {
-      throw new Error(`Email error: ${error.message}`);
+    } catch (error: any) {
+      throw new Error(`Email error: ${error?.message}`);
     }
   }
 
@@ -57,8 +57,8 @@ export class ResendConfigService {
       });
 
       return response;
-    } catch (error) {
-      throw new Error(`Email with attachment error: ${error.message}`);
+    } catch (error: any) {
+      throw new Error(`Email with attachment error: ${error?.message}`);
     }
   }
 }

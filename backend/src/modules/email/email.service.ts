@@ -43,9 +43,9 @@ export class EmailService {
         `Código QR para Entrega - ${nombreSeguro}`,
         html,
       );
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException(
-        `Error al enviar QR por email: ${error.message}`,
+        `Error al enviar QR por email: ${error?.message}`,
       );
     }
 

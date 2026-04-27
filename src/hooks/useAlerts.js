@@ -138,7 +138,7 @@ export function useAlerts() {
         const alerts_array = Array.isArray(data) ? data : data.data || [];
         setAlerts(sortAlerts(alerts_array.map(mapIncidencia)));
       } catch (error) {
-        console.error("Error al cargar incidencias:", error.message);
+        console.error("Error al cargar incidencias:", error?.message);
       } finally {
         setLoading(false);
       }
@@ -163,7 +163,7 @@ export function useAlerts() {
         const alerts_array = Array.isArray(data) ? data : data.data || [];
         setAlerts(sortAlerts(alerts_array.map(mapIncidencia)));
       } catch (error) {
-        console.warn("Polling error:", error.message);
+        console.warn("Polling error:", error?.message);
       }
     }, 5000); // Poll every 5 seconds
 
@@ -199,7 +199,7 @@ export function useAlerts() {
 
       return true;
     } catch (error) {
-      console.error("Error al hacer acuse de recibo:", error.message);
+      console.error("Error al hacer acuse de recibo:", error?.message);
       return false;
     }
   }, []);
@@ -230,7 +230,7 @@ export function useAlerts() {
 
       return true;
     } catch (error) {
-      console.error("Error al resolver incidencia:", error.message);
+      console.error("Error al resolver incidencia:", error?.message);
       return false;
     }
   }, []);

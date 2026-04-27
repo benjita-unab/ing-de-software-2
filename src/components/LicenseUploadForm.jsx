@@ -220,7 +220,7 @@ const LicenseUploadForm = () => {
     } catch (error) {
       console.error('Error en handleUpload:', error);
       setErrors({
-        submit: error.message || 'Error al procesar la solicitud. Intenta nuevamente.'
+        submit: error?.message || 'Error al procesar la solicitud. Intenta nuevamente.'
       });
     } finally {
       // Pase lo que pase (éxito o error), apagamos el estado de carga

@@ -70,7 +70,9 @@ export class ConductoresService {
     }
 
     // Verificar si está próxima a vencer (30 días)
-    const diasParaVencer = Math.floor((fechaVencimiento - hoy) / (1000 * 60 * 60 * 24));
+    const diasParaVencer = Math.floor(
+      (fechaVencimiento.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24)
+    );
 
     if (diasParaVencer < 30) {
       return {

@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { SupabaseConfigService } from '../../config/supabase.config';
 import { ResendConfigService } from '../../config/resend.config';
-import * as PDFDocument from 'pdfkit';
+import PDFDocument from 'pdfkit';
 import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
@@ -46,6 +46,8 @@ export class EntregasService {
       throw new NotFoundException(`Ruta no encontrada: ${rutaError?.message}`);
     }
 
+    const cliente = Array.isArray(ruta.clientes) ? ruta.clientes[0] : ruta.clientes;
+
     // Obtener entregas asociadas
     const { data: entregas, error: entregasError } = await supabase
       .from('entregas')
@@ -64,7 +66,7 @@ export class EntregasService {
         destino: ruta.destino,
         fechaInicio: ruta.fecha_inicio,
         fechaFin: ruta.fecha_fin,
-        cliente: ruta.clientes,
+        cliente,
         conductor: ruta.conductores,
         camion: ruta.camiones,
       });
@@ -90,11 +92,11 @@ export class EntregasService {
         .getPublicUrl(pdfPath);
 
       // 3. Enviar email al cliente
-      const emailDestino = clienteEmail || ruta.clientes?.contacto_email;
+      const emailDestino = clienteEmail || cliente?.contacto_email;
       if (emailDestino) {
         await this.sendDeliveryEmail(
           emailDestino,
-          ruta.clientes?.nombre || 'Cliente',
+          cliente?.nombre || 'Cliente',
           pdfBuffer,
           rutaId,
         );
@@ -127,12 +129,12 @@ export class EntregasService {
           rutaId,
           pdfUrl: publicUrlData.publicUrl,
           emailEnviadoA: emailDestino,
-          clienteNombre: ruta.clientes?.nombre,
+          clienteNombre: cliente?.nombre,
         },
       };
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException(
-        `Error cerrando entrega: ${error.message}`,
+        `Error cerrando entrega: ${error?.message}`,
       );
     }
   }
@@ -194,9 +196,9 @@ export class EntregasService {
           firmaUrl: publicUrlData.publicUrl,
         },
       };
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException(
-        `Error guardando firma: ${error.message}`,
+        `Error guardando firma: ${error?.message}`,
       );
     }
   }
@@ -254,9 +256,9 @@ export class EntregasService {
           fotoUrl: publicUrlData.publicUrl,
         },
       };
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException(
-        `Error guardando foto: ${error.message}`,
+        `Error guardando foto: ${error?.message}`,
       );
     }
   }
@@ -403,8 +405,8 @@ export class EntregasService {
           },
         ],
       });
-    } catch (error) {
-      console.error(`Error enviando email: ${error.message}`);
+    } catch (error: any) {
+      console.error(`Error enviando email: ${error?.message}`);
       // No lanzar excepción, solo registrar
     }
   }

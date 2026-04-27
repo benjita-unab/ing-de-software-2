@@ -36,7 +36,7 @@ export async function ensureLoggedIn(): Promise<string | null> {
       console.log("Token obtenido:", newToken.slice(0, 20));
     }
     return newToken;
-  } catch (error) {
+  } catch (error: any) {
     console.log("Error en ensureLoggedIn:", error);
     return null;
   }
@@ -57,6 +57,8 @@ export async function loginBff(email: string, password: string) {
   }
   if (payload.accessToken) {
     await saveAccessToken(payload.accessToken);
+    // TODO: quitar el log de abajo tras probar en Postman (no dejar el token en consola en producción)
+    console.log("TOKEN_POSTMAN_COPY:", payload.accessToken);
   }
   return payload;
 }

@@ -22,6 +22,8 @@ export class TrazabilidadController {
       timestamp_evento?: string;
     },
   ) {
+    console.log('BODY TRAZABILIDAD:', body);
+
     const { id, etapa, foto_uri, latitud, longitud, timestamp_evento } = body;
 
     if (typeof id !== 'string' || !id.trim()) {

@@ -134,7 +134,7 @@ export async function generarComprobantePDF(
 
     const data = await response.json();
     row = data as unknown as RutaQueryRow;
-  } catch (error) {
+  } catch (error: any) {
     console.warn(`Error fetching route data: ${error}. Using test data.`);
     row = {
       id: rutaId,

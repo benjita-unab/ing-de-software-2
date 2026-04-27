@@ -34,6 +34,8 @@ export class TrazabilidadService {
       .single();
 
     if (error) {
+      console.error('ERROR SUPABASE TRAZABILIDAD:', error);
+
       throw new BadRequestException(`Error al registrar evento: ${error.message}`);
     }
 

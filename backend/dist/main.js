@@ -2,11 +2,11 @@
 /******/ 	"use strict";
 /******/ 	var __webpack_modules__ = ({
 
-/***/ "./src/app.controller.ts"
+/***/ "./src/app.controller.ts":
 /*!*******************************!*\
   !*** ./src/app.controller.ts ***!
   \*******************************/
-(__unused_webpack_module, exports, __webpack_require__) {
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
@@ -53,13 +53,13 @@ exports.AppController = AppController = __decorate([
 ], AppController);
 
 
-/***/ },
+/***/ }),
 
-/***/ "./src/app.module.ts"
+/***/ "./src/app.module.ts":
 /*!***************************!*\
   !*** ./src/app.module.ts ***!
   \***************************/
-(__unused_webpack_module, exports, __webpack_require__) {
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
@@ -71,7 +71,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.AppModule = void 0;
 const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
-const config_1 = __webpack_require__(Object(function webpackMissingModule() { var e = new Error("Cannot find module '@nestjs/config'"); e.code = 'MODULE_NOT_FOUND'; throw e; }()));
+const config_1 = __webpack_require__(/*! @nestjs/config */ "@nestjs/config");
 const jwt_1 = __webpack_require__(/*! @nestjs/jwt */ "@nestjs/jwt");
 const passport_1 = __webpack_require__(/*! @nestjs/passport */ "@nestjs/passport");
 const supabase_config_1 = __webpack_require__(/*! ./config/supabase.config */ "./src/config/supabase.config.ts");
@@ -116,13 +116,13 @@ exports.AppModule = AppModule = __decorate([
 ], AppModule);
 
 
-/***/ },
+/***/ }),
 
-/***/ "./src/app.service.ts"
+/***/ "./src/app.service.ts":
 /*!****************************!*\
   !*** ./src/app.service.ts ***!
   \****************************/
-(__unused_webpack_module, exports, __webpack_require__) {
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
@@ -162,13 +162,13 @@ exports.AppService = AppService = __decorate([
 ], AppService);
 
 
-/***/ },
+/***/ }),
 
-/***/ "./src/common/decorators/user.decorator.ts"
+/***/ "./src/common/decorators/user.decorator.ts":
 /*!*************************************************!*\
   !*** ./src/common/decorators/user.decorator.ts ***!
   \*************************************************/
-(__unused_webpack_module, exports, __webpack_require__) {
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
@@ -185,13 +185,13 @@ exports.CurrentUser = (0, common_1.createParamDecorator)((data, ctx) => {
 });
 
 
-/***/ },
+/***/ }),
 
-/***/ "./src/common/guards/jwt.guard.ts"
+/***/ "./src/common/guards/jwt.guard.ts":
 /*!****************************************!*\
   !*** ./src/common/guards/jwt.guard.ts ***!
   \****************************************/
-(__unused_webpack_module, exports, __webpack_require__) {
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
@@ -221,13 +221,13 @@ exports.JwtGuard = JwtGuard = __decorate([
 ], JwtGuard);
 
 
-/***/ },
+/***/ }),
 
-/***/ "./src/common/strategies/jwt.strategy.ts"
+/***/ "./src/common/strategies/jwt.strategy.ts":
 /*!***********************************************!*\
   !*** ./src/common/strategies/jwt.strategy.ts ***!
   \***********************************************/
-(__unused_webpack_module, exports, __webpack_require__) {
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
@@ -270,13 +270,13 @@ exports.JwtStrategy = JwtStrategy = __decorate([
 ], JwtStrategy);
 
 
-/***/ },
+/***/ }),
 
-/***/ "./src/config/resend.config.ts"
+/***/ "./src/config/resend.config.ts":
 /*!*************************************!*\
   !*** ./src/config/resend.config.ts ***!
   \*************************************/
-(__unused_webpack_module, exports, __webpack_require__) {
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
@@ -315,7 +315,7 @@ let ResendConfigService = class ResendConfigService {
             return response;
         }
         catch (error) {
-            throw new Error(`Email error: ${error.message}`);
+            throw new Error(`Email error: ${error?.message}`);
         }
     }
     async sendEmailWithAttachment(to, subject, html, attachmentBase64, attachmentName) {
@@ -335,7 +335,7 @@ let ResendConfigService = class ResendConfigService {
             return response;
         }
         catch (error) {
-            throw new Error(`Email with attachment error: ${error.message}`);
+            throw new Error(`Email with attachment error: ${error?.message}`);
         }
     }
 };
@@ -346,13 +346,13 @@ exports.ResendConfigService = ResendConfigService = __decorate([
 ], ResendConfigService);
 
 
-/***/ },
+/***/ }),
 
-/***/ "./src/config/supabase.config.ts"
+/***/ "./src/config/supabase.config.ts":
 /*!***************************************!*\
   !*** ./src/config/supabase.config.ts ***!
   \***************************************/
-(__unused_webpack_module, exports, __webpack_require__) {
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
@@ -416,61 +416,35 @@ exports.SupabaseConfigService = SupabaseConfigService = __decorate([
 ], SupabaseConfigService);
 
 
-/***/ },
+/***/ }),
 
-/***/ "./src/main.ts"
+/***/ "./src/main.ts":
 /*!*********************!*\
   !*** ./src/main.ts ***!
   \*********************/
-(__unused_webpack_module, exports, __webpack_require__) {
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 const core_1 = __webpack_require__(/*! @nestjs/core */ "@nestjs/core");
 const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
 const app_module_1 = __webpack_require__(/*! ./app.module */ "./src/app.module.ts");
-const helmet = __importStar(__webpack_require__(/*! helmet */ "helmet"));
-const compression = __importStar(__webpack_require__(/*! compression */ "compression"));
+const helmet_1 = __importDefault(__webpack_require__(/*! helmet */ "helmet"));
+const compression_1 = __importDefault(__webpack_require__(/*! compression */ "compression"));
 async function bootstrap() {
     const app = await core_1.NestFactory.create(app_module_1.AppModule, {
         logger: ['log', 'error', 'warn', 'debug'],
     });
+    app.use((req, _res, next) => {
+        console.log(`[REQ] ${req.method} ${req.url}`);
+        next();
+    });
     // Security
-    app.use(helmet());
-    app.use(compression());
+    app.use((0, helmet_1.default)());
+    app.use((0, compression_1.default)());
     // CORS
     app.enableCors({
         origin: [
@@ -501,13 +475,13 @@ bootstrap().catch((err) => {
 });
 
 
-/***/ },
+/***/ }),
 
-/***/ "./src/modules/conductores/conductores.controller.ts"
+/***/ "./src/modules/conductores/conductores.controller.ts":
 /*!***********************************************************!*\
   !*** ./src/modules/conductores/conductores.controller.ts ***!
   \***********************************************************/
-(__unused_webpack_module, exports, __webpack_require__) {
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
@@ -611,13 +585,13 @@ exports.ConductoresController = ConductoresController = __decorate([
 ], ConductoresController);
 
 
-/***/ },
+/***/ }),
 
-/***/ "./src/modules/conductores/conductores.module.ts"
+/***/ "./src/modules/conductores/conductores.module.ts":
 /*!*******************************************************!*\
   !*** ./src/modules/conductores/conductores.module.ts ***!
   \*******************************************************/
-(__unused_webpack_module, exports, __webpack_require__) {
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
@@ -644,13 +618,13 @@ exports.ConductoresModule = ConductoresModule = __decorate([
 ], ConductoresModule);
 
 
-/***/ },
+/***/ }),
 
-/***/ "./src/modules/conductores/conductores.service.ts"
+/***/ "./src/modules/conductores/conductores.service.ts":
 /*!********************************************************!*\
   !*** ./src/modules/conductores/conductores.service.ts ***!
   \********************************************************/
-(__unused_webpack_module, exports, __webpack_require__) {
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
@@ -725,7 +699,7 @@ let ConductoresService = class ConductoresService {
             };
         }
         // Verificar si está próxima a vencer (30 días)
-        const diasParaVencer = Math.floor((fechaVencimiento - hoy) / (1000 * 60 * 60 * 24));
+        const diasParaVencer = Math.floor((fechaVencimiento.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24));
         if (diasParaVencer < 30) {
             return {
                 isValid: true,
@@ -908,13 +882,13 @@ exports.ConductoresService = ConductoresService = __decorate([
 ], ConductoresService);
 
 
-/***/ },
+/***/ }),
 
-/***/ "./src/modules/email/email.controller.ts"
+/***/ "./src/modules/email/email.controller.ts":
 /*!***********************************************!*\
   !*** ./src/modules/email/email.controller.ts ***!
   \***********************************************/
-(__unused_webpack_module, exports, __webpack_require__) {
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
@@ -962,13 +936,13 @@ exports.EmailController = EmailController = __decorate([
 ], EmailController);
 
 
-/***/ },
+/***/ }),
 
-/***/ "./src/modules/email/email.module.ts"
+/***/ "./src/modules/email/email.module.ts":
 /*!*******************************************!*\
   !*** ./src/modules/email/email.module.ts ***!
   \*******************************************/
-(__unused_webpack_module, exports, __webpack_require__) {
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
@@ -995,13 +969,13 @@ exports.EmailModule = EmailModule = __decorate([
 ], EmailModule);
 
 
-/***/ },
+/***/ }),
 
-/***/ "./src/modules/email/email.service.ts"
+/***/ "./src/modules/email/email.service.ts":
 /*!********************************************!*\
   !*** ./src/modules/email/email.service.ts ***!
   \********************************************/
-(__unused_webpack_module, exports, __webpack_require__) {
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
@@ -1051,7 +1025,7 @@ let EmailService = class EmailService {
             await this.resendConfig.sendEmail(email.trim(), `Código QR para Entrega - ${nombreSeguro}`, html);
         }
         catch (error) {
-            throw new common_1.InternalServerErrorException(`Error al enviar QR por email: ${error.message}`);
+            throw new common_1.InternalServerErrorException(`Error al enviar QR por email: ${error?.message}`);
         }
         return { message: 'QR enviado correctamente' };
     }
@@ -1071,13 +1045,13 @@ exports.EmailService = EmailService = __decorate([
 ], EmailService);
 
 
-/***/ },
+/***/ }),
 
-/***/ "./src/modules/entregas/entregas.controller.ts"
+/***/ "./src/modules/entregas/entregas.controller.ts":
 /*!*****************************************************!*\
   !*** ./src/modules/entregas/entregas.controller.ts ***!
   \*****************************************************/
-(__unused_webpack_module, exports, __webpack_require__) {
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
@@ -1175,13 +1149,13 @@ exports.EntregasController = EntregasController = __decorate([
 ], EntregasController);
 
 
-/***/ },
+/***/ }),
 
-/***/ "./src/modules/entregas/entregas.module.ts"
+/***/ "./src/modules/entregas/entregas.module.ts":
 /*!*************************************************!*\
   !*** ./src/modules/entregas/entregas.module.ts ***!
   \*************************************************/
-(__unused_webpack_module, exports, __webpack_require__) {
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
@@ -1209,56 +1183,26 @@ exports.EntregasModule = EntregasModule = __decorate([
 ], EntregasModule);
 
 
-/***/ },
+/***/ }),
 
-/***/ "./src/modules/entregas/entregas.service.ts"
+/***/ "./src/modules/entregas/entregas.service.ts":
 /*!**************************************************!*\
   !*** ./src/modules/entregas/entregas.service.ts ***!
   \**************************************************/
-(__unused_webpack_module, exports, __webpack_require__) {
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
     var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
     if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 var _a, _b;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
@@ -1266,7 +1210,7 @@ exports.EntregasService = void 0;
 const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
 const supabase_config_1 = __webpack_require__(/*! ../../config/supabase.config */ "./src/config/supabase.config.ts");
 const resend_config_1 = __webpack_require__(/*! ../../config/resend.config */ "./src/config/resend.config.ts");
-const PDFDocument = __importStar(__webpack_require__(/*! pdfkit */ "pdfkit"));
+const pdfkit_1 = __importDefault(__webpack_require__(/*! pdfkit */ "pdfkit"));
 let EntregasService = class EntregasService {
     constructor(supabaseConfig, resendConfig) {
         this.supabaseConfig = supabaseConfig;
@@ -1298,6 +1242,7 @@ let EntregasService = class EntregasService {
         if (rutaError || !ruta) {
             throw new common_1.NotFoundException(`Ruta no encontrada: ${rutaError?.message}`);
         }
+        const cliente = Array.isArray(ruta.clientes) ? ruta.clientes[0] : ruta.clientes;
         // Obtener entregas asociadas
         const { data: entregas, error: entregasError } = await supabase
             .from('entregas')
@@ -1314,7 +1259,7 @@ let EntregasService = class EntregasService {
                 destino: ruta.destino,
                 fechaInicio: ruta.fecha_inicio,
                 fechaFin: ruta.fecha_fin,
-                cliente: ruta.clientes,
+                cliente,
                 conductor: ruta.conductores,
                 camion: ruta.camiones,
             });
@@ -1334,9 +1279,9 @@ let EntregasService = class EntregasService {
                 .from('entregas')
                 .getPublicUrl(pdfPath);
             // 3. Enviar email al cliente
-            const emailDestino = clienteEmail || ruta.clientes?.contacto_email;
+            const emailDestino = clienteEmail || cliente?.contacto_email;
             if (emailDestino) {
-                await this.sendDeliveryEmail(emailDestino, ruta.clientes?.nombre || 'Cliente', pdfBuffer, rutaId);
+                await this.sendDeliveryEmail(emailDestino, cliente?.nombre || 'Cliente', pdfBuffer, rutaId);
             }
             // 4. Marcar entregas como validadas
             const { error: updateError } = await supabase
@@ -1362,12 +1307,12 @@ let EntregasService = class EntregasService {
                     rutaId,
                     pdfUrl: publicUrlData.publicUrl,
                     emailEnviadoA: emailDestino,
-                    clienteNombre: ruta.clientes?.nombre,
+                    clienteNombre: cliente?.nombre,
                 },
             };
         }
         catch (error) {
-            throw new common_1.InternalServerErrorException(`Error cerrando entrega: ${error.message}`);
+            throw new common_1.InternalServerErrorException(`Error cerrando entrega: ${error?.message}`);
         }
     }
     /**
@@ -1417,7 +1362,7 @@ let EntregasService = class EntregasService {
             };
         }
         catch (error) {
-            throw new common_1.InternalServerErrorException(`Error guardando firma: ${error.message}`);
+            throw new common_1.InternalServerErrorException(`Error guardando firma: ${error?.message}`);
         }
     }
     /**
@@ -1466,7 +1411,7 @@ let EntregasService = class EntregasService {
             };
         }
         catch (error) {
-            throw new common_1.InternalServerErrorException(`Error guardando foto: ${error.message}`);
+            throw new common_1.InternalServerErrorException(`Error guardando foto: ${error?.message}`);
         }
     }
     /**
@@ -1502,7 +1447,7 @@ let EntregasService = class EntregasService {
      */
     async generateDeliveryPDF(data) {
         return new Promise((resolve, reject) => {
-            const doc = new PDFDocument();
+            const doc = new pdfkit_1.default();
             const chunks = [];
             doc.on('data', (chunk) => chunks.push(chunk));
             doc.on('end', () => {
@@ -1577,7 +1522,7 @@ let EntregasService = class EntregasService {
             });
         }
         catch (error) {
-            console.error(`Error enviando email: ${error.message}`);
+            console.error(`Error enviando email: ${error?.message}`);
             // No lanzar excepción, solo registrar
         }
     }
@@ -1589,13 +1534,13 @@ exports.EntregasService = EntregasService = __decorate([
 ], EntregasService);
 
 
-/***/ },
+/***/ }),
 
-/***/ "./src/modules/incidencias/incidencias.controller.ts"
+/***/ "./src/modules/incidencias/incidencias.controller.ts":
 /*!***********************************************************!*\
   !*** ./src/modules/incidencias/incidencias.controller.ts ***!
   \***********************************************************/
-(__unused_webpack_module, exports, __webpack_require__) {
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
@@ -1661,13 +1606,13 @@ exports.IncidenciasController = IncidenciasController = __decorate([
 ], IncidenciasController);
 
 
-/***/ },
+/***/ }),
 
-/***/ "./src/modules/incidencias/incidencias.module.ts"
+/***/ "./src/modules/incidencias/incidencias.module.ts":
 /*!*******************************************************!*\
   !*** ./src/modules/incidencias/incidencias.module.ts ***!
   \*******************************************************/
-(__unused_webpack_module, exports, __webpack_require__) {
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
@@ -1694,13 +1639,13 @@ exports.IncidenciasModule = IncidenciasModule = __decorate([
 ], IncidenciasModule);
 
 
-/***/ },
+/***/ }),
 
-/***/ "./src/modules/incidencias/incidencias.service.ts"
+/***/ "./src/modules/incidencias/incidencias.service.ts":
 /*!********************************************************!*\
   !*** ./src/modules/incidencias/incidencias.service.ts ***!
   \********************************************************/
-(__unused_webpack_module, exports, __webpack_require__) {
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
@@ -1796,13 +1741,13 @@ exports.IncidenciasService = IncidenciasService = __decorate([
 ], IncidenciasService);
 
 
-/***/ },
+/***/ }),
 
-/***/ "./src/modules/rutas/rutas.controller.ts"
+/***/ "./src/modules/rutas/rutas.controller.ts":
 /*!***********************************************!*\
   !*** ./src/modules/rutas/rutas.controller.ts ***!
   \***********************************************/
-(__unused_webpack_module, exports, __webpack_require__) {
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
@@ -1918,13 +1863,13 @@ exports.RutasController = RutasController = __decorate([
 ], RutasController);
 
 
-/***/ },
+/***/ }),
 
-/***/ "./src/modules/rutas/rutas.module.ts"
+/***/ "./src/modules/rutas/rutas.module.ts":
 /*!*******************************************!*\
   !*** ./src/modules/rutas/rutas.module.ts ***!
   \*******************************************/
-(__unused_webpack_module, exports, __webpack_require__) {
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
@@ -1953,13 +1898,13 @@ exports.RutasModule = RutasModule = __decorate([
 ], RutasModule);
 
 
-/***/ },
+/***/ }),
 
-/***/ "./src/modules/rutas/rutas.service.ts"
+/***/ "./src/modules/rutas/rutas.service.ts":
 /*!********************************************!*\
   !*** ./src/modules/rutas/rutas.service.ts ***!
   \********************************************/
-(__unused_webpack_module, exports, __webpack_require__) {
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
@@ -2195,13 +2140,13 @@ exports.RutasService = RutasService = __decorate([
 ], RutasService);
 
 
-/***/ },
+/***/ }),
 
-/***/ "./src/modules/storage/storage.controller.ts"
+/***/ "./src/modules/storage/storage.controller.ts":
 /*!***************************************************!*\
   !*** ./src/modules/storage/storage.controller.ts ***!
   \***************************************************/
-(__unused_webpack_module, exports, __webpack_require__) {
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
@@ -2256,13 +2201,13 @@ exports.StorageController = StorageController = __decorate([
 ], StorageController);
 
 
-/***/ },
+/***/ }),
 
-/***/ "./src/modules/storage/storage.module.ts"
+/***/ "./src/modules/storage/storage.module.ts":
 /*!***********************************************!*\
   !*** ./src/modules/storage/storage.module.ts ***!
   \***********************************************/
-(__unused_webpack_module, exports, __webpack_require__) {
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
@@ -2288,13 +2233,13 @@ exports.StorageModule = StorageModule = __decorate([
 ], StorageModule);
 
 
-/***/ },
+/***/ }),
 
-/***/ "./src/modules/storage/storage.service.ts"
+/***/ "./src/modules/storage/storage.service.ts":
 /*!************************************************!*\
   !*** ./src/modules/storage/storage.service.ts ***!
   \************************************************/
-(__unused_webpack_module, exports, __webpack_require__) {
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
@@ -2345,13 +2290,13 @@ exports.StorageService = StorageService = __decorate([
 ], StorageService);
 
 
-/***/ },
+/***/ }),
 
-/***/ "./src/modules/trazabilidad/trazabilidad.controller.ts"
+/***/ "./src/modules/trazabilidad/trazabilidad.controller.ts":
 /*!*************************************************************!*\
   !*** ./src/modules/trazabilidad/trazabilidad.controller.ts ***!
   \*************************************************************/
-(__unused_webpack_module, exports, __webpack_require__) {
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
@@ -2376,6 +2321,7 @@ let TrazabilidadController = class TrazabilidadController {
         this.trazabilidadService = trazabilidadService;
     }
     async createEvent(body) {
+        console.log('BODY TRAZABILIDAD:', body);
         const { id, etapa, foto_uri, latitud, longitud, timestamp_evento } = body;
         if (typeof id !== 'string' || !id.trim()) {
             throw new common_1.BadRequestException('id es requerido');
@@ -2416,13 +2362,13 @@ exports.TrazabilidadController = TrazabilidadController = __decorate([
 ], TrazabilidadController);
 
 
-/***/ },
+/***/ }),
 
-/***/ "./src/modules/trazabilidad/trazabilidad.module.ts"
+/***/ "./src/modules/trazabilidad/trazabilidad.module.ts":
 /*!*********************************************************!*\
   !*** ./src/modules/trazabilidad/trazabilidad.module.ts ***!
   \*********************************************************/
-(__unused_webpack_module, exports, __webpack_require__) {
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
@@ -2448,13 +2394,13 @@ exports.TrazabilidadModule = TrazabilidadModule = __decorate([
 ], TrazabilidadModule);
 
 
-/***/ },
+/***/ }),
 
-/***/ "./src/modules/trazabilidad/trazabilidad.service.ts"
+/***/ "./src/modules/trazabilidad/trazabilidad.service.ts":
 /*!**********************************************************!*\
   !*** ./src/modules/trazabilidad/trazabilidad.service.ts ***!
   \**********************************************************/
-(__unused_webpack_module, exports, __webpack_require__) {
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
@@ -2490,6 +2436,7 @@ let TrazabilidadService = class TrazabilidadService {
             .select()
             .single();
         if (error) {
+            console.error('ERROR SUPABASE TRAZABILIDAD:', error);
             throw new common_1.BadRequestException(`Error al registrar evento: ${error.message}`);
         }
         return row;
@@ -2502,127 +2449,137 @@ exports.TrazabilidadService = TrazabilidadService = __decorate([
 ], TrazabilidadService);
 
 
-/***/ },
+/***/ }),
 
-/***/ "@nestjs/common"
+/***/ "@nestjs/common":
 /*!*********************************!*\
   !*** external "@nestjs/common" ***!
   \*********************************/
-(module) {
+/***/ ((module) => {
 
 module.exports = require("@nestjs/common");
 
-/***/ },
+/***/ }),
 
-/***/ "@nestjs/core"
+/***/ "@nestjs/config":
+/*!*********************************!*\
+  !*** external "@nestjs/config" ***!
+  \*********************************/
+/***/ ((module) => {
+
+module.exports = require("@nestjs/config");
+
+/***/ }),
+
+/***/ "@nestjs/core":
 /*!*******************************!*\
   !*** external "@nestjs/core" ***!
   \*******************************/
-(module) {
+/***/ ((module) => {
 
 module.exports = require("@nestjs/core");
 
-/***/ },
+/***/ }),
 
-/***/ "@nestjs/jwt"
+/***/ "@nestjs/jwt":
 /*!******************************!*\
   !*** external "@nestjs/jwt" ***!
   \******************************/
-(module) {
+/***/ ((module) => {
 
 module.exports = require("@nestjs/jwt");
 
-/***/ },
+/***/ }),
 
-/***/ "@nestjs/passport"
+/***/ "@nestjs/passport":
 /*!***********************************!*\
   !*** external "@nestjs/passport" ***!
   \***********************************/
-(module) {
+/***/ ((module) => {
 
 module.exports = require("@nestjs/passport");
 
-/***/ },
+/***/ }),
 
-/***/ "@nestjs/platform-express"
+/***/ "@nestjs/platform-express":
 /*!*******************************************!*\
   !*** external "@nestjs/platform-express" ***!
   \*******************************************/
-(module) {
+/***/ ((module) => {
 
 module.exports = require("@nestjs/platform-express");
 
-/***/ },
+/***/ }),
 
-/***/ "@supabase/supabase-js"
+/***/ "@supabase/supabase-js":
 /*!****************************************!*\
   !*** external "@supabase/supabase-js" ***!
   \****************************************/
-(module) {
+/***/ ((module) => {
 
 module.exports = require("@supabase/supabase-js");
 
-/***/ },
+/***/ }),
 
-/***/ "compression"
+/***/ "compression":
 /*!******************************!*\
   !*** external "compression" ***!
   \******************************/
-(module) {
+/***/ ((module) => {
 
 module.exports = require("compression");
 
-/***/ },
+/***/ }),
 
-/***/ "helmet"
+/***/ "helmet":
 /*!*************************!*\
   !*** external "helmet" ***!
   \*************************/
-(module) {
+/***/ ((module) => {
 
 module.exports = require("helmet");
 
-/***/ },
+/***/ }),
 
-/***/ "multer"
+/***/ "multer":
 /*!*************************!*\
   !*** external "multer" ***!
   \*************************/
-(module) {
+/***/ ((module) => {
 
 module.exports = require("multer");
 
-/***/ },
+/***/ }),
 
-/***/ "passport-jwt"
+/***/ "passport-jwt":
 /*!*******************************!*\
   !*** external "passport-jwt" ***!
   \*******************************/
-(module) {
+/***/ ((module) => {
 
 module.exports = require("passport-jwt");
 
-/***/ },
+/***/ }),
 
-/***/ "pdfkit"
+/***/ "pdfkit":
 /*!*************************!*\
   !*** external "pdfkit" ***!
   \*************************/
-(module) {
+/***/ ((module) => {
 
 module.exports = require("pdfkit");
 
-/***/ },
+/***/ }),
 
-/***/ "resend"
+/***/ "resend":
 /*!*************************!*\
   !*** external "resend" ***!
   \*************************/
-(module) {
+/***/ ((module) => {
 
 module.exports = require("resend");
 
-/***/ }
+/***/ })
 
 /******/ 	});
 /************************************************************************/
@@ -2644,12 +2601,6 @@ module.exports = require("resend");
 /******/ 		};
 /******/ 	
 /******/ 		// Execute the module function
-/******/ 		if (!(moduleId in __webpack_modules__)) {
-/******/ 			delete __webpack_module_cache__[moduleId];
-/******/ 			var e = new Error("Cannot find module '" + moduleId + "'");
-/******/ 			e.code = 'MODULE_NOT_FOUND';
-/******/ 			throw e;
-/******/ 		}
 /******/ 		__webpack_modules__[moduleId].call(module.exports, module, module.exports, __webpack_require__);
 /******/ 	
 /******/ 		// Return the exports of the module
