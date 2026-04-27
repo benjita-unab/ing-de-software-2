@@ -18,13 +18,11 @@ export async function cerrarDespachoYEnviarComprobante(
   }
 
   const email = "oyanadelbastian5@gmail.com";
-  const response = await bffFetch("/api/dispatch/close", {
+  const response = await bffFetch(`/api/entregas/${id}/close`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      rutaId: id,
-      email,
-      nombreCliente: "Cliente"
+      clienteEmail: email,
     })
   });
   const payload = await response.json().catch(() => ({}));
@@ -42,16 +40,11 @@ export async function cerrarDespachoYEnviarComprobante(
 export async function guardarFirmaEnSupabase(rutaId: string, base64Signature: string) {
   const dataUri = String(base64Signature || "");
   if (!dataUri.trim()) return;
-  const response = await fetch(dataUri);
-  const blob = await response.blob();
-  const formData = new FormData();
-  formData.append("file", blob, `${rutaId}-${Date.now()}.png`);
-  formData.append("bucket", "fotos_trazabilidad");
-  formData.append("folder", "firmas");
 
-  const uploadResponse = await bffFetch("/api/storage/upload", {
+  const uploadResponse = await bffFetch(`/api/entregas/${rutaId}/signature`, {
     method: "POST",
-    body: formData
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ base64Signature: dataUri }),
   });
   if (!uploadResponse.ok) {
     const payload = await uploadResponse.json().catch(() => ({}));
@@ -59,13 +52,14 @@ export async function guardarFirmaEnSupabase(rutaId: string, base64Signature: st
   }
 }
 
+
 export async function enviarQRPrevio(rutaId: string): Promise<CierreDespachoResultado> {
   const id = String(rutaId).trim();
   if (!id) {
     throw new Error('rutaId es obligatorio.');
   }
 
-  const routeResponse = await bffFetch(`/api/routes/${id}`, { method: "GET" });
+  const routeResponse = await bffFetch(`/api/rutas/${id}`, { method: "GET" });
   const routePayload = await routeResponse.json().catch(() => ({}));
   const clienteNombre = routePayload?.clientes?.nombre ?? "Cliente de Prueba";
   const clienteId = routePayload?.cliente_id ?? "test-client-123";

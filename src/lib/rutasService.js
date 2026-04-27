@@ -92,59 +92,54 @@ export async function validarLicenciaConductor(conductorId) {
  * @param {string} conductorId - ID del conductor
  * @returns {Promise<{success: boolean, data?: object, error?: string}>}
  */
-export async function asignarConductorARuta(rutaId, conductorId) {
+export async function asignarConductorARuta(rutaId, conductorId, camionId) {
   if (!rutaId || !conductorId) {
     return {
       success: false,
-      error: "Ruta y conductor son requeridos",
+      error: "rutaId y conductorId son requeridos",
     };
   }
 
+  const token = localStorage.getItem("logitrack_access_token");
+  if (!token) {
+    return {
+      success: false,
+      error: "Token de autorización no disponible",
+    };
+  }
+
+  const payload = {
+    rutaId,
+    conductorId,
+  };
+  if (camionId) {
+    payload.camionId = camionId;
+  }
+
   try {
-    // PASO 1: Validar licencia del conductor
-    const validacion = await validarLicenciaConductor(conductorId);
+    const response = await fetch("/api/rutas/assign", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
 
-    if (!validacion.isValid) {
+    const payload = await response.json().catch(() => null);
+
+    if (!response.ok) {
       return {
         success: false,
-        error: validacion.errorMessage,
-      };
-    }
-
-    // PASO 2: Actualizar la ruta con el conductor asignado
-    const { data: rutaActualizada, error: updateError } = await supabase
-      .from("rutas")
-      .update({
-        conductor_id: conductorId,
-        fecha_inicio: new Date().toISOString(),
-      })
-      .eq("id", rutaId)
-      .select("id, conductor_id, origen, destino, fecha_inicio")
-      .single();
-
-    if (updateError) {
-      return {
-        success: false,
-        error: `Error al asignar ruta: ${updateError.message}`,
-      };
-    }
-
-    if (!rutaActualizada) {
-      return {
-        success: false,
-        error: "No se encontró la ruta para asignar",
+        error:
+          payload?.message || payload?.error ||
+          `Error al asignar ruta: ${response.statusText}`,
       };
     }
 
     return {
       success: true,
-      data: {
-        rutaId: rutaActualizada.id,
-        conductorId,
-        origen: rutaActualizada.origen,
-        destino: rutaActualizada.destino,
-        asignadoEn: rutaActualizada.fecha_inicio,
-      },
+      data: payload?.data ?? payload,
     };
   } catch (err) {
     return {

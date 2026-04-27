@@ -1,20 +1,8 @@
-function requireResendApiKey(): string {
-  const key = process.env.EXPO_PUBLIC_RESEND_API_KEY;
-  if (!key || !String(key).trim()) {
-    throw new Error(
-      "Falta EXPO_PUBLIC_RESEND_API_KEY en el entorno. Configúrala para enviar correos."
-    );
-  }
-  return String(key).trim();
-}
+import { getAccessToken, bffFetch } from "./bffService";
 
-function resolveFromAddress(): string {
-  const configured = process.env.EXPO_PUBLIC_RESEND_FROM_EMAIL;
-  if (configured && String(configured).trim()) {
-    return String(configured).trim();
-  }
-  return "Sistema Cargas <onboarding@resend.dev>";
-}
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3001";
+
+
 
 function escapeHtml(text: string): string {
   return text
@@ -26,11 +14,11 @@ function escapeHtml(text: string): string {
 }
 
 /**
- * Envía al cliente un correo formal con el comprobante PDF adjunto (base64 sin prefijo data:).
- * Requiere REACT_APP_RESEND_API_KEY. Opcional: REACT_APP_RESEND_FROM_EMAIL (dominio verificado en Resend).
+ * Sends a formal email to the client with the PDF receipt (base64 without data: prefix).
+ * Now uses backend API instead of direct Resend access.
  *
- * Nota de seguridad: en producción, la API key de Resend no debería exponerse en el bundle del navegador;
- * lo ideal es llamar a Resend desde un backend o Supabase Edge Function.
+ * Security note: Never expose API keys in client bundles. All email operations
+ * go through the backend API with JWT authentication.
  */
 export async function enviarComprobanteEmail(
   emailCliente: string,
@@ -42,64 +30,30 @@ export async function enviarComprobanteEmail(
     throw new Error("El correo del cliente está vacío.");
   }
 
-  const limpioBase64 = String(pdfBase64).replace(/^data:application\/pdf;base64,/, "").trim();
+  const limpioBase64 = String(pdfBase64)
+    .replace(/^data:application\/pdf;base64,/, "")
+    .trim();
   if (!limpioBase64) {
     throw new Error("El PDF en base64 está vacío.");
   }
 
-  const apiKey = requireResendApiKey();
-  const nombreSeguro = escapeHtml(nombreCliente);
-  const from = resolveFromAddress();
-
-  const html = `
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="utf-8" />
-  <title>Comprobante de despacho</title>
-</head>
-<body style="font-family: Arial, Helvetica, sans-serif; line-height: 1.5; color: #111827;">
-  <p>Estimado/a <strong>${nombreSeguro}</strong>,</p>
-  <p>
-    Le informamos que su despacho ha sido procesado en nuestro
-    <strong>Sistema de Seguimiento de Cargas Valiosas</strong>.
-  </p>
-  <p>
-    Adjunto a este mensaje encontrará el <strong>comprobante en formato PDF</strong>
-    con el resumen del trayecto, datos del envío y la documentación gráfica disponible.
-  </p>
-  <p>
-    Si tiene alguna consulta, puede responder a este correo o contactar a nuestro equipo de operaciones.
-  </p>
-  <p style="margin-top: 24px;">Atentamente,<br/>Equipo de Operaciones</p>
-  <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
-  <p style="font-size: 12px; color: #6b7280;">
-    Este es un mensaje automático. Por favor no comparta datos sensibles por correo si no conoce el remitente.
-  </p>
-</body>
-</html>
-`.trim();
+  const token = await getAccessToken();
+  if (!token) {
+    throw new Error("No authentication token found. Please log in.");
+  }
 
   const payload = {
-    from,
-    to: destino,
-    subject: `Comprobante de despacho – ${nombreCliente}`,
-    html,
-    attachments: [
-      {
-        filename: "comprobante-despacho.pdf",
-        content: limpioBase64, // base64 SIN prefijo data:...
-        contentType: "application/pdf",
-      },
-    ],
+    email: destino,
+    pdfBase64: limpioBase64,
+    nombreCliente: escapeHtml(nombreCliente),
   };
 
-  // Expo móvil (Hermes) - evitar librerías; usar fetch nativo.
-  const response = await fetch("https://api.resend.com/emails", {
+  // Call backend API instead of Resend directly
+  const response = await fetch(`${API_BASE_URL}/api/emails/send-receipt`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(payload),
   });
@@ -117,11 +71,11 @@ export async function enviarComprobanteEmail(
       responseJson?.message ||
       responseJson?.errors?.[0]?.message ||
       JSON.stringify(responseJson ?? {});
-    throw new Error(`Resend no pudo enviar el correo: ${detalle}`);
+    throw new Error(`Backend error sending email: ${detalle}`);
   }
 
   if (!responseJson) {
-    throw new Error("Resend no devolvió datos de confirmación del envío.");
+    throw new Error("Backend did not return confirmation data.");
   }
 }
 
@@ -135,33 +89,19 @@ export async function enviarCorreoQRCliente(
     throw new Error('El correo del cliente está vacío.');
   }
 
-  const apiKey = requireResendApiKey();
-  const nombreSeguro = escapeHtml(nombreCliente);
-  const from = resolveFromAddress();
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(clienteId)}`;
-  const html = `<!DOCTYPE html><html><body><h1>Hola, ${nombreSeguro}</h1><p>Aquí está tu código QR para presentar a la hora de la recepción de carga:</p><div><img src="${qrUrl}" alt="QR" /></div><p>Slds,<br>LogiTrack</p></body></html>`;
-
-  const payload = {
-    from,
-    to: destino,
-    subject: `Código QR para Entrega - ${nombreSeguro}`,
-    html,
-  };
-
-  const response = await fetch("https://api.resend.com/emails", {
+  // Delegates to backend — Resend API key never touches the mobile bundle.
+  const response = await bffFetch("/api/email/enviar-qr", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(payload),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email: destino,
+      clienteId,
+      nombreCliente,
+    }),
   });
 
   if (!response.ok) {
-    let errorData: any = {};
-    try {
-      errorData = await response.json();
-    } catch {}
-    throw new Error(`Resend Error QR: ${errorData?.message || response.statusText}`);
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload?.error ?? "No se pudo enviar el QR al cliente");
   }
 }

@@ -1,23 +1,28 @@
 // src/lib/supabaseClient.js
 // ─────────────────────────────────────────────────────────────────────────────
-// Instancia única del cliente Supabase para toda la app.
+// DEPRECATED: This file should not be used anymore.
+// All data operations must go through the backend API (apiClient).
+// Kept only for backward compatibility during migration.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { createClient } from "@supabase/supabase-js";
-
-const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
-const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error(
-    "Faltan las variables REACT_APP_SUPABASE_URL y REACT_APP_SUPABASE_ANON_KEY en tu .env"
-  );
-}
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  realtime: {
-    params: {
-      eventsPerSecond: 20,
-    },
+// Fallback stub to prevent crashes in legacy code that still imports this
+export const supabase = {
+  from: () => ({
+    select: () => Promise.reject(new Error("Use backend API instead")),
+    insert: () => Promise.reject(new Error("Use backend API instead")),
+    update: () => Promise.reject(new Error("Use backend API instead")),
+    delete: () => Promise.reject(new Error("Use backend API instead")),
+  }),
+  storage: {
+    from: () => ({
+      upload: () => Promise.reject(new Error("Use backend API instead")),
+      download: () => Promise.reject(new Error("Use backend API instead")),
+      getPublicUrl: () => ({ publicUrl: null, error: new Error("Use backend API instead") }),
+    }),
   },
-});
+  channel: () => ({
+    on: () => ({ subscribe: () => {}, unsubscribe: () => {} }),
+  }),
+  removeChannel: () => {},
+};
+

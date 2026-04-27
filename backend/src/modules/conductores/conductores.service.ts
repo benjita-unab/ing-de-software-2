@@ -1,6 +1,5 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { SupabaseConfigService } from '../../config/supabase.config';
-import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class ConductoresService {
@@ -114,28 +113,27 @@ export class ConductoresService {
     this.validateExpiryDate(expiryDate);
 
     const supabase = this.supabaseConfig.getClient();
+    const bucket = process.env.SUPABASE_DRIVER_LICENSES_BUCKET || 'driver_licenses';
 
     // Generar path único para el archivo
     const fileName = `${Date.now()}_${file.originalname}`;
     const filePath = `licenses/${userId}/${fileName}`;
 
+    if (!file.buffer) {
+      throw new BadRequestException('El archivo no se cargó correctamente en memoria');
+    }
+
     try {
       // 1. Subir archivo a Supabase Storage
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('driver_licenses')
-        .upload(filePath, file.buffer, {
-          contentType: file.mimetype,
-          upsert: false,
-        });
-
-      if (uploadError) {
-        throw new BadRequestException(`Error al subir archivo: ${uploadError.message}`);
-      }
+      await this.supabaseConfig.uploadFile(
+        bucket,
+        filePath,
+        file.buffer,
+        file.mimetype,
+      );
 
       // 2. Obtener URL pública
-      const { data: publicUrl } = supabase.storage
-        .from('driver_licenses')
-        .getPublicUrl(filePath);
+      const publicUrl = this.supabaseConfig.getPublicUrl(bucket, filePath);
 
       // 3. Guardar registro en driver_licenses
       const { data: licenseRecord, error: insertError } = await supabase
@@ -143,7 +141,7 @@ export class ConductoresService {
         .insert([
           {
             user_id: userId,
-            file_url: publicUrl.publicUrl,
+            file_url: publicUrl,
             file_name: file.originalname,
             expiry_date: expiryDate,
             uploaded_at: new Date().toISOString(),
@@ -156,33 +154,22 @@ export class ConductoresService {
         throw new BadRequestException(`Error al guardar registro: ${insertError.message}`);
       }
 
-      // 4. Actualizar licencia_vencimiento en tabla conductores (si existe relación)
-      const { data: conductor, error: conductorError } = await supabase
-        .from('conductores')
-        .select('id')
-        .eq('usuario_id', userId)
-        .single();
-
-      if (conductor && !conductorError) {
-        await supabase
-          .from('conductores')
-          .update({ licencia_vencimiento: expiryDate })
-          .eq('id', conductor.id);
-      }
-
       return {
         success: true,
         message: 'Licencia subida exitosamente',
         data: {
-          licenseId: licenseRecord[0]?.id,
-          fileUrl: publicUrl.publicUrl,
+          licenseId: licenseRecord?.[0]?.id,
+          fileUrl: publicUrl,
           status: 'pending_review',
           expiryDate,
         },
       };
     } catch (error) {
-      // Intentar limpiar archivo si algo falla
-      await supabase.storage.from('driver_licenses').remove([filePath]);
+      try {
+        await this.supabaseConfig.deleteFile(bucket, filePath);
+      } catch {
+        // Ignorar errores de limpieza para no enmascarar el error original
+      }
       throw error;
     }
   }

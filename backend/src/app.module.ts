@@ -10,6 +10,10 @@ import { AppService } from './app.service';
 import { ConductoresModule } from './modules/conductores/conductores.module';
 import { RutasModule } from './modules/rutas/rutas.module';
 import { EntregasModule } from './modules/entregas/entregas.module';
+import { IncidenciasModule } from './modules/incidencias/incidencias.module';
+import { EmailModule } from './modules/email/email.module';
+import { StorageModule } from './modules/storage/storage.module';
+import { TrazabilidadModule } from './modules/trazabilidad/trazabilidad.module';
 
 @Module({
   imports: [
@@ -25,6 +29,10 @@ import { EntregasModule } from './modules/entregas/entregas.module';
     ConductoresModule,
     RutasModule,
     EntregasModule,
+    IncidenciasModule,
+    EmailModule,
+    StorageModule,
+    TrazabilidadModule,
   ],
   controllers: [AppController],
   providers: [AppService, SupabaseConfigService, ResendConfigService, JwtStrategy],

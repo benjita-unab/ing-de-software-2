@@ -1,11 +1,13 @@
-import React, { useRef, useState } from "react";
-import { supabase } from "../lib/supabaseClient";
+import React, { useRef, useState, useEffect } from "react";
+import { getAuthToken } from "../lib/apiClient";
 
 const DRIVERS_TEMP = [
   { id: "driver-001", name: "Juan Pérez" },
   { id: "driver-002", name: "María Gómez" },
   { id: "driver-003", name: "Carlos Silva" },
 ];
+
+const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:3001";
 
 const base = {
   dashboard: {
@@ -125,56 +127,44 @@ export default function MonitoreoLicencias() {
 
     setIsLoading(true);
     try {
-      const sanitizedFileName = file.name.replace(/\s+/g, "_");
-      const generatedFilename = `${Date.now()}_${sanitizedFileName}`;
-      const uploadPath = `driver_licenses/${driverId}/${generatedFilename}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from("driver_licenses")
-        .upload(uploadPath, file, {
-          cacheControl: "3600",
-          upsert: false,
-          contentType: file.type,
-        });
-
-      if (uploadError) {
-        throw new Error(`Error al subir archivo: ${uploadError.message}`);
+      const token = getAuthToken();
+      if (!token) {
+        throw new Error("No authentication token found. Please log in.");
       }
 
-      const { data: publicData, error: publicError } = supabase.storage
-        .from("driver_licenses")
-        .getPublicUrl(uploadPath);
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("expiryDate", expiryDate);
 
-      if (publicError) {
-        throw new Error(`Error al obtener URL pública: ${publicError.message}`);
-      }
-
-      const publicUrl = publicData?.publicUrl;
-      if (!publicUrl) {
-        throw new Error("No se generó la URL pública del archivo.");
-      }
-
-      const { error: dbError } = await supabase
-        .from("driver_licenses")
-        .insert([
-          {
-            user_id: driverId,
-            file_url: publicUrl,
-            file_name: file.name,
-            expiry_date: expiryDate,
-            status: "pending_review",
+      const response = await fetch(
+        `${API_BASE_URL}/api/conductores/license/upload`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
           },
-        ]);
+          body: formData,
+        }
+      );
 
-      if (dbError) {
-        throw new Error(`Error guardando metadatos: ${dbError.message}`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(
+          errorData.message || `Error uploading license: ${response.statusText}`
+        );
       }
 
-      setSuccessText("Licencia cargada y registrada correctamente (estado pending_review).");
+      const result = await response.json();
+
+      setSuccessText(
+        "Licencia cargada y registrada correctamente (estado pending_review)."
+      );
       resetForm();
     } catch (err) {
       console.error("MonitoreoLicencias error:", err);
-      setErrorText(err.message || "Ocurrió un error inesperado, inténtalo nuevamente.");
+      setErrorText(
+        err.message || "Ocurrió un error inesperado, inténtalo nuevamente."
+      );
     } finally {
       setIsLoading(false);
     }

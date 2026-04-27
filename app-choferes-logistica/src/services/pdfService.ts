@@ -1,5 +1,7 @@
 import * as Print from "expo-print";
-import { supabase } from "../lib/supabaseClient";
+import { getAccessToken } from "./bffService";
+
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3001";
 
 export type ClienteResumen = {
   nombre: string;
@@ -109,31 +111,31 @@ export async function generarComprobantePDF(
     throw new Error("rutaId es obligatorio.");
   }
 
-  // Mantener lógica de obtención de datos desde Supabase.
-  const { data, error } = await supabase
-    .from("rutas")
-    .select(
-      `
-        id,
-        origen,
-        destino,
-        cliente_id,
-        clientes ( id, nombre, contacto_email ),
-        entregas ( id, firma_url, validado ),
-        fotos ( id, etapa, url )
-      `
-    )
-    .eq("id", rutaId)
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(`Error al obtener datos de la ruta: ${error.message}`);
+  const token = await getAccessToken();
+  if (!token) {
+    throw new Error("No authentication token found. Please log in.");
   }
 
+  // Fetch PDF data from backend
   let row: RutaQueryRow;
 
-  if (!data) {
-    console.warn(`No se encontró la ruta con id "${rutaId}". Usando datos de prueba para generar PDF.`);
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/rutas/${rutaId}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch route data: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    row = data as unknown as RutaQueryRow;
+  } catch (error) {
+    console.warn(`Error fetching route data: ${error}. Using test data.`);
     row = {
       id: rutaId,
       origen: "Bodega Central",
@@ -143,8 +145,6 @@ export async function generarComprobantePDF(
       entregas: [{ id: "entrega-123", firma_url: null, validado: false }],
       fotos: []
     } as RutaQueryRow;
-  } else {
-    row = data as unknown as RutaQueryRow;
   }
 
   const clientesRel = normalizeRelation(row.clientes);

@@ -10,6 +10,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { ConductoresService } from './conductores.service';
 import { JwtGuard } from '../../common/guards/jwt.guard';
 import { CurrentUser } from '../../common/decorators/user.decorator';
@@ -24,7 +25,7 @@ export class ConductoresController {
    */
   @Post('upload-license')
   @UseGuards(JwtGuard)
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
   async uploadLicense(
     @CurrentUser('id') userId: string,
     @UploadedFile() file: Express.Multer.File,
@@ -32,6 +33,10 @@ export class ConductoresController {
   ) {
     if (!file) {
       throw new BadRequestException('El archivo es requerido');
+    }
+
+    if (!body?.expiryDate) {
+      throw new BadRequestException('expiryDate es requerido');
     }
 
     return await this.conductoresService.uploadDriverLicense(

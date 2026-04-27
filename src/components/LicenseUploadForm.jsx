@@ -1,6 +1,4 @@
 import React, { useState } from 'react';
-import supabaseClient from '../lib/supabaseClient'; // Descomenta cuando necesites integrar con Supabase
-import { supabaseClient } from '../supabaseClient'; // O simplemente 'supabase' dependiendo de cómo lo hayas exportado
 /**
  * Componente LicenseUploadForm
  * 
@@ -184,53 +182,30 @@ const LicenseUploadForm = () => {
     setSuccessMessage('');
 
     try {
-      // ==================== CONEXIÓN REAL A SUPABASE ====================
-      // 1. ID temporal de prueba (Hasta que tengas login real)
-      const currentUserId = 'chofer-prueba-123';
-
-      // 2. Subir archivo a Supabase Storage
-      const fileName = `${Date.now()}_${file.name}`;
-      // NOTA: Usamos currentUserId aquí para crear la carpeta del usuario
-      const filePath = `licenses/${currentUserId}/${fileName}`; 
-      
-      const { data: storageData, error: storageError } = await supabaseClient
-        .storage
-        .from('driver_licenses')
-        .upload(filePath, file);
-      
-      if (storageError) {
-        throw new Error(`Error al subir archivo: ${storageError.message}`);
-      }
-      
-      // 3. Obtener URL pública del archivo
-      const { data: publicUrlData } = supabaseClient
-        .storage
-        .from('driver_licenses')
-        .getPublicUrl(filePath);
-      
-      const publicUrl = publicUrlData.publicUrl;
-      
-      // 4. Guardar registro en la base de datos
-      const { data: dbData, error: dbError } = await supabaseClient
-        .from('driver_licenses')
-        .insert([
-          {
-            user_id: currentUserId, 
-            file_url: publicUrl,
-            file_name: file.name,
-            expiry_date: expiryDate,
-            uploaded_at: new Date().toISOString(),
-            status: 'pending_review'
-          }
-        ])
-        .select();
-      
-      if (dbError) {
-        throw new Error(`Error al guardar datos en BD: ${dbError.message}`);
+      const token = localStorage.getItem('logitrack_access_token');
+      if (!token) {
+        throw new Error('Token de autorización no disponible. Inicia sesión de nuevo.');
       }
 
-      // ==================== ACTUALIZAR LA INTERFAZ ====================
-      // Mostrar mensaje de éxito real
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('expiryDate', expiryDate);
+
+      const response = await fetch('/api/conductores/upload-license', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      const responseBody = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        const message = responseBody?.message || responseBody?.error || 'Error al subir la licencia';
+        throw new Error(message);
+      }
+
       setSuccessMessage(`¡Archivo "${file.name}" cargado exitosamente en el sistema!`);
 
       // Resetear formulario para que quede limpio

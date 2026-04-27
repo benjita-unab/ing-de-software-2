@@ -1,13 +1,13 @@
 // src/hooks/useAlerts.js
 // ─────────────────────────────────────────────────────────────────────────────
-// Hook principal: se suscribe a Supabase Realtime (tabla: incidencias)
-// y normaliza los datos al formato que espera la UI.
+// Hook principal: fetches alerts from backend API and normalizes data
+// to the format expected by the UI.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useState, useCallback } from "react";
-import { supabase } from "../lib/supabaseClient";
+import { getAuthToken } from "../lib/apiClient";
 
-const TABLE = "incidencias";
+const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:3001";
 
 // ── Mapeo de valores de tipo/estado/prioridad ───────────────────────────────
 const TIPO_MAP = {
@@ -112,104 +112,127 @@ const SELECT_QUERY = `
 export function useAlerts() {
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [pollingInterval, setPollingInterval] = useState(null);
 
   // ── Carga inicial ──────────────────────────────────────────────────────────
   useEffect(() => {
     async function fetchAlerts() {
       setLoading(true);
-      const { data, error } = await supabase
-        .from(TABLE)
-        .select(SELECT_QUERY)
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        console.error("Error al cargar incidencias:", error.message);
-      } else if (data) {
-        setAlerts(sortAlerts(data.map(mapIncidencia)));
+      const token = getAuthToken();
+      if (!token) {
+        console.warn("No authentication token found");
+        setLoading(false);
+        return;
       }
-      setLoading(false);
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/incidencias`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch alerts: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        const alerts_array = Array.isArray(data) ? data : data.data || [];
+        setAlerts(sortAlerts(alerts_array.map(mapIncidencia)));
+      } catch (error) {
+        console.error("Error al cargar incidencias:", error.message);
+      } finally {
+        setLoading(false);
+      }
     }
     fetchAlerts();
   }, []);
 
-  // ── Supabase Realtime subscription (CA-4: ≤ 3 segundos) ──────────────────
+  // ── Polling para simular Realtime (fallback si no hay WebSocket) ───────────
   useEffect(() => {
-    const channel = supabase
-      .channel("incidencias-realtime")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: TABLE },
-        async (payload) => {
-          const { eventType, new: newRow, old: oldRow } = payload;
+    const token = getAuthToken();
+    if (!token) return;
 
-          if (eventType === "INSERT") {
-            // Fetch completo para incluir el JOIN de conductores
-            const { data } = await supabase
-              .from(TABLE)
-              .select(SELECT_QUERY)
-              .eq("id", newRow.id)
-              .single();
+    const interval = setInterval(async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/incidencias`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
 
-            if (data) {
-              const mapped = mapIncidencia(data);
-              if (["CRITICA", "ALTA"].includes(mapped.priority)) playAlarm();
-              setAlerts((prev) => sortAlerts([mapped, ...prev]));
-            }
-          }
+        if (!response.ok) return;
 
-          if (eventType === "UPDATE") {
-            const mapped = mapIncidencia(newRow);
-            setAlerts((prev) =>
-              sortAlerts(
-                prev.map((a) => (a.id === mapped.id ? mapped : a))
-              )
-            );
-          }
+        const data = await response.json();
+        const alerts_array = Array.isArray(data) ? data : data.data || [];
+        setAlerts(sortAlerts(alerts_array.map(mapIncidencia)));
+      } catch (error) {
+        console.warn("Polling error:", error.message);
+      }
+    }, 5000); // Poll every 5 seconds
 
-          if (eventType === "DELETE") {
-            const deletedId = oldRow.id;
-            setAlerts((prev) => prev.filter((a) => a.id !== deletedId));
-          }
-        }
-      )
-      .subscribe();
+    setPollingInterval(interval);
 
-    return () => { supabase.removeChannel(channel); };
+    return () => clearInterval(interval);
   }, []);
 
   // ── Acuse de Recibo (CA-3) ─────────────────────────────────────────────────
   const acknowledgeAlert = useCallback(async (alertId, operatorId) => {
-    const { error } = await supabase
-      .from(TABLE)
-      .update({
-        estado:         "EN_GESTION",
-        atendido_por:   operatorId,
-        fecha_atencion: new Date().toISOString(),
-      })
-      .eq("id", alertId);
+    const token = getAuthToken();
+    if (!token) {
+      console.warn("No authentication token found");
+      return false;
+    }
 
-    if (error) {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/incidencias/${alertId}/acknowledge`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ operatorId }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to acknowledge alert: ${response.statusText}`);
+      }
+
+      return true;
+    } catch (error) {
       console.error("Error al hacer acuse de recibo:", error.message);
       return false;
     }
-    return true;
   }, []);
 
   // ── Resolver incidencia ───────────────────────────────────────────────────
   const resolveAlert = useCallback(async (alertId) => {
-    const { error } = await supabase
-      .from(TABLE)
-      .update({
-        estado:            "RESUELTO",
-        fecha_resolucion:  new Date().toISOString(),
-      })
-      .eq("id", alertId);
+    const token = getAuthToken();
+    if (!token) {
+      console.warn("No authentication token found");
+      return false;
+    }
 
-    if (error) {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/incidencias/${alertId}/resolve`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to resolve alert: ${response.statusText}`);
+      }
+
+      return true;
+    } catch (error) {
       console.error("Error al resolver incidencia:", error.message);
       return false;
     }
-    return true;
   }, []);
 
   return { alerts, loading, acknowledgeAlert, resolveAlert };
