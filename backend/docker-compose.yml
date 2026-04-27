@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  logitrack-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: logitrack-backend
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - SUPABASE_PUBLIC_KEY=${SUPABASE_PUBLIC_KEY}
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - RESEND_FROM_EMAIL=${RESEND_FROM_EMAIL}
+      - LOG_LEVEL=debug
+    volumes:
+      - ./src:/app/src
+      - ./dist:/app/dist
+      - /app/node_modules
+    networks:
+      - logitrack-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+networks:
+  logitrack-network:
+    driver: bridge
