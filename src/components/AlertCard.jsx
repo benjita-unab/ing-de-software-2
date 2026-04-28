@@ -18,14 +18,8 @@ const ALERT_TYPE_LABELS = {
   EMERGENCIA:   "Emergencia Grave",
 };
 
-function formatTimestamp(ts) {
-  if (!ts) return "—";
-  const d = new Date(ts);
-  return d.toLocaleString("es-CL", {
-    day: "2-digit", month: "2-digit", year: "numeric",
-    hour: "2-digit", minute: "2-digit", second: "2-digit",
-  });
-}
+  
+
 
 function timeAgo(ts) {
   if (!ts) return "";
@@ -35,14 +29,23 @@ function timeAgo(ts) {
   return `hace ${Math.floor(diff / 3600)}h`;
 }
 
+function formatTimestamp(ts) {
+  if (!ts) return "";
+  const d = new Date(ts);
+  return d.toLocaleString("es-CL", { 
+    day: "2-digit", month: "2-digit", year: "numeric", 
+    hour: "2-digit", minute: "2-digit", second: "2-digit" 
+  });
+}
+
 // Genera enlace a Google Maps sin API key (CA-2 placeholder de ubicación)
 function buildMapsLink(alert) {
-  if (alert.lat && alert.lng) return `https://www.google.com/maps?q=${alert.lat},${alert.lng}`;
+  if (alert.lat && alert.lng) return `https://www.google.com/maps/place/${alert.lat},${alert.lng}`;
   if (alert.last_location_label) return `https://www.google.com/maps/search/${encodeURIComponent(alert.last_location_label)}`;
   return null;
 }
 
-export default function AlertCard({
+export default function AlertCard(  {
   alert,
   onAcknowledge,
   onResolve,
@@ -73,7 +76,6 @@ export default function AlertCard({
 
   return (
     <div
-      className="alert-card"
       onClick={() => onSelect?.(alert)}
       style={{
         background: isSelected ? `${cfg.border}18` : cfg.bg,
@@ -150,7 +152,7 @@ export default function AlertCard({
             style={mapsLinkBtnStyle}
             title="Ver ubicación en Google Maps"
           >
-            🗺️ Ver Ubicación
+            📍 Ver Ubicacion
           </a>
         )}
         {isPending && (
@@ -163,9 +165,6 @@ export default function AlertCard({
             {isResolving ? "Procesando..." : "✅ Marcar Resuelta"}
           </button>
         )}
-        <button onClick={() => onSelect?.(alert)} style={btnStyle("#1a2a3a")}>
-          {isSelected ? "✦ Seleccionada" : "Ver Detalle →"}
-        </button>
       </div>
     </div>
   );

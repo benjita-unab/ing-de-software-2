@@ -40,7 +40,7 @@ function timeAgo(ts) {
 // Genera el enlace a Google Maps (CA-2 placeholder — sin API key requerida)
 function buildMapsLink(alert) {
   if (alert.lat && alert.lng) {
-    return `https://www.google.com/maps?q=${alert.lat},${alert.lng}`;
+    return `https://www.google.com/maps/place/${alert.lat},${alert.lng}`;
   }
   if (alert.last_location_label) {
     return `https://www.google.com/maps/search/${encodeURIComponent(alert.last_location_label)}`;

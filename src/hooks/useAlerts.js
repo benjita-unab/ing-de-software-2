@@ -98,7 +98,7 @@ function mapIncidencia(row) {
 
     // Ubicación (para enlace Google Maps)
     lat:               row.latitud  ?? row.lat  ?? null,
-    lng:               row.longitud ?? row.lng  ?? null,
+    lng:               row.longitud ?? row.long ?? row.lng  ?? null,
     last_location_label: row.ultima_ubicacion ?? row.ubicacion ?? null,
 
     // Acuse de recibo (CA-3)
@@ -198,6 +198,29 @@ export function useAlerts() {
             });
           }
         }
+
+        // --- FULL JOIN MANUAL PARA PATENTES (Si falla o falta foreign key en Supabase) ---
+        const rutaIds = [...new Set(rows.map((r) => r.ruta_id).filter(Boolean))];
+        if (rutaIds.length > 0) {
+          const { data: rawRutas } = await supabase.from("rutas").select("id, camion_id").in("id", rutaIds);
+          if (rawRutas && rawRutas.length > 0) {
+            const camionIds = [...new Set(rawRutas.map((r) => r.camion_id).filter(Boolean))];
+            if (camionIds.length > 0) {
+              const { data: rawCamiones } = await supabase.from("camiones").select("id, patente").in("id", camionIds);
+              if (rawCamiones) {
+                rows.forEach((row) => {
+                  if (row.ruta_id && !row.vehiculo_patente && !row.rutas?.camiones?.patente) {
+                    const rut = rawRutas.find((r) => r.id === row.ruta_id);
+                    if (rut && rut.camion_id) {
+                      const cam = rawCamiones.find((c) => c.id === rut.camion_id);
+                      if (cam) row.vehiculo_patente = cam.patente;
+                    }
+                  }
+                });
+              }
+            }
+          }
+        }
         // ------------------------------------------------------------------
 
         setAlerts(sortAlerts(rows.map(mapIncidencia)));
@@ -233,6 +256,13 @@ export function useAlerts() {
                 if (cond && cond.usuario_id) {
                   const { data: usr } = await supabase.from("usuarios").select("nombre").eq("id", cond.usuario_id).single();
                   if (usr) row.conductor_nombre = usr.nombre;
+                }
+              }
+              if (row.ruta_id && !row.vehiculo_patente && !row.rutas?.camiones?.patente) {
+                const { data: rut } = await supabase.from("rutas").select("camion_id").eq("id", row.ruta_id).single();
+                if (rut && rut.camion_id) {
+                  const { data: cam } = await supabase.from("camiones").select("patente").eq("id", rut.camion_id).single();
+                  if (cam) row.vehiculo_patente = cam.patente;
                 }
               }
               // ------------------------------------
