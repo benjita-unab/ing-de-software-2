@@ -14,6 +14,7 @@ import { IncidenciasModule } from './modules/incidencias/incidencias.module';
 import { EmailModule } from './modules/email/email.module';
 import { StorageModule } from './modules/storage/storage.module';
 import { TrazabilidadModule } from './modules/trazabilidad/trazabilidad.module';
+import { AuthModule } from './modules/auth/auth.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { TrazabilidadModule } from './modules/trazabilidad/trazabilidad.module';
       secret: process.env.SUPABASE_PUBLIC_KEY,
       signOptions: { expiresIn: '24h' },
     }),
+    AuthModule,
     ConductoresModule,
     RutasModule,
     EntregasModule,

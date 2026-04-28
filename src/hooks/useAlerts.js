@@ -5,7 +5,20 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useState, useCallback } from "react";
-import { getAuthToken } from "../lib/apiClient";
+import { getAuthToken, loginWeb } from "../lib/apiClient";
+
+async function ensureToken() {
+  let token = getAuthToken();
+  if (!token) {
+    try {
+      token = await loginWeb();
+    } catch (e) {
+      console.error("Auto-login web falló:", e?.message || e);
+      return null;
+    }
+  }
+  return token;
+}
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:3001";
 
@@ -118,7 +131,7 @@ export function useAlerts() {
   useEffect(() => {
     async function fetchAlerts() {
       setLoading(true);
-      const token = getAuthToken();
+      const token = await ensureToken();
       if (!token) {
         console.warn("No authentication token found");
         setLoading(false);
@@ -148,33 +161,43 @@ export function useAlerts() {
 
   // ── Polling para simular Realtime (fallback si no hay WebSocket) ───────────
   useEffect(() => {
-    const token = getAuthToken();
-    if (!token) return;
+    let interval;
+    let cancelled = false;
 
-    const interval = setInterval(async () => {
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/incidencias`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+    (async () => {
+      const initialToken = await ensureToken();
+      if (!initialToken || cancelled) return;
 
-        if (!response.ok) return;
+      interval = setInterval(async () => {
+        const token = getAuthToken();
+        if (!token) return;
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/incidencias`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
 
-        const data = await response.json();
-        const alerts_array = Array.isArray(data) ? data : data.data || [];
-        setAlerts(sortAlerts(alerts_array.map(mapIncidencia)));
-      } catch (error) {
-        console.warn("Polling error:", error?.message);
-      }
-    }, 5000); // Poll every 5 seconds
+          if (!response.ok) return;
 
-    setPollingInterval(interval);
+          const data = await response.json();
+          const alerts_array = Array.isArray(data) ? data : data.data || [];
+          setAlerts(sortAlerts(alerts_array.map(mapIncidencia)));
+        } catch (error) {
+          console.warn("Polling error:", error?.message);
+        }
+      }, 5000);
 
-    return () => clearInterval(interval);
+      setPollingInterval(interval);
+    })();
+
+    return () => {
+      cancelled = true;
+      if (interval) clearInterval(interval);
+    };
   }, []);
 
   // ── Acuse de Recibo (CA-3) ─────────────────────────────────────────────────
   const acknowledgeAlert = useCallback(async (alertId, operatorId) => {
-    const token = getAuthToken();
+    const token = await ensureToken();
     if (!token) {
       console.warn("No authentication token found");
       return false;
@@ -206,7 +229,7 @@ export function useAlerts() {
 
   // ── Resolver incidencia ───────────────────────────────────────────────────
   const resolveAlert = useCallback(async (alertId) => {
-    const token = getAuthToken();
+    const token = await ensureToken();
     if (!token) {
       console.warn("No authentication token found");
       return false;

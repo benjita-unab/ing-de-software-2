@@ -59,6 +59,59 @@ export class EntregasService {
     }
 
     try {
+      // 0. Obtener firma del receptor (más reciente) desde BD
+      const { data: entregasFirma, error: firmaError } = await supabase
+        .from('entregas')
+        .select('firma_url, created_at')
+        .eq('ruta_id', rutaId)
+        .not('firma_url', 'is', null)
+        .order('created_at', { ascending: false });
+
+      if (firmaError) {
+        console.error('Error consultando firma:', firmaError);
+      }
+
+      const firmaUrl = entregasFirma?.[0]?.firma_url ?? null;
+      // TEMP LOG
+      console.log('PDF -> firmaUrl:', firmaUrl);
+
+      if (!firmaUrl) {
+        console.warn('⚠️ No hay firma_url en la BD al generar PDF');
+      }
+
+      // Descargar firma desde el bucket fotos_trazabilidad usando service_role
+      let firmaBuffer: Buffer | null = null;
+      if (firmaUrl) {
+        const marker = '/storage/v1/object/public/fotos_trazabilidad/';
+        const filePath = firmaUrl.includes(marker)
+          ? firmaUrl.split(marker)[1]
+          : null;
+
+        if (!filePath) {
+          console.warn(
+            `⚠️ firma_url no apunta a fotos_trazabilidad: ${firmaUrl}`,
+          );
+        } else {
+          console.log('Descargando firma desde fotos_trazabilidad:', filePath);
+
+          const { data: firmaBlob, error: downloadError } =
+            await supabase.storage
+              .from('fotos_trazabilidad')
+              .download(filePath);
+
+          if (downloadError) {
+            console.error(
+              'Error descargando firma desde fotos_trazabilidad:',
+              downloadError,
+            );
+          } else if (firmaBlob) {
+            const arrayBuffer = await firmaBlob.arrayBuffer();
+            console.log('Firma descargada, bytes:', arrayBuffer.byteLength);
+            firmaBuffer = Buffer.from(arrayBuffer);
+          }
+        }
+      }
+
       // 1. Generar PDF
       const pdfBuffer = await this.generateDeliveryPDF({
         rutaId: ruta.id,
@@ -69,6 +122,7 @@ export class EntregasService {
         cliente,
         conductor: ruta.conductores,
         camion: ruta.camiones,
+        firmaBuffer,
       });
 
       // 2. Subir PDF a Storage
@@ -133,6 +187,8 @@ export class EntregasService {
         },
       };
     } catch (error: any) {
+      // TEMP LOG
+      console.error('ERROR CLOSE DELIVERY:', error);
       throw new InternalServerErrorException(
         `Error cerrando entrega: ${error?.message}`,
       );
@@ -143,6 +199,8 @@ export class EntregasService {
    * Guarda la firma de recepción
    */
   async saveSignature(rutaId: string, base64Signature: string) {
+    console.log("ENTRO A SAVE SIGNATURE");
+    console.log("DATA:", { rutaId, base64Signature });
     if (!rutaId || !base64Signature) {
       throw new BadRequestException('rutaId y base64Signature son requeridos');
     }
@@ -161,7 +219,7 @@ export class EntregasService {
 
       // Subir a Storage
       const { data, error: uploadError } = await supabase.storage
-        .from('entregas')
+        .from('fotos_trazabilidad')
         .upload(filePath, buffer, {
           contentType: 'image/png',
           upsert: false,
@@ -175,18 +233,36 @@ export class EntregasService {
 
       // Obtener URL pública
       const { data: publicUrlData } = supabase.storage
-        .from('entregas')
+        .from('fotos_trazabilidad')
         .getPublicUrl(filePath);
 
       // Actualizar registro de entrega
-      const { error: updateError } = await supabase
+      const {
+        data: updatedRows,
+        error: updateError,
+      } = await supabase
         .from('entregas')
         .update({ firma_url: publicUrlData.publicUrl })
-        .eq('ruta_id', rutaId);
+        .eq('ruta_id', rutaId)
+        .select('id, ruta_id, firma_url');
 
       if (updateError) {
         console.warn(`No se pudo actualizar firma en BD: ${updateError.message}`);
+        throw new BadRequestException(
+          `Error actualizando firma en BD: ${updateError.message}`,
+        );
       }
+
+      if (!updatedRows || updatedRows.length === 0) {
+        console.warn(
+          `⚠️ UPDATE firma_url afectó 0 filas para ruta_id=${rutaId}`,
+        );
+        throw new BadRequestException(
+          `No existe entrega para ruta_id=${rutaId}`,
+        );
+      }
+
+      console.log('Firma actualizada en BD, filas:', updatedRows);
 
       return {
         success: true,
@@ -194,9 +270,12 @@ export class EntregasService {
         data: {
           rutaId,
           firmaUrl: publicUrlData.publicUrl,
+          entregas: updatedRows,
         },
       };
     } catch (error: any) {
+      // TEMP LOG
+      console.error('ERROR SAVE SIGNATURE:', error);
       throw new InternalServerErrorException(
         `Error guardando firma: ${error?.message}`,
       );
@@ -309,6 +388,7 @@ export class EntregasService {
     cliente: any;
     conductor: any;
     camion: any;
+    firmaBuffer?: Buffer | null;
   }): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument();
@@ -352,6 +432,29 @@ export class EntregasService {
       );
       doc.text(`Fecha de fin: ${new Date(data.fechaFin).toLocaleString('es-CL')}`);
       doc.moveDown();
+
+      // Firma digital del receptor
+      doc.font('Helvetica-Bold').text('Firma digital del receptor');
+      doc.font('Helvetica');
+      doc.moveDown(0.5);
+
+      if (data.firmaBuffer && data.firmaBuffer.length > 0) {
+        try {
+          doc.image(data.firmaBuffer, {
+            fit: [200, 100],
+            align: 'center',
+          });
+          doc.moveDown();
+        } catch (err: any) {
+          console.warn(`No se pudo insertar firma en PDF: ${err?.message}`);
+          doc.text('Sin firma disponible');
+          doc.moveDown();
+        }
+      } else {
+        console.warn('⚠️ firmaBuffer vacío o inválido');
+        doc.text('Sin firma disponible');
+        doc.moveDown();
+      }
 
       // Footer
       doc

@@ -86,6 +86,7 @@ const incidencias_module_1 = __webpack_require__(/*! ./modules/incidencias/incid
 const email_module_1 = __webpack_require__(/*! ./modules/email/email.module */ "./src/modules/email/email.module.ts");
 const storage_module_1 = __webpack_require__(/*! ./modules/storage/storage.module */ "./src/modules/storage/storage.module.ts");
 const trazabilidad_module_1 = __webpack_require__(/*! ./modules/trazabilidad/trazabilidad.module */ "./src/modules/trazabilidad/trazabilidad.module.ts");
+const auth_module_1 = __webpack_require__(/*! ./modules/auth/auth.module */ "./src/modules/auth/auth.module.ts");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -101,6 +102,7 @@ exports.AppModule = AppModule = __decorate([
                 secret: process.env.SUPABASE_PUBLIC_KEY,
                 signOptions: { expiresIn: '24h' },
             }),
+            auth_module_1.AuthModule,
             conductores_module_1.ConductoresModule,
             rutas_module_1.RutasModule,
             entregas_module_1.EntregasModule,
@@ -239,17 +241,19 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var _a;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.JwtStrategy = void 0;
 const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
+const config_1 = __webpack_require__(/*! @nestjs/config */ "@nestjs/config");
 const passport_1 = __webpack_require__(/*! @nestjs/passport */ "@nestjs/passport");
 const passport_jwt_1 = __webpack_require__(/*! passport-jwt */ "passport-jwt");
 let JwtStrategy = class JwtStrategy extends (0, passport_1.PassportStrategy)(passport_jwt_1.Strategy) {
-    constructor() {
+    constructor(configService) {
         super({
             jwtFromRequest: passport_jwt_1.ExtractJwt.fromAuthHeaderAsBearerToken(),
             ignoreExpiration: false,
-            secretOrKey: process.env.SUPABASE_PUBLIC_KEY,
+            secretOrKey: configService.get('JWT_SECRET'),
             algorithms: ['HS256'],
         });
     }
@@ -257,7 +261,7 @@ let JwtStrategy = class JwtStrategy extends (0, passport_1.PassportStrategy)(pas
         return {
             id: payload.sub,
             email: payload.email,
-            role: payload.user_role || 'user',
+            role: payload.role || payload.user_role || 'user',
             aud: payload.aud,
             iss: payload.iss,
         };
@@ -266,7 +270,7 @@ let JwtStrategy = class JwtStrategy extends (0, passport_1.PassportStrategy)(pas
 exports.JwtStrategy = JwtStrategy;
 exports.JwtStrategy = JwtStrategy = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [])
+    __metadata("design:paramtypes", [typeof (_a = typeof config_1.ConfigService !== "undefined" && config_1.ConfigService) === "function" ? _a : Object])
 ], JwtStrategy);
 
 
@@ -473,6 +477,166 @@ bootstrap().catch((err) => {
     console.error('❌ Error iniciando la aplicación:', err);
     process.exit(1);
 });
+
+
+/***/ }),
+
+/***/ "./src/modules/auth/auth.controller.ts":
+/*!*********************************************!*\
+  !*** ./src/modules/auth/auth.controller.ts ***!
+  \*********************************************/
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
+var _a;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.AuthController = void 0;
+const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
+const auth_service_1 = __webpack_require__(/*! ./auth.service */ "./src/modules/auth/auth.service.ts");
+let AuthController = class AuthController {
+    constructor(authService) {
+        this.authService = authService;
+    }
+    /**
+     * POST /api/auth/login
+     * Body: { email, password }
+     * Respuesta: { accessToken }
+     */
+    async login(body) {
+        if (!body?.email || !body?.password) {
+            throw new common_1.BadRequestException('email y password son requeridos');
+        }
+        return this.authService.login(body.email, body.password);
+    }
+};
+exports.AuthController = AuthController;
+__decorate([
+    (0, common_1.Post)('login'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "login", null);
+exports.AuthController = AuthController = __decorate([
+    (0, common_1.Controller)('api/auth'),
+    __metadata("design:paramtypes", [typeof (_a = typeof auth_service_1.AuthService !== "undefined" && auth_service_1.AuthService) === "function" ? _a : Object])
+], AuthController);
+
+
+/***/ }),
+
+/***/ "./src/modules/auth/auth.module.ts":
+/*!*****************************************!*\
+  !*** ./src/modules/auth/auth.module.ts ***!
+  \*****************************************/
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.AuthModule = void 0;
+const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
+const config_1 = __webpack_require__(/*! @nestjs/config */ "@nestjs/config");
+const jwt_1 = __webpack_require__(/*! @nestjs/jwt */ "@nestjs/jwt");
+const auth_controller_1 = __webpack_require__(/*! ./auth.controller */ "./src/modules/auth/auth.controller.ts");
+const auth_service_1 = __webpack_require__(/*! ./auth.service */ "./src/modules/auth/auth.service.ts");
+let AuthModule = class AuthModule {
+};
+exports.AuthModule = AuthModule;
+exports.AuthModule = AuthModule = __decorate([
+    (0, common_1.Module)({
+        imports: [
+            config_1.ConfigModule,
+            jwt_1.JwtModule.registerAsync({
+                imports: [config_1.ConfigModule],
+                inject: [config_1.ConfigService],
+                useFactory: (config) => ({
+                    secret: config.get('JWT_SECRET'),
+                    signOptions: { expiresIn: '24h' },
+                }),
+            }),
+        ],
+        controllers: [auth_controller_1.AuthController],
+        providers: [auth_service_1.AuthService],
+        exports: [auth_service_1.AuthService],
+    })
+], AuthModule);
+
+
+/***/ }),
+
+/***/ "./src/modules/auth/auth.service.ts":
+/*!******************************************!*\
+  !*** ./src/modules/auth/auth.service.ts ***!
+  \******************************************/
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var _a, _b;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.AuthService = void 0;
+const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
+const config_1 = __webpack_require__(/*! @nestjs/config */ "@nestjs/config");
+const jwt_1 = __webpack_require__(/*! @nestjs/jwt */ "@nestjs/jwt");
+let AuthService = class AuthService {
+    constructor(jwtService, configService) {
+        this.jwtService = jwtService;
+        this.configService = configService;
+    }
+    /**
+     * Valida credenciales contra DEBUG_EMAIL / DEBUG_PASSWORD del .env
+     * y emite un JWT firmado con JWT_SECRET.
+     */
+    async login(email, password) {
+        const debugEmail = this.configService.get('DEBUG_EMAIL');
+        const debugPassword = this.configService.get('DEBUG_PASSWORD');
+        if (!debugEmail || !debugPassword) {
+            throw new common_1.UnauthorizedException('Credenciales de depuración no configuradas en el servidor');
+        }
+        if (email !== debugEmail || password !== debugPassword) {
+            throw new common_1.UnauthorizedException('Credenciales inválidas');
+        }
+        const payload = {
+            sub: email,
+            email,
+            role: 'mobile',
+        };
+        const accessToken = await this.jwtService.signAsync(payload);
+        return { accessToken };
+    }
+};
+exports.AuthService = AuthService;
+exports.AuthService = AuthService = __decorate([
+    (0, common_1.Injectable)(),
+    __metadata("design:paramtypes", [typeof (_a = typeof jwt_1.JwtService !== "undefined" && jwt_1.JwtService) === "function" ? _a : Object, typeof (_b = typeof config_1.ConfigService !== "undefined" && config_1.ConfigService) === "function" ? _b : Object])
+], AuthService);
 
 
 /***/ }),
@@ -1082,6 +1246,8 @@ let EntregasController = class EntregasController {
      * Cierra una entrega (genera PDF, envía email, marca como validada)
      */
     async closeDelivery(rutaId, userEmail, body) {
+        // TEMP LOG
+        console.log('CLOSE DELIVERY -> rutaId:', rutaId, 'body:', body);
         return await this.entregasService.closeDelivery(rutaId, body?.clienteEmail || userEmail);
     }
     /**
@@ -1089,6 +1255,8 @@ let EntregasController = class EntregasController {
      * Guarda la firma de recepción (base64)
      */
     async saveSignature(rutaId, body) {
+        // TEMP LOG
+        console.log('SAVE SIGNATURE -> rutaId:', rutaId, 'base64Signature length:', body?.base64Signature?.length ?? 0);
         return await this.entregasService.saveSignature(rutaId, body.base64Signature);
     }
     /**
@@ -1252,6 +1420,47 @@ let EntregasService = class EntregasService {
             throw new common_1.BadRequestException(`Error al obtener entregas: ${entregasError.message}`);
         }
         try {
+            // 0. Obtener firma del receptor (más reciente) desde BD
+            const { data: entregasFirma, error: firmaError } = await supabase
+                .from('entregas')
+                .select('firma_url, created_at')
+                .eq('ruta_id', rutaId)
+                .not('firma_url', 'is', null)
+                .order('created_at', { ascending: false });
+            if (firmaError) {
+                console.error('Error consultando firma:', firmaError);
+            }
+            const firmaUrl = entregasFirma?.[0]?.firma_url ?? null;
+            // TEMP LOG
+            console.log('PDF -> firmaUrl:', firmaUrl);
+            if (!firmaUrl) {
+                console.warn('⚠️ No hay firma_url en la BD al generar PDF');
+            }
+            // Descargar firma desde el bucket fotos_trazabilidad usando service_role
+            let firmaBuffer = null;
+            if (firmaUrl) {
+                const marker = '/storage/v1/object/public/fotos_trazabilidad/';
+                const filePath = firmaUrl.includes(marker)
+                    ? firmaUrl.split(marker)[1]
+                    : null;
+                if (!filePath) {
+                    console.warn(`⚠️ firma_url no apunta a fotos_trazabilidad: ${firmaUrl}`);
+                }
+                else {
+                    console.log('Descargando firma desde fotos_trazabilidad:', filePath);
+                    const { data: firmaBlob, error: downloadError } = await supabase.storage
+                        .from('fotos_trazabilidad')
+                        .download(filePath);
+                    if (downloadError) {
+                        console.error('Error descargando firma desde fotos_trazabilidad:', downloadError);
+                    }
+                    else if (firmaBlob) {
+                        const arrayBuffer = await firmaBlob.arrayBuffer();
+                        console.log('Firma descargada, bytes:', arrayBuffer.byteLength);
+                        firmaBuffer = Buffer.from(arrayBuffer);
+                    }
+                }
+            }
             // 1. Generar PDF
             const pdfBuffer = await this.generateDeliveryPDF({
                 rutaId: ruta.id,
@@ -1262,6 +1471,7 @@ let EntregasService = class EntregasService {
                 cliente,
                 conductor: ruta.conductores,
                 camion: ruta.camiones,
+                firmaBuffer,
             });
             // 2. Subir PDF a Storage
             const pdfPath = `comprobantes/${rutaId}/${Date.now()}.pdf`;
@@ -1312,6 +1522,8 @@ let EntregasService = class EntregasService {
             };
         }
         catch (error) {
+            // TEMP LOG
+            console.error('ERROR CLOSE DELIVERY:', error);
             throw new common_1.InternalServerErrorException(`Error cerrando entrega: ${error?.message}`);
         }
     }
@@ -1319,6 +1531,8 @@ let EntregasService = class EntregasService {
      * Guarda la firma de recepción
      */
     async saveSignature(rutaId, base64Signature) {
+        console.log("ENTRO A SAVE SIGNATURE");
+        console.log("DATA:", { rutaId, base64Signature });
         if (!rutaId || !base64Signature) {
             throw new common_1.BadRequestException('rutaId y base64Signature son requeridos');
         }
@@ -1332,7 +1546,7 @@ let EntregasService = class EntregasService {
             const filePath = `firmas/${rutaId}-${Date.now()}.png`;
             // Subir a Storage
             const { data, error: uploadError } = await supabase.storage
-                .from('entregas')
+                .from('fotos_trazabilidad')
                 .upload(filePath, buffer, {
                 contentType: 'image/png',
                 upsert: false,
@@ -1342,26 +1556,36 @@ let EntregasService = class EntregasService {
             }
             // Obtener URL pública
             const { data: publicUrlData } = supabase.storage
-                .from('entregas')
+                .from('fotos_trazabilidad')
                 .getPublicUrl(filePath);
             // Actualizar registro de entrega
-            const { error: updateError } = await supabase
+            const { data: updatedRows, error: updateError, } = await supabase
                 .from('entregas')
                 .update({ firma_url: publicUrlData.publicUrl })
-                .eq('ruta_id', rutaId);
+                .eq('ruta_id', rutaId)
+                .select('id, ruta_id, firma_url');
             if (updateError) {
                 console.warn(`No se pudo actualizar firma en BD: ${updateError.message}`);
+                throw new common_1.BadRequestException(`Error actualizando firma en BD: ${updateError.message}`);
             }
+            if (!updatedRows || updatedRows.length === 0) {
+                console.warn(`⚠️ UPDATE firma_url afectó 0 filas para ruta_id=${rutaId}`);
+                throw new common_1.BadRequestException(`No existe entrega para ruta_id=${rutaId}`);
+            }
+            console.log('Firma actualizada en BD, filas:', updatedRows);
             return {
                 success: true,
                 message: 'Firma guardada exitosamente',
                 data: {
                     rutaId,
                     firmaUrl: publicUrlData.publicUrl,
+                    entregas: updatedRows,
                 },
             };
         }
         catch (error) {
+            // TEMP LOG
+            console.error('ERROR SAVE SIGNATURE:', error);
             throw new common_1.InternalServerErrorException(`Error guardando firma: ${error?.message}`);
         }
     }
@@ -1478,6 +1702,29 @@ let EntregasService = class EntregasService {
             doc.text(`Fecha de inicio: ${new Date(data.fechaInicio).toLocaleString('es-CL')}`);
             doc.text(`Fecha de fin: ${new Date(data.fechaFin).toLocaleString('es-CL')}`);
             doc.moveDown();
+            // Firma digital del receptor
+            doc.font('Helvetica-Bold').text('Firma digital del receptor');
+            doc.font('Helvetica');
+            doc.moveDown(0.5);
+            if (data.firmaBuffer && data.firmaBuffer.length > 0) {
+                try {
+                    doc.image(data.firmaBuffer, {
+                        fit: [200, 100],
+                        align: 'center',
+                    });
+                    doc.moveDown();
+                }
+                catch (err) {
+                    console.warn(`No se pudo insertar firma en PDF: ${err?.message}`);
+                    doc.text('Sin firma disponible');
+                    doc.moveDown();
+                }
+            }
+            else {
+                console.warn('⚠️ firmaBuffer vacío o inválido');
+                doc.text('Sin firma disponible');
+                doc.moveDown();
+            }
             // Footer
             doc
                 .fontSize(8)

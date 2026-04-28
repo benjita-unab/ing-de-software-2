@@ -22,6 +22,7 @@ export async function getAccessToken(): Promise<string | null> {
 
 export async function ensureLoggedIn(): Promise<string | null> {
   try {
+    await AsyncStorage.removeItem("logitrack_access_token")
     const existingToken = await getAccessToken();
     if (existingToken) {
       console.log("Token reutilizado");
