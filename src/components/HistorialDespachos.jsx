@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { supabase } from "../lib/supabaseClient";
+import { apiFetch } from "../lib/apiClient";
 
 const base = {
   container: {
@@ -45,7 +45,7 @@ const base = {
     padding: "14px 12px",
     borderBottom: "1px solid rgba(255,255,255,0.08)",
     fontSize: "15px",
-    color: "#e2e8f0"
+    color: "#e2e8f0",
   },
   badge: {
     display: "inline-block",
@@ -56,44 +56,76 @@ const base = {
     background: "rgba(58,12,163,0.45)",
     color: "#ffffff",
     border: "1px solid rgba(76,201,240,0.45)",
-  }
+  },
 };
+
+const ESTADOS_FINALIZADOS = ["ENTREGADA", "ENTREGADO"];
 
 export default function HistorialDespachos() {
   const [historial, setHistorial] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
+
     async function cargarHistorial() {
       setLoading(true);
-      // Intentamos traer fecha_fin, si no existe en la BD caerá en error, así que podemos probar con created_at
-      const { data, error } = await supabase
-        .from("rutas")
-        .select(`
-          *,
-          clientes(nombre), 
-          conductores(usuario_id, rut, usuarios(nombre)),
-          camiones(patente)
-        `)
-        .eq("estado", "ENTREGADO")
-        .order("created_at", { ascending: false });
 
-      if (error) {
-        console.error("Error cargando historial de rutas:", error);
+      // Intento 1: pedir directamente filtrado por backend (estado=ENTREGADA).
+      let lista = [];
+      let firstError = null;
+
+      for (const estado of ESTADOS_FINALIZADOS) {
+        const res = await apiFetch(`/api/rutas?estado=${encodeURIComponent(estado)}`);
+        if (res.ok) {
+          const payload = res.data;
+          const data = Array.isArray(payload) ? payload : payload?.data ?? [];
+          lista = lista.concat(data);
+        } else if (!firstError) {
+          firstError = res.error;
+        }
       }
-      if (!error && data) {
-        setHistorial(data);
+
+      // Fallback: si los dos intentos anteriores fallaron, traer todo y filtrar.
+      if (lista.length === 0 && firstError) {
+        const resAll = await apiFetch("/api/rutas");
+        if (resAll.ok) {
+          const payload = resAll.data;
+          const data = Array.isArray(payload) ? payload : payload?.data ?? [];
+          lista = data.filter((ruta) =>
+            ESTADOS_FINALIZADOS.includes(String(ruta?.estado || "").toUpperCase())
+          );
+        } else {
+          console.error("Error cargando historial de rutas:", resAll.error);
+        }
       }
-      setLoading(false);
+
+      // Deduplicar por id por si el backend retorna ambos casings.
+      const dedup = Array.from(new Map(lista.map((r) => [r.id, r])).values());
+      // Ordenar más recientes primero (fecha_fin > fecha_inicio > created_at).
+      dedup.sort((a, b) => {
+        const da = new Date(a.fecha_fin || a.fecha_inicio || a.created_at || 0).getTime();
+        const db = new Date(b.fecha_fin || b.fecha_inicio || b.created_at || 0).getTime();
+        return db - da;
+      });
+
+      if (!cancelled) {
+        setHistorial(dedup);
+        setLoading(false);
+      }
     }
+
     cargarHistorial();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
     <div style={base.container} className="premium-scroll operator-section">
       <div style={base.card} className="operator-glass-card">
         <div style={base.title}>📜 Historial de Despachos</div>
-        
+
         {loading ? (
           <p style={{ color: "#94A3B8", fontSize: "14px" }}>Cargando historial...</p>
         ) : historial.length === 0 ? (
@@ -116,27 +148,33 @@ export default function HistorialDespachos() {
                 {historial.map((despacho) => (
                   <tr key={despacho.id}>
                     <td style={base.td}>
-                      <span style={{color: "#94A3B8"}}>#{String(despacho.id).substring(0, 8)}</span>
+                      <span style={{ color: "#94A3B8" }}>#{String(despacho.id).substring(0, 8)}</span>
                     </td>
                     <td style={base.td}>{despacho.clientes?.nombre || "N/A"}</td>
                     <td style={base.td}>
-                      <div style={{fontWeight: 500}}>{despacho.conductores?.usuarios?.nombre || despacho.conductores?.rut || "N/A"}</div>
-                        <div style={{fontSize: "13px", color: "#94A3B8", marginTop: "4px"}}>🚚 {despacho.camiones?.patente || "-"}</div>
+                      <div style={{ fontWeight: 500 }}>
+                        {despacho.conductores?.usuarios?.nombre || despacho.conductores?.rut || "N/A"}
+                      </div>
+                      <div style={{ fontSize: "13px", color: "#94A3B8", marginTop: "4px" }}>
+                        🚚 {despacho.camiones?.patente || "-"}
+                      </div>
                     </td>
                     <td style={base.td}>{despacho.destino}</td>
                     <td style={base.td}>
-                      {/* En caso de que no tengas fecha de finalizado como tal, puedes usar created_at o similar */}
-                      {despacho.created_at ? new Date(despacho.created_at).toLocaleString('es-CL') : "—"}
+                      {(() => {
+                        const fecha = despacho.fecha_fin || despacho.fecha_inicio || despacho.created_at;
+                        return fecha ? new Date(fecha).toLocaleString("es-CL") : "—";
+                      })()}
                     </td>
                     <td style={base.td}>
                       <span style={base.badge}>✅ {despacho.estado}</span>
                     </td>
                     <td style={base.td}>
                       {despacho.ficha_despacho_url ? (
-                        <a 
-                          href={despacho.ficha_despacho_url} 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
+                        <a
+                          href={despacho.ficha_despacho_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           style={{ color: "#3B82F6", textDecoration: "none", fontWeight: 600, fontSize: "12px" }}
                         >
                           📄 Ver Ficha

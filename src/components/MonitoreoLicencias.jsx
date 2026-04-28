@@ -1,5 +1,5 @@
-import React, { useRef, useState, useEffect } from "react";
-import { getAuthToken } from "../lib/apiClient";
+import React, { useRef, useState } from "react";
+import { getAuthToken, getApiBaseUrl } from "../lib/apiClient";
 
 const DRIVERS_TEMP = [
   { id: "driver-001", name: "Juan Pérez" },
@@ -7,7 +7,7 @@ const DRIVERS_TEMP = [
   { id: "driver-003", name: "Carlos Silva" },
 ];
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:3001";
+const API_BASE_URL = getApiBaseUrl();
 
 const base = {
   dashboard: {
@@ -137,7 +137,7 @@ export default function MonitoreoLicencias() {
       formData.append("expiryDate", expiryDate);
 
       const response = await fetch(
-        `${API_BASE_URL}/api/conductores/license/upload`,
+        `${API_BASE_URL}/api/conductores/upload-license`,
         {
           method: "POST",
           headers: {
@@ -148,13 +148,13 @@ export default function MonitoreoLicencias() {
       );
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({}));
         throw new Error(
-          errorData.message || `Error uploading license: ${response.statusText}`
+          errorData?.message || errorData?.error || `Error uploading license: ${response.statusText}`
         );
       }
 
-      const result = await response.json();
+      await response.json().catch(() => null);
 
       setSuccessText(
         "Licencia cargada y registrada correctamente (estado pending_review)."

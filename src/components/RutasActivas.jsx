@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { supabase } from "../lib/supabaseClient";
+import { apiFetch } from "../lib/apiClient";
 
 const MAPS_API_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
 
@@ -47,7 +47,7 @@ const base = {
     padding: "14px 12px",
     borderBottom: "1px solid rgba(255,255,255,0.08)",
     fontSize: "15px",
-    color: "#e2e8f0"
+    color: "#e2e8f0",
   },
   badge: {
     display: "inline-block",
@@ -67,9 +67,11 @@ const base = {
     background: "rgba(8,8,12,0.7)",
     marginTop: "20px",
     position: "relative",
-    overflow: "hidden"
-  }
+    overflow: "hidden",
+  },
 };
+
+const ESTADOS_FINALIZADOS = new Set(["ENTREGADA", "ENTREGADO", "CANCELADA"]);
 
 export default function RutasActivas() {
   const [rutas, setRutas] = useState([]);
@@ -79,7 +81,6 @@ export default function RutasActivas() {
   const googleMapRef = useRef(null);
   const markersRef = useRef([]);
 
-  // Cargar Google Maps
   useEffect(() => {
     if (!MAPS_API_KEY) return;
     if (window.google?.maps) {
@@ -98,29 +99,29 @@ export default function RutasActivas() {
     }
   }, []);
 
-  // Cargar Rutas
   const cargarRutasEnCurso = async () => {
     setLoading(true);
-    // Rutas asignadas (conductor_id is not null) y que no estén entregadas
-    const { data, error } = await supabase
-      .from("rutas")
-      .select(`
-        *,
-        clientes(nombre, latitud, longitud), 
-        conductores(usuario_id, rut, usuarios(nombre)),
-        camiones(patente)
-      `)
-      .not("conductor_id", "is", null) 
-      .neq("estado", "ENTREGADO")
-      .order("created_at", { ascending: false });
 
-    if (error) {
-      console.error("Error cargando rutas activas:", error);
+    const res = await apiFetch("/api/rutas");
+
+    if (!res.ok) {
+      console.error("Error cargando rutas activas:", res.error);
+      setRutas([]);
+      setLoading(false);
+      return;
     }
 
-    if (!error && data) {
-      setRutas(data);
-    }
+    const payload = res.data;
+    const lista = Array.isArray(payload) ? payload : payload?.data ?? [];
+
+    const activas = lista.filter((ruta) => {
+      const estado = String(ruta?.estado || "").toUpperCase();
+      const tieneConductor =
+        ruta?.conductor_id != null || ruta?.conductores != null;
+      return tieneConductor && !ESTADOS_FINALIZADOS.has(estado);
+    });
+
+    setRutas(activas);
     setLoading(false);
   };
 
@@ -128,9 +129,12 @@ export default function RutasActivas() {
     cargarRutasEnCurso();
   }, []);
 
-  // Inicializar o actualizar marcadores en el mapa
+  // Marcadores en el mapa. El backend `GET /api/rutas` no expone lat/lng del
+  // cliente; sólo se renderizan marcadores cuando algún endpoint futuro los
+  // incluya o si el objeto ya viene enriquecido. Si no hay coordenadas, se
+  // mantiene el mapa centrado en Santiago como fallback visual.
   useEffect(() => {
-    if (!mapLoaded || !mapRef.current || rutas.length === 0) return;
+    if (!mapLoaded || !mapRef.current) return;
 
     if (!googleMapRef.current) {
       googleMapRef.current = new window.google.maps.Map(mapRef.current, {
@@ -146,9 +150,10 @@ export default function RutasActivas() {
       });
     }
 
-    // Limpiar marcadores viejos
-    markersRef.current.forEach(m => m.setMap(null));
+    markersRef.current.forEach((m) => m.setMap(null));
     markersRef.current = [];
+
+    if (rutas.length === 0) return;
 
     const bounds = new window.google.maps.LatLngBounds();
     let hasValidCoords = false;
@@ -156,7 +161,7 @@ export default function RutasActivas() {
     rutas.forEach((ruta) => {
       const lat = ruta.clientes?.latitud;
       const lng = ruta.clientes?.longitud;
-      
+
       if (lat && lng) {
         hasValidCoords = true;
         const pos = { lat: Number(lat), lng: Number(lng) };
@@ -164,13 +169,13 @@ export default function RutasActivas() {
           position: pos,
           map: googleMapRef.current,
           title: `🚜 Destino: ${ruta.clientes?.nombre || "Cliente"} (${ruta.estado})`,
-          icon: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png"
+          icon: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png",
         });
-        
+
         const info = new window.google.maps.InfoWindow({
-          content: `<div style="color:#000;padding:5px;"><b>${ruta.clientes?.nombre || "Desconocido"}</b><br/>🚚 Camión: ${ruta.camiones?.patente || "S/A"}<br/>⏳ Estado: ${ruta.estado || "En Ruta"}</div>`
+          content: `<div style="color:#000;padding:5px;"><b>${ruta.clientes?.nombre || "Desconocido"}</b><br/>🚚 Camión: ${ruta.camiones?.patente || "S/A"}<br/>⏳ Estado: ${ruta.estado || "En Ruta"}</div>`,
         });
-        
+
         marker.addListener("click", () => {
           info.open(googleMapRef.current, marker);
         });
@@ -183,14 +188,13 @@ export default function RutasActivas() {
     if (hasValidCoords) {
       googleMapRef.current.fitBounds(bounds);
     }
-
   }, [mapLoaded, rutas]);
 
   return (
     <div style={base.container} className="premium-scroll operator-section">
       <div style={base.card} className="operator-glass-card">
         <div style={base.title}>📍 Rutas Activas (En Curso)</div>
-        
+
         {loading ? (
           <p style={{ color: "#94A3B8", fontSize: "14px" }}>Cargando rutas en curso...</p>
         ) : rutas.length === 0 ? (
@@ -212,23 +216,33 @@ export default function RutasActivas() {
                   {rutas.map((ruta) => (
                     <tr key={ruta.id}>
                       <td style={base.td}>
-                        <span style={{color: "#94A3B8"}}>#{String(ruta.id).substring(0, 8)}</span>
+                        <span style={{ color: "#94A3B8" }}>#{String(ruta.id).substring(0, 8)}</span>
                       </td>
                       <td style={base.td}>
-                        <div style={{fontWeight: 500}}>{ruta.clientes?.nombre || "Sin Asignar"}</div>
-                        <div style={{fontSize: "13px", color: "#94A3B8", marginTop: "4px"}}>🛑 {ruta.destino}</div>
+                        <div style={{ fontWeight: 500 }}>{ruta.clientes?.nombre || "Sin Asignar"}</div>
+                        <div style={{ fontSize: "13px", color: "#94A3B8", marginTop: "4px" }}>🛑 {ruta.destino}</div>
                       </td>
                       <td style={base.td}>
-                        <div style={{fontWeight: 500}}>🚚 {ruta.camiones?.patente || "-"}</div>
-                        <div style={{fontSize: "13px", color: "#94A3B8", marginTop: "4px"}}>
+                        <div style={{ fontWeight: 500 }}>🚚 {ruta.camiones?.patente || "-"}</div>
+                        <div style={{ fontSize: "13px", color: "#94A3B8", marginTop: "4px" }}>
                           👤 {ruta.conductores?.usuarios?.nombre || ruta.conductores?.rut || "N/A"}
                         </div>
                       </td>
                       <td style={base.td}>
-                        {ruta.created_at ? new Date(ruta.created_at).toLocaleString('es-CL', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' }) : "N/A"}
+                        {(() => {
+                          const fecha = ruta.fecha_inicio || ruta.created_at;
+                          return fecha
+                            ? new Date(fecha).toLocaleString("es-CL", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                day: "2-digit",
+                                month: "short",
+                              })
+                            : "N/A";
+                        })()}
                       </td>
                       <td style={base.td}>
-                        <span style={{...base.badge, background: ruta.estado === "PENDIENTE" ? "#F59E0B" : "#2563EB", color: "#fff"}}>
+                        <span style={{ ...base.badge, background: ruta.estado === "PENDIENTE" ? "#F59E0B" : "#2563EB", color: "#fff" }}>
                           {ruta.estado === "PENDIENTE" ? "⏳" : "🚛"} {ruta.estado || "EN CURSO"}
                         </span>
                       </td>
@@ -238,7 +252,6 @@ export default function RutasActivas() {
               </table>
             </div>
 
-            {/* Mapa de Destinos */}
             <div style={base.mapContainer} ref={mapRef}>
               {!mapLoaded && (
                 <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "#60A5FA" }}>

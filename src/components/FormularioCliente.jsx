@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { supabase } from "../lib/supabaseClient";
+import { apiFetch } from "../lib/apiClient";
 import SelectorCoordenadas from "./SelectorCoordenadas";
 
 const base = {
@@ -187,23 +187,37 @@ export default function FormularioCliente({ onGuardado }) {
         nombre: formData.nombre,
         rut: formData.rut,
         contacto_telefono: formData.telefono,
-        direccion: formData.direccion
+        direccion: formData.direccion,
+        latitud: formData.latitud,
+        longitud: formData.longitud,
       };
-      const { error } = await supabase
-        .from("clientes")
-        .insert([payload]); 
 
-      if (error) throw error;
+      const res = await apiFetch("/api/clientes", {
+        method: "POST",
+        json: payload,
+      });
+
+      if (!res.ok) {
+        if (res.status === 404 || res.status === 0) {
+          alert(
+            "⚠️ Endpoint de clientes no disponible aún en el backend. " +
+            "El cliente no se guardó. Intenta más tarde."
+          );
+          return;
+        }
+        throw new Error(res.error || "Error al guardar cliente");
+      }
+
       alert("✅ Cliente guardado exitosamente");
       setFormData({
         nombre: "",
         rut: "",
         telefono: "",
         direccion: "",
-        latitud: -33.4489, 
-        longitud: -70.6693
+        latitud: -33.4489,
+        longitud: -70.6693,
       });
-      if(onGuardado) onGuardado();
+      if (onGuardado) onGuardado();
     } catch (err) {
       alert("❌ Error al guardar cliente: " + err.message);
     } finally {

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { supabase } from "../lib/supabaseClient";
+import { apiFetch } from "../lib/apiClient";
 
 const base = {
   container: {
@@ -46,7 +46,7 @@ const base = {
     padding: "14px 12px",
     borderBottom: "1px solid rgba(255,255,255,0.08)",
     fontSize: "15px",
-    color: "#e2e8f0"
+    color: "#e2e8f0",
   },
   badge: {
     display: "inline-block",
@@ -58,49 +58,48 @@ const base = {
     color: "#ffffff",
     border: "1px solid rgba(76,201,240,0.45)",
   },
-  mapContainer: {
-    width: "100%",
-    height: "350px",
-    borderRadius: "8px",
-    border: "1px solid rgba(255,255,255,0.12)",
-    background: "rgba(8,8,12,0.7)",
-    marginTop: "20px",
-    position: "relative",
-    overflow: "hidden"
-  }
 };
+
+// Estados que se consideran "entregados" para excluir de las guías activas.
+const ESTADOS_FINALIZADOS = new Set(["ENTREGADA", "ENTREGADO", "CANCELADA"]);
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error("No se pudo leer el archivo"));
+    reader.readAsDataURL(file);
+  });
+}
 
 export default function GuiasDespacho() {
   const [rutas, setRutas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploadingId, setUploadingId] = useState(null);
 
-  // REMOVIENDO MAPA PARA ESTA VISTA DE GUIAS
-  // ----------------------------------------
-
-  // Cargar Rutas
   const cargarRutasEnCurso = async () => {
     setLoading(true);
-    // Rutas asignadas (conductor_id is not null) y que no estén entregadas
-    const { data, error } = await supabase
-      .from("rutas")
-      .select(`
-        *,
-        clientes(nombre), 
-        conductores(usuario_id, rut, usuarios(nombre)),
-        camiones(patente)
-      `)
-      .not("conductor_id", "is", null)
-      .neq("estado", "ENTREGADO")
-      .order("created_at", { ascending: false });
+    const res = await apiFetch("/api/rutas");
 
-    if (error) {
-      console.error("Error cargando rutas activas:", error);
+    if (!res.ok) {
+      console.error("Error cargando rutas activas:", res.error);
+      setRutas([]);
+      setLoading(false);
+      return;
     }
 
-    if (!error && data) {
-      setRutas(data);
-    }
+    const payload = res.data;
+    const lista = Array.isArray(payload) ? payload : payload?.data ?? [];
+
+    const activas = lista.filter(
+      (ruta) =>
+        ruta?.conductor_id != null ||
+        ruta?.conductores != null
+    ).filter(
+      (ruta) => !ESTADOS_FINALIZADOS.has(String(ruta?.estado || "").toUpperCase())
+    );
+
+    setRutas(activas);
     setLoading(false);
   };
 
@@ -109,40 +108,35 @@ export default function GuiasDespacho() {
   }, []);
 
   const handleSubirFicha = async (rutaId, event) => {
-    const file = event.target.files[0];
+    const file = event.target.files?.[0];
     if (!file) return;
 
     setUploadingId(rutaId);
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `ficha_${rutaId}_${Date.now()}.${fileExt}`;
+      const dataUrl = await readFileAsDataUrl(file);
 
-      // 1. Subir a Supabase Storage
-      const { data, error } = await supabase.storage
-        .from("fichas_despacho")
-        .upload(fileName, file);
+      const res = await apiFetch(`/api/entregas/${rutaId}/photo`, {
+        method: "POST",
+        json: { base64Photo: dataUrl },
+      });
 
-      if (error) throw error;
-
-      // 2. Obtener URL pública
-      const { data: publicUrlData } = supabase.storage
-        .from("fichas_despacho")
-        .getPublicUrl(data.path);
-
-      if (publicUrlData) {
-        // 3. Actualizar la tabla de 'rutas' con la URL
-        const { error: dbError } = await supabase
-          .from("rutas")
-          .update({ ficha_despacho_url: publicUrlData.publicUrl })
-          .eq("id", rutaId);
-
-        if (dbError) throw dbError;
-        alert("Ficha de despacho subida exitosamente.");
-        cargarRutasEnCurso();
+      if (!res.ok) {
+        throw new Error(res.error || "No se pudo subir la ficha");
       }
+
+      const fotoUrl = res.data?.data?.fotoUrl ?? res.data?.fotoUrl ?? null;
+
+      // Actualizar estado local sin recargar todo (la URL no la expone GET /api/rutas).
+      setRutas((prev) =>
+        prev.map((r) =>
+          r.id === rutaId ? { ...r, ficha_despacho_url: fotoUrl } : r
+        )
+      );
+
+      alert("Ficha de despacho subida exitosamente.");
     } catch (err) {
       console.error("Error subiendo ficha:", err);
-      alert("No se pudo subir la ficha de despacho. Verifica los permisos de almacenamiento en Supabase.");
+      alert(`No se pudo subir la ficha de despacho: ${err.message}`);
     } finally {
       setUploadingId(null);
     }
@@ -150,24 +144,29 @@ export default function GuiasDespacho() {
 
   const handleFinalizarDespacho = async (ruta) => {
     if (!ruta.ficha_despacho_url) {
-      alert("Acción bloqueada: No se puede finalizar el despacho. Debes adjuntar al menos una Ficha de Despacho física.");
+      alert(
+        "Acción bloqueada: No se puede finalizar el despacho. Debes adjuntar al menos una Ficha de Despacho física."
+      );
       return;
     }
 
-    if (window.confirm("¿Estás seguro de finalizar este despacho?")) {
-      try {
-        const { error } = await supabase
-          .from("rutas")
-          .update({ estado: "ENTREGADO" })
-          .eq("id", ruta.id);
+    if (!window.confirm("¿Estás seguro de finalizar este despacho?")) return;
 
-        if (error) throw error;
-        alert("Despacho finalizado con éxito.");
-        cargarRutasEnCurso();
-      } catch (err) {
-        console.error("Error al finalizar despacho:", err);
-        alert("Error al intentar finalizar el despacho.");
+    try {
+      const res = await apiFetch(`/api/rutas/${ruta.id}/status`, {
+        method: "PATCH",
+        json: { estado: "ENTREGADA" },
+      });
+
+      if (!res.ok) {
+        throw new Error(res.error || "Error al finalizar el despacho");
       }
+
+      alert("Despacho finalizado con éxito.");
+      cargarRutasEnCurso();
+    } catch (err) {
+      console.error("Error al finalizar despacho:", err);
+      alert(`Error al intentar finalizar el despacho: ${err.message}`);
     }
   };
 
@@ -211,7 +210,17 @@ export default function GuiasDespacho() {
                         </div>
                       </td>
                       <td style={base.td}>
-                        {ruta.created_at ? new Date(ruta.created_at).toLocaleString('es-CL', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' }) : "N/A"}
+                        {(() => {
+                          const fecha = ruta.fecha_inicio || ruta.created_at;
+                          return fecha
+                            ? new Date(fecha).toLocaleString("es-CL", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                day: "2-digit",
+                                month: "short",
+                              })
+                            : "N/A";
+                        })()}
                       </td>
                       <td style={base.td}>
                         <span style={{ ...base.badge, background: ruta.estado === "PENDIENTE" ? "#F59E0B" : "#2563EB", color: "#fff" }}>
@@ -220,7 +229,6 @@ export default function GuiasDespacho() {
                       </td>
                       <td style={base.td}>
                         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                          {/* Botón para subir o ver ficha */}
                           {ruta.ficha_despacho_url ? (
                             <a href={ruta.ficha_despacho_url} target="_blank" rel="noopener noreferrer" style={{ color: "#3B82F6", fontSize: "14px", textDecoration: "none", fontWeight: 600 }}>
                               📄 Ver Ficha Adjunta
@@ -238,7 +246,6 @@ export default function GuiasDespacho() {
                             </label>
                           )}
 
-                          {/* Botón de Finalizar Despacho */}
                           <button
                             onClick={() => handleFinalizarDespacho(ruta)}
                             style={{
@@ -249,7 +256,7 @@ export default function GuiasDespacho() {
                               borderRadius: "8px",
                               fontSize: "14px",
                               cursor: "pointer",
-                              fontWeight: 600
+                              fontWeight: 600,
                             }}
                             title={!ruta.ficha_despacho_url ? "Debe subir la ficha para finalizar" : "Finalizar Despacho"}
                           >

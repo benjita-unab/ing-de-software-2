@@ -5,7 +5,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useState, useCallback } from "react";
-import { getAuthToken, loginWeb } from "../lib/apiClient";
+import { getAuthToken, loginWeb, getApiBaseUrl } from "../lib/apiClient";
 
 async function ensureToken() {
   let token = getAuthToken();
@@ -20,7 +20,7 @@ async function ensureToken() {
   return token;
 }
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:3001";
+const API_BASE_URL = getApiBaseUrl();
 
 // ── Mapeo de valores de tipo/estado/prioridad ───────────────────────────────
 const TIPO_MAP = {
@@ -104,28 +104,9 @@ function sortAlerts(alerts) {
   });
 }
 
-// ── Query con JOIN a conductores (y camiones si existe la relación) ──────────
-const SELECT_QUERY = `
-  *,
-  conductores (
-    id,
-    usuarios (
-      nombre
-    )
-  ),
-  rutas (
-    id,
-    camiones (
-      id,
-      patente
-    )
-  )
-`.trim();
-
 export function useAlerts() {
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [pollingInterval, setPollingInterval] = useState(null);
 
   // ── Carga inicial ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -185,8 +166,6 @@ export function useAlerts() {
           console.warn("Polling error:", error?.message);
         }
       }, 5000);
-
-      setPollingInterval(interval);
     })();
 
     return () => {
@@ -260,25 +239,3 @@ export function useAlerts() {
 
   return { alerts, loading, acknowledgeAlert, resolveAlert };
 }
-
-// ── Alarma sonora ─────────────────────────────────────────────────────────
-function playAlarm() {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.type = "square";
-    osc.frequency.setValueAtTime(880, ctx.currentTime);
-    gain.gain.setValueAtTime(0.3, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8);
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.8);
-  } catch (e) {
-    console.warn("Audio no disponible:", e);
-  }
-}
-
-
-

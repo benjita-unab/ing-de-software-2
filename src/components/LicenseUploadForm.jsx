@@ -1,16 +1,17 @@
 import React, { useState } from 'react';
+import { getAuthToken, getApiBaseUrl } from '../lib/apiClient';
 /**
  * Componente LicenseUploadForm
- * 
+ *
  * Renderiza un formulario para la carga de documentos de licencias de conducir
  * incluyendo la copia digital y su fecha de vencimiento.
- * 
+ *
  * Características:
  * - File upload para documentos (PDF, JPG, PNG)
  * - Date input para fecha de vencimiento
  * - Validaciones de formulario
  * - Diseño Bootstrap 5
- * - Integración preparada para Supabase
+ * - Envío al backend NestJS (POST /api/conductores/upload-license)
  */
 const LicenseUploadForm = () => {
   // ==================== ESTADOS ====================
@@ -182,7 +183,7 @@ const LicenseUploadForm = () => {
     setSuccessMessage('');
 
     try {
-      const token = localStorage.getItem('logitrack_access_token');
+      const token = getAuthToken();
       if (!token) {
         throw new Error('Token de autorización no disponible. Inicia sesión de nuevo.');
       }
@@ -191,7 +192,7 @@ const LicenseUploadForm = () => {
       formData.append('file', file);
       formData.append('expiryDate', expiryDate);
 
-      const response = await fetch('/api/conductores/upload-license', {
+      const response = await fetch(`${getApiBaseUrl()}/api/conductores/upload-license`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,

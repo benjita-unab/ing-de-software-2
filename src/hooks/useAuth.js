@@ -1,21 +1,27 @@
 // src/hooks/useAuth.js
 // ─────────────────────────────────────────────────────────────────────────────
-// Hook de autenticación con Supabase Auth.
-// Maneja sesión, perfil del operador, login y logout.
+// Hook de autenticación contra el backend NestJS (POST /api/auth/login).
+// Persiste el token en localStorage en ambas claves para mantener
+// compatibilidad con código legado:
+//   - "accessToken"
+//   - "logitrack_access_token"
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useState } from "react";
+import {
+  getApiBaseUrl,
+  getAuthToken,
+  setAuthToken,
+  clearAuthToken,
+} from "../lib/apiClient";
 
 export function useAuth() {
   const [session, setSession] = useState(null);
   const [operator, setOperator] = useState(null);
   const [loading, setLoading] = useState(true);
-  const API_URL = (process.env.REACT_APP_API_URL || process.env.NEXT_PUBLIC_API_URL || "")
-    .replace(/\/$/, "")
-    .replace(/\/api$/, "");
 
   useEffect(() => {
-    const token = localStorage.getItem("logitrack_access_token");
+    const token = getAuthToken();
     if (!token) {
       setLoading(false);
       return;
@@ -25,37 +31,45 @@ export function useAuth() {
       id: "operator",
       full_name: "Operador",
       branch: "",
-      role: "operator"
+      role: "operator",
     });
     setLoading(false);
   }, []);
 
   async function signIn(email, password) {
-    if (!API_URL) {
+    const apiUrl = getApiBaseUrl();
+    if (!apiUrl) {
       return new Error("Falta REACT_APP_API_URL o NEXT_PUBLIC_API_URL.");
     }
-    const response = await fetch(`${API_URL}/api/auth/login`, {
+
+    const response = await fetch(`${apiUrl}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password })
+      body: JSON.stringify({ email, password }),
     });
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      return new Error(payload?.error || "Credenciales inválidas");
+    if (!response.ok || !payload?.accessToken) {
+      return new Error(
+        payload?.message || payload?.error || "Credenciales inválidas",
+      );
     }
-    localStorage.setItem("logitrack_access_token", payload.accessToken);
+
+    setAuthToken(payload.accessToken);
     setSession({ access_token: payload.accessToken, user: payload.user });
     setOperator({
       id: payload.user?.id || "operator",
-      full_name: payload.user?.user_metadata?.full_name || payload.user?.email || "Operador",
+      full_name:
+        payload.user?.user_metadata?.full_name ||
+        payload.user?.email ||
+        "Operador",
       branch: "",
-      role: payload.user?.role || "operator"
+      role: payload.user?.role || "operator",
     });
     return null;
   }
 
   async function signOut() {
-    localStorage.removeItem("logitrack_access_token");
+    clearAuthToken();
     setSession(null);
     setOperator(null);
   }
