@@ -5,10 +5,10 @@ import AlertCard from "./AlertCard";
 const FILTERS = ["TODAS", "PENDIENTE", "EN_GESTION", "RESUELTA"];
 
 const PRIORITY_SECTIONS = [
-  { key: "CRITICA", label: "🚨 Críticas",       color: "#ff1744" },
-  { key: "ALTA",    label: "⚠️ Alta Prioridad",  color: "#ff6d00" },
-  { key: "NORMAL",  label: "ℹ️ Normales",        color: "#1565c0" },
-  { key: "BAJA",    label: "📋 Baja Prioridad",  color: "#2e7d32" },
+  { key: "CRITICA", label: "🚨 Críticas",       color: "#f72585" },
+  { key: "ALTA",    label: "⚠️ Alta Prioridad",  color: "#4cc9f0" },
+  { key: "NORMAL",  label: "ℹ️ Normales",        color: "rgba(255,255,255,0.8)" },
+  { key: "BAJA",    label: "📋 Baja Prioridad",  color: "rgba(255,255,255,0.6)" },
 ];
 
 export default function AlertQueue({
@@ -38,29 +38,30 @@ export default function AlertQueue({
 
   return (
     <div
+      className="alert-queue"
       style={{
         display: "flex",
         flexDirection: "column",
         height: "100%",
-        background: "#0a0e1a",
+        background: "transparent",
       }}
     >
       {/* ── Header de la cola ── */}
       <div
         style={{
           padding: "16px 20px",
-          borderBottom: "1px solid #1e2a3a",
+          borderBottom: "1px solid rgba(255,255,255,0.12)",
           flexShrink: 0,
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
-          <h2 style={{ color: "#fff", margin: 0, fontSize: "16px", fontWeight: 700, fontFamily: "'Syne', sans-serif" }}>
+          <h2 style={{ color: "#fff", margin: 0, fontSize: "13px", fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase" }}>
             Cola de Alertas
           </h2>
           {pendingCritical > 0 && (
             <span
               style={{
-                background: "#ff1744",
+                background: "#f72585",
                 color: "#fff",
                 fontSize: "11px",
                 fontWeight: 700,
@@ -75,9 +76,8 @@ export default function AlertQueue({
           <span
             style={{
               marginLeft: "auto",
-              color: "#888",
-              fontSize: "12px",
-              fontFamily: "'DM Mono', monospace",
+              color: "rgba(255,255,255,0.7)",
+              fontSize: "11px",
             }}
           >
             {filtered.length} alerta{filtered.length !== 1 ? "s" : ""}
@@ -86,15 +86,16 @@ export default function AlertQueue({
 
         {/* Búsqueda */}
         <input
+          className="alert-search-input"
           type="text"
           placeholder="Buscar conductor o patente..."
           value={searchText}
           onChange={(e) => setSearchText(e.target.value)}
           style={{
             width: "100%",
-            background: "#111827",
-            border: "1px solid #1e2a3a",
-            borderRadius: "8px",
+            background: "rgba(8,8,12,0.7)",
+            border: "1px solid rgba(255,255,255,0.15)",
+            borderRadius: "999px",
             padding: "8px 12px",
             color: "#fff",
             fontSize: "13px",
@@ -102,6 +103,7 @@ export default function AlertQueue({
             marginBottom: "10px",
             boxSizing: "border-box",
             fontFamily: "inherit",
+            boxShadow: "inset 0 0 12px rgba(76,201,240,0.12)",
           }}
         />
 
@@ -112,15 +114,15 @@ export default function AlertQueue({
               key={f}
               onClick={() => setStatusFilter(f)}
               style={{
-                background: statusFilter === f ? "#1565c0" : "#111827",
-                color: statusFilter === f ? "#fff" : "#888",
-                border: `1px solid ${statusFilter === f ? "#1565c0" : "#1e2a3a"}`,
-                borderRadius: "6px",
+                background: statusFilter === f ? "linear-gradient(135deg, #3a0ca3, #12185c)" : "rgba(255,255,255,0.05)",
+                color: statusFilter === f ? "#fff" : "rgba(255,255,255,0.75)",
+                border: `1px solid ${statusFilter === f ? "rgba(76,201,240,0.6)" : "rgba(255,255,255,0.14)"}`,
+                borderRadius: "999px",
                 padding: "4px 10px",
                 fontSize: "11px",
                 fontWeight: 600,
                 cursor: "pointer",
-                fontFamily: "'DM Mono', monospace",
+                letterSpacing: "0.06em",
               }}
             >
               {f}
@@ -136,8 +138,9 @@ export default function AlertQueue({
           overflowY: "auto",
           padding: "14px 14px",
           scrollbarWidth: "thin",
-          scrollbarColor: "#1e2a3a #0a0e1a",
+          scrollbarColor: "rgba(76,201,240,0.4) transparent",
         }}
+        className="premium-scroll"
       >
         {loading ? (
           <LoadingState />

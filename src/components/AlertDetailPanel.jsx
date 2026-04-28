@@ -8,10 +8,10 @@
 import React, { useState } from "react";
 
 const PRIORITY_CONFIG = {
-  CRITICA: { label: "CRÍTICA",  border: "#ff1744", glow: "#ff174440", icon: "🚨", badgeBg: "#ff1744" },
-  ALTA:    { label: "ALTA",     border: "#ff6d00", glow: "#ff6d0040", icon: "⚠️", badgeBg: "#ff6d00" },
-  NORMAL:  { label: "NORMAL",   border: "#1565c0", glow: "#1565c040", icon: "ℹ️", badgeBg: "#1565c0" },
-  BAJA:    { label: "BAJA",     border: "#2e7d32", glow: "#2e7d3240", icon: "📋", badgeBg: "#2e7d32" },
+  CRITICA: { label: "CRÍTICA",  border: "#f72585", glow: "#f7258540", icon: "🚨", badgeBg: "#f72585" },
+  ALTA:    { label: "ALTA",     border: "#4cc9f0", glow: "#4cc9f040", icon: "⚠️", badgeBg: "#4cc9f0" },
+  NORMAL:  { label: "NORMAL",   border: "#3a0ca3", glow: "#3a0ca340", icon: "ℹ️", badgeBg: "#3a0ca3" },
+  BAJA:    { label: "BAJA",     border: "#12185c", glow: "#12185c40", icon: "📋", badgeBg: "#12185c" },
 };
 
 const ALERT_TYPE_LABELS = {
@@ -55,7 +55,7 @@ export default function AlertDetailPanel({ alert, onAcknowledge, onResolve, curr
   // ── Estado vacío ────────────────────────────────────────────────────────
   if (!alert) {
     return (
-      <div style={emptyContainerStyle}>
+      <div style={emptyContainerStyle} className="alert-detail-panel">
         <div style={{ fontSize: "52px", marginBottom: "16px", opacity: 0.3 }}>📋</div>
         <p style={{ color: "#334", margin: 0, fontSize: "14px", fontWeight: 600 }}>
           Selecciona una alerta
@@ -85,12 +85,12 @@ export default function AlertDetailPanel({ alert, onAcknowledge, onResolve, curr
   }
 
   return (
-    <div style={panelStyle}>
+    <div style={panelStyle} className="alert-detail-panel">
       {/* ── Encabezado con glow de prioridad ── */}
       <div
         style={{
           padding: "24px 28px 20px",
-          borderBottom: `1px solid ${cfg.border}33`,
+          borderBottom: `1px solid ${cfg.border}44`,
           background: `linear-gradient(180deg, ${cfg.glow} 0%, transparent 100%)`,
         }}
       >
@@ -99,7 +99,7 @@ export default function AlertDetailPanel({ alert, onAcknowledge, onResolve, curr
           <span style={{ ...badgeStyle, background: cfg.badgeBg }}>
             {cfg.icon} {cfg.label}
           </span>
-          <span style={{ ...badgeStyle, background: "#ffffff12", color: "#ccc" }}>
+          <span style={{ ...badgeStyle, background: "#ffffff12", color: "rgba(255,255,255,0.82)" }}>
             {ALERT_TYPE_LABELS[alert.alert_type] ?? alert.alert_type}
           </span>
           <span style={{
@@ -113,16 +113,16 @@ export default function AlertDetailPanel({ alert, onAcknowledge, onResolve, curr
           </span>
         </div>
 
-        <h2 style={{ color: "#fff", margin: "0 0 4px", fontSize: "18px", fontFamily: "'Syne', sans-serif", fontWeight: 700 }}>
+        <h2 style={{ color: "#fff", margin: "0 0 4px", fontSize: "17px", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase" }}>
           {ALERT_TYPE_LABELS[alert.alert_type] ?? alert.alert_type}
         </h2>
-        <p style={{ color: "#556", margin: 0, fontSize: "12px", fontFamily: "'DM Mono', monospace" }}>
+        <p style={{ color: "rgba(255,255,255,0.65)", margin: 0, fontSize: "12px" }}>
           ID #{String(alert.id).slice(0, 8).toUpperCase()} · {formatTimestamp(alert.created_at)} ({timeAgo(alert.created_at)})
         </p>
       </div>
 
       {/* ── Cuerpo del detalle ── */}
-      <div style={{ padding: "20px 28px", overflowY: "auto", flex: 1 }}>
+      <div style={{ padding: "20px 28px", overflowY: "auto", flex: 1 }} className="premium-scroll">
 
         {/* Conductor y vehículo — CA-2 */}
         <Section title="Vehículo y Conductor">
@@ -186,11 +186,11 @@ export default function AlertDetailPanel({ alert, onAcknowledge, onResolve, curr
       {/* ── Acciones — CA-3 ── */}
       <div style={{
         padding: "16px 28px",
-        borderTop: "1px solid #1e2a3a",
+        borderTop: "1px solid rgba(255,255,255,0.12)",
         display: "flex",
         gap: "10px",
         flexShrink: 0,
-        background: "#060910",
+        background: "rgba(8,8,12,0.5)",
       }}>
         {isPending && (
           <button
@@ -266,7 +266,7 @@ function InfoRow({ icon, label, value, highlight }) {
 
 const panelStyle = {
   width: "100%", height: "100%",
-  background: "#0a0e1a",
+  background: "transparent",
   display: "flex", flexDirection: "column",
   overflowY: "hidden",
 };
@@ -275,7 +275,7 @@ const emptyContainerStyle = {
   width: "100%", height: "100%",
   display: "flex", flexDirection: "column",
   alignItems: "center", justifyContent: "center",
-  background: "#0a0e1a",
+  background: "transparent",
 };
 
 const badgeStyle = {
@@ -290,15 +290,16 @@ const mapsLinkStyle = {
   alignItems: "center",
   marginTop: "8px",
   padding: "8px 14px",
-  background: "#1565c022",
-  border: "1px solid #1565c066",
+  background: "rgba(58,12,163,0.26)",
+  border: "1px solid rgba(76,201,240,0.5)",
   borderRadius: "8px",
-  color: "#64b5f6",
+  color: "#ffffff",
   fontSize: "13px",
   fontWeight: 600,
   textDecoration: "none",
   transition: "background 0.2s",
-  fontFamily: "'Syne', sans-serif",
+  letterSpacing: "0.06em",
+  textTransform: "uppercase",
 };
 
 const noLocationStyle = {

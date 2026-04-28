@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { TouchableOpacity, Text, Alert, StyleSheet, View, ActivityIndicator, Dimensions } from "react-native";
-import { cerrarDespachoYEnviarComprobante, enviarQRPrevio, guardarFirmaEnSupabase } from "../services/cierreDespachoService";
+import { cerrarDespachoYEnviarComprobante, enviarQRPrevio, guardarFirmaEnSupabase, subirFotoFichaEnSupabase } from "../services/cierreDespachoService";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import SignatureScreen from "react-native-signature-canvas";
 
@@ -15,10 +15,11 @@ export function BotonCerrarDespacho({
   etiquetaListo = "Cerrar despacho y enviar",
 }: BotonCerrarDespachoProps) {
   const [cargando, setCargando] = useState(false);
-  const [estadoFlujo, setEstadoFlujo] = useState<"inicio" | "escanearQR" | "firmar" | "hecho">("inicio");
+  const [estadoFlujo, setEstadoFlujo] = useState<"inicio" | "escanearQR" | "tomarFotoFicha" | "firmar" | "hecho">("inicio");
   const [estadoTexto, setEstadoTexto] = useState("");
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const signatureRef = useRef<any>(null);
+  const cameraRef = useRef<CameraView>(null);
 
   async function manejarEnviarQR(): Promise<void> {
     if (cargando) return;
@@ -53,8 +54,30 @@ export function BotonCerrarDespacho({
     if (!result.data || result.data.length < 10) return;
 
     // Solo para prevenir multiples escaneos en rafaga
-    setEstadoFlujo("firmar");
-    Alert.alert("QR Escaneado", "QR de cliente validado. Por favor, proceda con la firma.");
+    setEstadoFlujo("tomarFotoFicha");
+    Alert.alert("QR Validado", "QR de cliente validado. Por favor tome una foto de la Guía de Despacho física.");
+  }
+
+  async function tomarFotoYSubir() {
+    if (cargando || !cameraRef.current) return;
+    setCargando(true);
+    setEstadoTexto("Subiendo fotografía...");
+    
+    try {
+      const fotillo = await cameraRef.current.takePictureAsync({ base64: true, quality: 0.3 });
+      
+      if (fotillo?.base64) {
+        await subirFotoFichaEnSupabase(rutaId, fotillo.base64);
+        setEstadoFlujo("firmar");
+        Alert.alert("Éxito", "Foto de la Guía almacenada. Por favor dibuje su firma para terminar.");
+      }
+    } catch (err) {
+      const mensaje = err instanceof Error ? err.message : "Error al subir la fotografía.";
+      Alert.alert("Error", mensaje);
+    } finally {
+      setCargando(false);
+      setEstadoTexto("");
+    }
   }
 
   async function manejarFirmaOK(firmaBase64: string) {
@@ -125,6 +148,30 @@ export function BotonCerrarDespacho({
           style={[styles.boton, { position: 'absolute', bottom: 0, alignSelf:'center', width: '80%' }]} 
           onPress={() => setEstadoFlujo("inicio")}>
           <Text style={styles.texto}>Cancelar</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (estadoFlujo === "tomarFotoFicha") {
+    return (
+      <View style={[styles.container, { height: 400 }]}>
+        <Text style={styles.instruccionTexto}>Fotografíe la Guía de Despacho</Text>
+        <View style={{ flex: 1, borderRadius: 12, overflow: "hidden", marginBottom: 60 }}>
+          <CameraView
+            ref={cameraRef}
+            style={StyleSheet.absoluteFillObject}
+            facing="back"
+          />
+        </View>
+        <TouchableOpacity 
+          style={[styles.boton, { position: 'absolute', bottom: 0, alignSelf:'center', width: '80%', backgroundColor: '#10B981' }]} 
+          onPress={tomarFotoYSubir}
+          disabled={cargando}
+        >
+          <Text style={styles.texto}>
+            {cargando ? estadoTexto : "📸 Tomar Foto y Continuar"}
+          </Text>
         </TouchableOpacity>
       </View>
     );

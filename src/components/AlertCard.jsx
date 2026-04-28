@@ -13,6 +13,9 @@ const ALERT_TYPE_LABELS = {
   BOTON_PANICO: "Botón de Pánico",
   ANOMALIA:     "Anomalía en Ruta",
   MANTENCION:   "Mantención Requerida",
+  ALERTA:       "Alerta Identificada",
+  NORMAL:       "Incidencia Normal",
+  EMERGENCIA:   "Emergencia Grave",
 };
 
 function formatTimestamp(ts) {
@@ -70,6 +73,7 @@ export default function AlertCard({
 
   return (
     <div
+      className="alert-card"
       onClick={() => onSelect?.(alert)}
       style={{
         background: isSelected ? `${cfg.border}18` : cfg.bg,
