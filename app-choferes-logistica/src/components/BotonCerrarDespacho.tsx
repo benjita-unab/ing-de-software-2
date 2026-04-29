@@ -19,6 +19,8 @@ export type BotonCerrarDespachoProps = {
   rutaId: string;
   className?: string;
   etiquetaListo?: string;
+  /** Tras cerrar despacho OK en backend (firma + PDF + correo). Limpieza de ruta activa en el padre. */
+  onDespachoFinalizado?: () => void | Promise<void>;
 };
 
 type EstadoFlujo = "inicio" | "escanearQR" | "firmar" | "hecho";
@@ -86,6 +88,7 @@ function parsearPayloadQR(raw: string): {
 export function BotonCerrarDespacho({
   rutaId,
   etiquetaListo: _etiquetaListo = "Cerrar despacho y enviar",
+  onDespachoFinalizado,
 }: BotonCerrarDespachoProps) {
   const [cargando, setCargando] = useState(false);
   const [estadoFlujo, setEstadoFlujo] = useState<EstadoFlujo>("inicio");
@@ -250,21 +253,31 @@ export function BotonCerrarDespacho({
   async function manejarFirmaOK(firmaBase64: string) {
     if (cargando) return;
     setCargando(true);
-    setEstadoTexto("Guardando firma y generando PDF...");
-    // El cierre de despacho dispara generación de PDF + descarga de
-    // imágenes desde Storage + envío de email; puede tardar bastante,
-    // así que damos margen pero igual cerramos la puerta a colgarse.
-    arrancarWatchdogLoading(45000);
+    setEstadoTexto("Guardando firma...");
+    // El cierre de despacho puede tardar más de un minuto cuando hay
+    // muchas evidencias (descarga de imágenes + generación PDF + envío
+    // de email + retries). Damos un margen amplio para evitar que el
+    // watchdog cierre el spinner antes de que el backend responda.
+    arrancarWatchdogLoading(180000);
 
     try {
       await guardarFirmaEnSupabase(rutaId, firmaBase64);
+      // Mensaje claro mientras el backend genera el PDF y envía mail.
+      setEstadoTexto("Generando comprobante y enviando correo...");
+
       const resultado = await cerrarDespachoYEnviarComprobante(rutaId);
 
+      // Solo avanzamos a "hecho" cuando /close respondió OK.
+      setEstadoFlujo("hecho");
+      try {
+        await onDespachoFinalizado?.();
+      } catch (cbErr) {
+        console.warn("onDespachoFinalizado:", cbErr);
+      }
       Alert.alert(
-        "Despacho Finalizado",
+        "Despacho finalizado",
         `La guía de despacho PDF (con firma) se generó y envió exitosamente a ${resultado.emailEnviadoA}. La entrega quedó validada.`,
       );
-      setEstadoFlujo("hecho");
     } catch (err) {
       // Usamos warn (no error) para no abrir el LogBox rojo en dev:
       // el cierre puede fallar por motivos esperables (sin internet,
@@ -274,6 +287,9 @@ export function BotonCerrarDespacho({
         err instanceof Error && err.message
           ? err.message
           : "No se pudo finalizar el despacho. Inténtalo nuevamente.";
+      // No avanzamos: nos quedamos en estado "firmar". Cuando se reactive
+      // la pizarra (al apagarse `cargando` en el finally), el usuario
+      // puede volver a tocar "Guardar Firma" para reintentar el cierre.
       Alert.alert("Error al finalizar despacho", mensaje);
     } finally {
       cancelarWatchdogLoading();
@@ -351,10 +367,38 @@ export function BotonCerrarDespacho({
         <Text style={styles.instruccionTexto}>Firma del receptor (Cliente)</Text>
         {cargando ? (
           <View
-            style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
+            style={{
+              flex: 1,
+              justifyContent: "center",
+              alignItems: "center",
+              backgroundColor: "#ffffff",
+              borderRadius: 12,
+              marginHorizontal: 5,
+              paddingHorizontal: 24,
+            }}
           >
-            <ActivityIndicator size="large" color="#000" />
-            <Text style={{ marginTop: 10 }}>{estadoTexto}</Text>
+            <ActivityIndicator size="large" color="#1565c0" />
+            <Text
+              style={{
+                marginTop: 16,
+                fontSize: 15,
+                fontWeight: "600",
+                color: "#111827",
+                textAlign: "center",
+              }}
+            >
+              {estadoTexto || "Procesando..."}
+            </Text>
+            <Text
+              style={{
+                marginTop: 8,
+                fontSize: 12,
+                color: "#6b7280",
+                textAlign: "center",
+              }}
+            >
+              No cierre la app. Esto puede tardar hasta dos minutos.
+            </Text>
           </View>
         ) : (
           <>

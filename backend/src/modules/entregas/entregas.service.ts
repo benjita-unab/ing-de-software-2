@@ -124,29 +124,9 @@ export class EntregasService {
         );
       }
 
-      // ── 3) Evidencias fotográficas (best effort) ──────────────
-      console.log('PDF STEP -> descargando evidencias');
-      let evidencias: Array<{
-        etapa: string | null;
-        buffer: Buffer;
-        timestamp: string | null;
-      }> = [];
-      try {
-        evidencias = await this.obtenerEvidenciasParaPDF(
-          rutaId,
-          ruta.fecha_inicio as unknown as string | null,
-          ruta.fecha_fin as unknown as string | null,
-        );
-      } catch (e: any) {
-        console.warn(
-          'PDF STEP ERROR -> evidencias (continuamos sin fotos):',
-          e?.message,
-        );
-        evidencias = [];
-      }
-      console.log('PDF STEP -> evidencias listas:', evidencias.length);
-
-      // ── 4) Generar PDF (defensivo: nunca debe tirar) ─────────
+      // ── 3) Generar PDF (sin evidencias: el PDF del correo solo
+      //     incluye comprobante formal; las fotos se ven en el
+      //     Historial web vía GET /api/rutas/:id/evidencias). ────
       console.log('PDF STEP -> generando PDF');
       let pdfBuffer: Buffer;
       try {
@@ -160,43 +140,17 @@ export class EntregasService {
           conductor: ruta.conductores,
           camion: ruta.camiones,
           firmaBuffer,
-          evidencias,
         });
         console.log('PDF STEP -> PDF generado, bytes:', pdfBuffer?.length ?? 0);
       } catch (e: any) {
-        // Si por algún motivo el PDF falla CON evidencias, reintentamos
-        // sin evidencias (regla 9 del usuario).
-        console.warn(
-          'PDF STEP ERROR -> generateDeliveryPDF falló con evidencias, reintento sin evidencias:',
+        console.error(
+          'PDF STEP ERROR -> generateDeliveryPDF falló:',
           e?.message,
+          e?.stack,
         );
-        try {
-          pdfBuffer = await this.generateDeliveryPDF({
-            rutaId: ruta.id,
-            origen: ruta.origen,
-            destino: ruta.destino,
-            fechaInicio: ruta.fecha_inicio,
-            fechaFin: ruta.fecha_fin,
-            cliente,
-            conductor: ruta.conductores,
-            camion: ruta.camiones,
-            firmaBuffer,
-            evidencias: [],
-          });
-          console.log(
-            'PDF STEP -> PDF generado SIN evidencias, bytes:',
-            pdfBuffer?.length ?? 0,
-          );
-        } catch (e2: any) {
-          console.error(
-            'PDF STEP ERROR -> generateDeliveryPDF falló incluso sin evidencias:',
-            e2?.message,
-            e2?.stack,
-          );
-          throw new InternalServerErrorException(
-            `No se pudo generar el comprobante PDF: ${e2?.message ?? 'error desconocido'}`,
-          );
-        }
+        throw new InternalServerErrorException(
+          `No se pudo generar el comprobante PDF: ${e?.message ?? 'error desconocido'}`,
+        );
       }
 
       // ── 5) Subir PDF a Storage con retry (única operación que SÍ
@@ -228,18 +182,32 @@ export class EntregasService {
 
       // ── 6) Enviar email (best effort: no rompe el cierre) ────
       const emailDestino = clienteEmail || cliente?.contacto_email || null;
+      let emailEnviadoOk = false;
       if (emailDestino) {
         try {
-          await this.sendDeliveryEmail(
+          const resultadoEmail = await this.sendDeliveryEmail(
             emailDestino,
             cliente?.nombre || 'Cliente',
             pdfBuffer,
             rutaId,
           );
-          console.log('CLOSE DELIVERY -> email enviado a:', emailDestino);
+          emailEnviadoOk = resultadoEmail.ok;
+          if (resultadoEmail.ok) {
+            console.log(
+              'CLOSE DELIVERY -> email enviado a:',
+              emailDestino,
+              'id:',
+              resultadoEmail.id,
+            );
+          } else {
+            console.warn(
+              'CLOSE DELIVERY -> email no enviado:',
+              resultadoEmail.errorMsg,
+            );
+          }
         } catch (e: any) {
           console.warn(
-            'CLOSE DELIVERY -> error enviando email (continuamos):',
+            'CLOSE DELIVERY -> excepción enviando email (continuamos):',
             e?.message,
           );
         }
@@ -302,6 +270,22 @@ export class EntregasService {
           );
         } else {
           console.log('CLOSE DELIVERY -> rutas.estado=ENTREGADO OK');
+        }
+
+        try {
+          await supabase.from('historial_estados').insert([
+            {
+              ruta_id: rutaId,
+              estado: 'ENTREGADO',
+              created_at: new Date().toISOString(),
+            },
+          ]);
+          console.log('CLOSE DELIVERY -> historial_estados ENTREGADO registrado');
+        } catch (histErr: any) {
+          console.warn(
+            'CLOSE DELIVERY -> historial_estados insert omitido:',
+            histErr?.message,
+          );
         }
       } catch (e: any) {
         console.warn(
@@ -588,195 +572,13 @@ export class EntregasService {
   }
 
   /**
-   * Descarga una imagen desde su URL pública y devuelve un Buffer
-   * apto para `doc.image(...)`. Devuelve null si falla por red, 404,
-   * MIME no soportado por pdfkit (sólo PNG/JPEG), timeout, etc.
-   *
-   * El timeout es CRÍTICO: si el bucket no responde, sin esto el
-   * await del cierre de despacho queda colgado para siempre y mobile
-   * eventualmente lanza un 500 vía watchdog.
-   */
-  private async descargarImagen(
-    url: string,
-    timeoutMs: number = 8000,
-  ): Promise<Buffer | null> {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      const res = await fetch(url, { signal: controller.signal });
-      if (!res.ok) {
-        console.warn(
-          `PDF: no se pudo descargar imagen (${res.status}): ${url}`,
-        );
-        return null;
-      }
-      const arrayBuffer = await res.arrayBuffer();
-      return Buffer.from(arrayBuffer);
-    } catch (err: any) {
-      const motivo =
-        err?.name === 'AbortError' ? 'timeout' : err?.message ?? 'error';
-      console.warn(`PDF: error descargando imagen (${motivo}): ${url}`);
-      return null;
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-
-  /**
-   * Reúne las evidencias fotográficas de una ruta para insertarlas
-   * en el PDF. Misma estrategia que `RutasService.getEvidencias`:
-   *   1) Tabla `fotos` por `ruta_id`.
-   *   2) Fallback a `traceability_events` por `ruta_id`.
-   *   3) Fallback final por ventana temporal `[fecha_inicio, fecha_fin]`.
-   * Devuelve los buffers ya descargados, listos para `doc.image`.
-   */
-  private async obtenerEvidenciasParaPDF(
-    rutaId: string,
-    fechaInicio: string | null,
-    fechaFin: string | null,
-  ): Promise<Array<{ etapa: string | null; buffer: Buffer; timestamp: string | null }>> {
-    type FotoUrl = { etapa: string | null; url: string; timestamp: string | null };
-    const fotosUrls: FotoUrl[] = [];
-
-    let supabase;
-    try {
-      supabase = this.supabaseConfig.getClient();
-    } catch (e: any) {
-      console.warn(
-        'EVIDENCIAS -> no se pudo instanciar supabase (continuamos sin fotos):',
-        e?.message,
-      );
-      return [];
-    }
-
-    // 1) tabla `fotos` — best effort
-    try {
-      const { data: fotosRow, error: fotosErr } = await supabase
-        .from('fotos')
-        .select('etapa, url, created_at')
-        .eq('ruta_id', rutaId)
-        .order('created_at', { ascending: true });
-
-      if (fotosErr) {
-        console.warn(
-          'EVIDENCIAS -> query a tabla fotos falló:',
-          fotosErr.message,
-        );
-      } else {
-        for (const f of fotosRow || []) {
-          const url = (f as any)?.url;
-          if (!url) continue;
-          fotosUrls.push({
-            etapa: (f as any)?.etapa ?? null,
-            url,
-            timestamp: (f as any)?.created_at ?? null,
-          });
-        }
-      }
-    } catch (e: any) {
-      console.warn('EVIDENCIAS -> excepción consultando tabla fotos:', e?.message);
-    }
-
-    // 2) fallback en traceability_events — best effort
-    if (fotosUrls.length === 0) {
-      try {
-        let traceData: Array<{
-          etapa: string | null;
-          foto_uri: string | null;
-          timestamp_evento: string | null;
-        }> = [];
-
-        const exactos = await supabase
-          .from('traceability_events')
-          .select('etapa, foto_uri, timestamp_evento')
-          .eq('ruta_id', rutaId)
-          .order('timestamp_evento', { ascending: true });
-
-        const colMissing =
-          exactos.error &&
-          ['42703', 'PGRST204'].includes(
-            (exactos.error as { code?: string }).code || '',
-          );
-
-        if (!exactos.error && exactos.data && exactos.data.length > 0) {
-          traceData = exactos.data as any;
-        } else if (
-          (colMissing || (!exactos.error && (exactos.data || []).length === 0)) &&
-          fechaInicio
-        ) {
-          const desde = fechaInicio;
-          const hasta = fechaFin || new Date().toISOString();
-          const fallback = await supabase
-            .from('traceability_events')
-            .select('etapa, foto_uri, timestamp_evento')
-            .gte('timestamp_evento', desde)
-            .lte('timestamp_evento', hasta)
-            .order('timestamp_evento', { ascending: true });
-          traceData = (fallback.data as any) || [];
-        }
-
-        for (const ev of traceData) {
-          if (!ev?.foto_uri) continue;
-          let url: string | null = null;
-          try {
-            url = this.supabaseConfig.getPublicUrl(
-              'fotos_trazabilidad',
-              ev.foto_uri,
-            );
-          } catch (e: any) {
-            console.warn(
-              'EVIDENCIAS -> getPublicUrl falló para',
-              ev.foto_uri,
-              e?.message,
-            );
-          }
-          if (!url) continue;
-          fotosUrls.push({
-            etapa: ev.etapa ?? null,
-            url,
-            timestamp: ev.timestamp_evento ?? null,
-          });
-        }
-      } catch (e: any) {
-        console.warn(
-          'EVIDENCIAS -> excepción consultando traceability_events:',
-          e?.message,
-        );
-      }
-    }
-
-    // 3) Descarga de buffers en paralelo (cada descarga ya captura su error)
-    let buffers: Array<Buffer | null> = [];
-    try {
-      buffers = await Promise.all(
-        fotosUrls.map((f) => this.descargarImagen(f.url)),
-      );
-    } catch (e: any) {
-      console.warn('EVIDENCIAS -> Promise.all descargas falló:', e?.message);
-      buffers = fotosUrls.map((): Buffer | null => null);
-    }
-
-    const resultado: Array<{
-      etapa: string | null;
-      buffer: Buffer;
-      timestamp: string | null;
-    }> = [];
-    for (let i = 0; i < fotosUrls.length; i++) {
-      const buf = buffers[i];
-      if (buf) {
-        resultado.push({
-          etapa: fotosUrls[i].etapa,
-          buffer: buf,
-          timestamp: fotosUrls[i].timestamp,
-        });
-      }
-    }
-    return resultado;
-  }
-
-  /**
    * Genera el PDF "Comprobante de despacho" con tabla Concepto/Detalle,
-   * firma digital del receptor y galería de evidencias agrupadas por etapa.
+   * firma digital del receptor y footer.
+   *
+   * Las evidencias fotográficas NO se incluyen en este PDF: el cliente
+   * solo necesita el comprobante formal por correo. La galería de
+   * fotos se ve únicamente en el Historial web (modal "Ver evidencias",
+   * endpoint GET /api/rutas/:id/evidencias).
    */
   private async generateDeliveryPDF(data: {
     rutaId: string;
@@ -788,11 +590,6 @@ export class EntregasService {
     conductor: any;
     camion: any;
     firmaBuffer?: Buffer | null;
-    evidencias?: Array<{
-      etapa: string | null;
-      buffer: Buffer;
-      timestamp: string | null;
-    }>;
   }): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({ size: 'A4', margin: 50 });
@@ -990,100 +787,7 @@ export class EntregasService {
 
       doc.moveDown(1.5);
 
-      // ── 4) EVIDENCIAS FOTOGRÁFICAS ──────────────────────────────
-      if (doc.y > doc.page.height - doc.page.margins.bottom - 80) {
-        doc.addPage();
-      }
-      doc
-        .font('Helvetica-Bold')
-        .fontSize(13)
-        .fillColor(COLOR_TEXTO)
-        .text('Evidencias fotográficas', { align: 'left' });
-
-      doc
-        .strokeColor(COLOR_LINEA)
-        .lineWidth(0.5)
-        .moveTo(margenIzq, doc.y + 2)
-        .lineTo(margenIzq + anchoUtil, doc.y + 2)
-        .stroke();
-      doc.moveDown(0.6);
-
-      const evidencias = data.evidencias || [];
-      if (evidencias.length === 0) {
-        doc
-          .font('Helvetica-Oblique')
-          .fontSize(10)
-          .fillColor(COLOR_TENUE)
-          .text('No hay evidencias registradas', { align: 'left' });
-      } else {
-        // Agrupar por etapa
-        const grupos = new Map<string, typeof evidencias>();
-        for (const ev of evidencias) {
-          const etapa = (ev.etapa || 'Sin etapa').toString().trim() || 'Sin etapa';
-          if (!grupos.has(etapa)) grupos.set(etapa, [] as any);
-          grupos.get(etapa)!.push(ev);
-        }
-
-        // Imagen: 2 por fila
-        const fotoAncho = (anchoUtil - 12) / 2;
-        const fotoAlto = 130;
-
-        for (const [etapa, lista] of grupos) {
-          if (doc.y > doc.page.height - doc.page.margins.bottom - 40) {
-            doc.addPage();
-          }
-          doc
-            .font('Helvetica-Bold')
-            .fontSize(11)
-            .fillColor(COLOR_ACENTO)
-            .text(etapa, { align: 'left' });
-          doc.moveDown(0.3);
-
-          for (let i = 0; i < lista.length; i += 2) {
-            // Si no cabe la fila, salto de página
-            if (
-              doc.y + fotoAlto + 12 >
-              doc.page.height - doc.page.margins.bottom
-            ) {
-              doc.addPage();
-            }
-
-            const yFoto = doc.y;
-            const ev1 = lista[i];
-            const ev2 = lista[i + 1];
-
-            try {
-              doc.image(ev1.buffer, margenIzq, yFoto, {
-                fit: [fotoAncho, fotoAlto],
-                align: 'center',
-              });
-            } catch (err: any) {
-              console.warn(
-                `No se pudo insertar evidencia (${etapa}): ${err?.message}`,
-              );
-            }
-            if (ev2) {
-              try {
-                doc.image(
-                  ev2.buffer,
-                  margenIzq + fotoAncho + 12,
-                  yFoto,
-                  { fit: [fotoAncho, fotoAlto], align: 'center' },
-                );
-              } catch (err: any) {
-                console.warn(
-                  `No se pudo insertar evidencia (${etapa}): ${err?.message}`,
-                );
-              }
-            }
-
-            doc.y = yFoto + fotoAlto + 10;
-          }
-          doc.moveDown(0.4);
-        }
-      }
-
-      // ── 5) FOOTER ───────────────────────────────────────────────
+      // ── 4) FOOTER ───────────────────────────────────────────────
       doc.moveDown(1.2);
       const yFooter = doc.page.height - doc.page.margins.bottom - 20;
       doc
@@ -1102,15 +806,31 @@ export class EntregasService {
   }
 
   /**
-   * Envía email de comprobante de entrega al cliente
+   * Envía email de comprobante de entrega al cliente.
+   *
+   * Devuelve `{ ok, id?, errorMsg? }`:
+   *  - `ok=true` solo si Resend confirmó con un id de correo.
+   *  - `ok=false` si Resend devolvió `error` en el response (falla
+   *    silenciosa típica: dominio no verificado, "to" inválido,
+   *    cuenta sin saldo, etc.) o tiró excepción.
    */
   private async sendDeliveryEmail(
     emailCliente: string,
     nombreCliente: string,
     pdfBuffer: Buffer,
     rutaId: string,
-  ) {
+  ): Promise<{ ok: boolean; id?: string; errorMsg?: string }> {
     const resend = this.resendConfig.getClient();
+    const fromUsado =
+      process.env.RESEND_FROM_EMAIL ||
+      'Sistema LogiTrack <onboarding@resend.dev>';
+
+    console.log(
+      'CLOSE DELIVERY -> sendDeliveryEmail FROM:',
+      fromUsado,
+      'TO:',
+      emailCliente,
+    );
 
     try {
       const html = `
@@ -1127,11 +847,10 @@ export class EntregasService {
         </html>
       `;
 
-      // Convertir buffer a base64
       const base64Pdf = pdfBuffer.toString('base64');
 
-      await resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL || 'Sistema LogiTrack <onboarding@resend.dev>',
+      const response = await resend.emails.send({
+        from: fromUsado,
         to: emailCliente,
         subject: `Comprobante de Entrega - ${rutaId}`,
         html,
@@ -1142,9 +861,40 @@ export class EntregasService {
           },
         ],
       });
+
+      // TEMP: Resend retorna { data: { id }, error }. Loggeamos completo
+      // para diagnosticar por qué el correo no llega aunque "se envíe".
+      console.log('RESEND EMAIL RESPONSE:', JSON.stringify(response));
+
+      if ((response as any)?.error) {
+        const err = (response as any).error;
+        console.warn('RESEND EMAIL ERROR:', err);
+        return {
+          ok: false,
+          errorMsg: err?.message || err?.name || 'error desconocido de Resend',
+        };
+      }
+
+      const id = (response as any)?.data?.id ?? (response as any)?.id ?? null;
+      if (!id) {
+        console.warn(
+          'RESEND EMAIL WARNING: respuesta sin id ni error explícito',
+        );
+        return { ok: false, errorMsg: 'Resend no confirmó id de envío' };
+      }
+
+      return { ok: true, id };
     } catch (error: any) {
-      console.error(`Error enviando email: ${error?.message}`);
-      // No lanzar excepción, solo registrar
+      console.warn(
+        'RESEND EMAIL EXCEPTION:',
+        error?.message,
+        error?.name,
+        error?.statusCode,
+      );
+      return {
+        ok: false,
+        errorMsg: error?.message || 'excepción al enviar correo',
+      };
     }
   }
 }

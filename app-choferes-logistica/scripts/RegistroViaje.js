@@ -17,7 +17,22 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { syncTraceabilityRecords } from '../src/services/syncEngine';
 
 const ETAPAS = ['Carga', 'Salida', 'Transito', 'Entrega'];
-const STORAGE_KEY = 'hu1_traceability_records';
+
+/** AsyncStorage SIEMPRE por ruta — no compartir cache entre rutas */
+function storageKeyFromRutaId(rutaId) {
+  const id = String(rutaId ?? '').trim();
+  return id ? `hu1_traceability_records_${id}` : 'hu1_traceability_records_sin_ruta';
+}
+
+/** Primera etapa sin evidencia local; si todas tienen foto → última etapa (para Confirmar/Finalizar) */
+function etapaInicialDesdeRegistros(records) {
+  if (!records?.length) return 0;
+  for (let i = 0; i < ETAPAS.length; i++) {
+    const tiene = records.some((r) => r.stage === ETAPAS[i]);
+    if (!tiene) return i;
+  }
+  return ETAPAS.length - 1;
+}
 
 function ProgressSteps({ etapaActual }) {
   return (
@@ -99,7 +114,9 @@ function StageCard({
   );
 }
 
-export default function RegistroViaje({ onSyncComplete }) {
+export default function RegistroViaje({ onSyncComplete, rutaId }) {
+  const STORAGE_KEY = storageKeyFromRutaId(rutaId);
+
   const [etapaActual, setEtapaActual] = useState(0);
   const [registros, setRegistros] = useState([]);
   const [viajeFinalizado, setViajeFinalizado] = useState(false);
@@ -110,18 +127,51 @@ export default function RegistroViaje({ onSyncComplete }) {
   const cameraRef = useRef(null);
 
   useEffect(() => {
-    loadRecords();
-  }, []);
+    console.log('RUTA CAMBIÓ EN REGISTRO:', rutaId);
 
-  const loadRecords = async () => {
-    try {
-      const raw = await AsyncStorage.getItem(STORAGE_KEY);
-      const parsed = raw ? JSON.parse(raw) : [];
-      setRegistros(parsed);
-    } catch (error) {
-      Alert.alert('Error', 'No se pudieron cargar registros locales.');
+    setViajeFinalizado(false);
+    setIsCameraOpen(false);
+    setIsCapturing(false);
+    setIsSyncing(false);
+    setEtapaActual(0);
+    setRegistros([]);
+
+    if (rutaId) {
+      console.log('INICIANDO VIAJE AUTOMÁTICO');
     }
-  };
+
+    let cancelled = false;
+
+    async function cargarDatosDeRuta(idActual) {
+      const key = storageKeyFromRutaId(idActual);
+      try {
+        const raw = await AsyncStorage.getItem(key);
+        const parsed = raw ? JSON.parse(raw) : [];
+        if (!cancelled) {
+          setRegistros(parsed);
+          const etapaIni = etapaInicialDesdeRegistros(parsed);
+          setEtapaActual(etapaIni);
+          setViajeFinalizado(false);
+          setIsCameraOpen(false);
+          console.log(
+            'INICIANDO VIAJE AUTOMÁTICO — etapa inicial:',
+            etapaIni,
+            ETAPAS[etapaIni],
+          );
+        }
+      } catch (error) {
+        if (!cancelled) {
+          Alert.alert('Error', 'No se pudieron cargar registros locales.');
+        }
+      }
+    }
+
+    void cargarDatosDeRuta(rutaId);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [rutaId]);
 
   const persistRecords = async (nextRecords) => {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(nextRecords));
@@ -205,7 +255,7 @@ export default function RegistroViaje({ onSyncComplete }) {
       }
 
       setIsSyncing(true);
-      const syncedIds = await syncTraceabilityRecords(unsyncedRecords);
+      const syncedIds = await syncTraceabilityRecords(unsyncedRecords, rutaId);
       const nextRecords = registros.map((record) =>
         syncedIds.includes(record.id) ? { ...record, synced: true } : record
       );
@@ -312,6 +362,9 @@ export default function RegistroViaje({ onSyncComplete }) {
             <View style={styles.header}>
               <Text style={styles.title}>Trazabilidad de Carga Valiosa</Text>
               <Text style={styles.subtitle}>Etapa {etapaActual + 1} de 4</Text>
+              <Text style={styles.etapaActualLabel}>
+                Etapa actual: {ETAPAS[etapaActual]}
+              </Text>
             </View>
 
             <ProgressSteps etapaActual={etapaActual} />
@@ -352,6 +405,13 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 22, fontWeight: '700', color: '#1D2A3A' },
   subtitle: { fontSize: 15, color: '#667085', marginTop: 6 },
+  etapaActualLabel: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#1D4ED8',
+    marginTop: 10,
+    textAlign: 'center',
+  },
   progressContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',

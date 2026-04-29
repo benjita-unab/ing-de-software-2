@@ -214,17 +214,34 @@ export class RutasService {
       throw new BadRequestException(`Estado inválido. Acepta: ${estadosValidos.join(', ')}`);
     }
 
+    const patch: Record<string, unknown> = { estado: nuevoEstado };
+    // Solo registrar fecha_fin al cerrar entrega; no borrar fecha_fin al
+    // cambiar a otros estados (evita pérdida de auditoría).
+    if (nuevoEstado === 'ENTREGADO') {
+      patch.fecha_fin = new Date().toISOString();
+    }
+
     const { data: rutaActualizada, error } = await supabase
       .from('rutas')
-      .update({
-        estado: nuevoEstado,
-        fecha_fin: nuevoEstado === 'ENTREGADO' ? new Date().toISOString() : null,
-      })
+      .update(patch)
       .eq('id', rutaId)
       .select();
 
     if (error) {
       throw new BadRequestException(`Error al actualizar ruta: ${error.message}`);
+    }
+
+    // Si el despacho se marca ENTREGADO desde la web sin pasar por closeDelivery,
+    // reflejar fecha de entrega en `entregas` cuando exista la fila (best effort).
+    if (nuevoEstado === 'ENTREGADO') {
+      try {
+        await supabase
+          .from('entregas')
+          .update({ fecha_entrega_real: new Date().toISOString() })
+          .eq('ruta_id', rutaId);
+      } catch {
+        /* tabla/claves pueden variar entre ambientes */
+      }
     }
 
     // Registrar en historial
@@ -260,9 +277,13 @@ export class RutasService {
       estado,
       fecha_inicio,
       fecha_fin,
-      clientes(nombre),
-      conductores(rut),
-      camiones(patente)
+      created_at,
+      cliente_id,
+      conductor_id,
+      camion_id,
+      clientes(id, nombre),
+      conductores(id, rut),
+      camiones(id, patente)
     `);
 
     if (filters?.estado) {
@@ -287,15 +308,13 @@ export class RutasService {
   }
 
   /**
-   * Devuelve las evidencias de una ruta:
-   *  - `pdfs`: comprobantes guardados en Supabase Storage,
-   *    bucket `entregas`, carpeta `comprobantes/{rutaId}/...`.
-   *  - `fotos`: imágenes de trazabilidad. Preferimos la tabla `fotos`
-   *    (tiene `ruta_id` directo); como fallback, `traceability_events`
-   *    filtrados por ventana temporal porque ese registro no tiene `ruta_id`.
-   *  - `firmaUrl`: firma del cliente. Primero `entregas.firma_url` por
-   *    `ruta_id`; como fallback, busca en el bucket `fotos_trazabilidad/firmas/`
-   *    archivos cuyo nombre empiece con `{rutaId}-`.
+   * Devuelve las evidencias de una ruta para el modal Historial web:
+   *  - `pdfs`: bucket `entregas/comprobantes/{rutaId}/`
+   *  - `fotos`: unión en orden — tabla `fotos` por `ruta_id`, más
+   *    `traceability_events` por `ruta_id`; dedupe por URL.
+   *    Fallback temporal legacy solo si sigue sin fotos y existe ventana
+   *    `fecha_inicio`/`fecha_fin` (marcado `fuente: fallback_temporal`).
+   *  - `firmaUrl`: `entregas.firma_url` o prefijo `{rutaId}-` en Storage.
    */
   async getEvidencias(rutaId: string) {
     if (!rutaId) {
@@ -331,15 +350,43 @@ export class RutasService {
       }))
       .filter((p) => !!p.url);
 
-    // ── 2) Fotos de trazabilidad
+    // ── 2) Fotos de trazabilidad (combinadas sin duplicar URLs)
+    type FuenteFoto =
+      | 'fotos_tabla'
+      | 'traceability_ruta'
+      | 'fallback_temporal';
+
     const fotos: Array<{
       id: string;
       etapa: string | null;
       url: string;
       timestamp: string | null;
+      fuente?: FuenteFoto;
     }> = [];
 
-    // 2a) Tabla `fotos` (vínculo directo por ruta_id)
+    const urlsVistas = new Set<string>();
+
+    const pushFoto = (
+      id: string,
+      etapa: string | null,
+      url: string | null | undefined,
+      timestamp: string | null,
+      fuente: FuenteFoto,
+    ) => {
+      if (!url || typeof url !== 'string') return;
+      const u = url.trim();
+      if (!u || urlsVistas.has(u)) return;
+      urlsVistas.add(u);
+      fotos.push({
+        id,
+        etapa,
+        url: u,
+        timestamp,
+        fuente,
+      });
+    };
+
+    // 2a) Tabla `fotos` (prioridad por vínculo directo ruta_id)
     const { data: fotosRow } = await supabase
       .from('fotos')
       .select('id, etapa, url, created_at')
@@ -347,76 +394,80 @@ export class RutasService {
       .order('created_at', { ascending: true });
 
     for (const f of fotosRow || []) {
-      if (!f?.url) continue;
-      fotos.push({
-        id: String(f.id),
-        etapa: f.etapa ?? null,
-        url: f.url,
-        timestamp: f.created_at ?? null,
-      });
+      pushFoto(
+        String(f.id),
+        f.etapa ?? null,
+        f.url,
+        f.created_at ?? null,
+        'fotos_tabla',
+      );
     }
 
-    // 2b) Fallback en `traceability_events` SOLO si la tabla `fotos`
-    //     no devolvió nada. Estrategia en dos pasos:
-    //       1) Preferir eventos con `ruta_id = X` (fuente confiable).
-    //       2) Si la columna no existe aún (pre-migración) o no hay
-    //          eventos con ese ruta_id, caer al filtro por ventana
-    //          temporal usando rutas.fecha_inicio/fecha_fin.
-    if (fotos.length === 0) {
-      let traceEvents: Array<{
-        id: string | null;
-        etapa: string | null;
-        foto_uri: string | null;
-        timestamp_evento: string | null;
-      }> = [];
+    // 2b) traceability_events por ruta_id (si existe la columna)
+    const traceRuta = await supabase
+      .from('traceability_events')
+      .select('id, etapa, foto_uri, timestamp_evento')
+      .eq('ruta_id', rutaId)
+      .order('timestamp_evento', { ascending: true });
 
-      // Intento por ruta_id directo. Si la columna aún no existe en BD,
-      // PostgREST devuelve un error: lo capturamos y caemos al fallback.
-      const exactos = await supabase
-        .from('traceability_events')
-        .select('id, etapa, foto_uri, timestamp_evento')
-        .eq('ruta_id', rutaId)
-        .order('timestamp_evento', { ascending: true });
+    const errTrace =
+      traceRuta.error &&
+      ['42703', 'PGRST204'].includes(
+        (traceRuta.error as { code?: string }).code || '',
+      );
 
-      const colMissing =
-        exactos.error &&
-        ['42703', 'PGRST204'].includes(
-          (exactos.error as { code?: string }).code || '',
-        );
-
-      if (!exactos.error && exactos.data && exactos.data.length > 0) {
-        traceEvents = exactos.data;
-      } else if (
-        (colMissing || (!exactos.error && (exactos.data || []).length === 0)) &&
-        ruta.fecha_inicio
-      ) {
-        const desde = ruta.fecha_inicio as unknown as string;
-        const hasta =
-          (ruta.fecha_fin as unknown as string) || new Date().toISOString();
-
-        const fallback = await supabase
-          .from('traceability_events')
-          .select('id, etapa, foto_uri, timestamp_evento')
-          .gte('timestamp_evento', desde)
-          .lte('timestamp_evento', hasta)
-          .order('timestamp_evento', { ascending: true });
-
-        traceEvents = fallback.data || [];
-      }
-
-      for (const ev of traceEvents) {
+    if (!traceRuta.error && traceRuta.data) {
+      for (const ev of traceRuta.data) {
         if (!ev?.foto_uri) continue;
         const url = this.supabaseConfig.getPublicUrl(
           'fotos_trazabilidad',
           ev.foto_uri,
         );
-        if (!url) continue;
-        fotos.push({
-          id: String(ev.id),
-          etapa: ev.etapa ?? null,
+        pushFoto(
+          String(ev.id ?? `ev-${ev.foto_uri}`),
+          ev.etapa ?? null,
           url,
-          timestamp: ev.timestamp_evento ?? null,
-        });
+          ev.timestamp_evento ?? null,
+          'traceability_ruta',
+        );
+      }
+    } else if (errTrace) {
+      console.warn(
+        'EVIDENCIAS -> traceability_events.ruta_id no disponible en BD (columna ausente); omitiendo vínculo por ruta.',
+      );
+    }
+
+    // 2c) Fallback temporal legacy (solo si sigue sin fotos desde fuentes directas).
+    //    Puede acotarse mejor cuando todas las filas tengan ruta_id poblado.
+    if (fotos.length === 0 && ruta.fecha_inicio) {
+      const desde = ruta.fecha_inicio as unknown as string;
+      const hasta =
+        (ruta.fecha_fin as unknown as string) || new Date().toISOString();
+
+      const fallback = await supabase
+        .from('traceability_events')
+        .select('id, etapa, foto_uri, timestamp_evento')
+        .gte('timestamp_evento', desde)
+        .lte('timestamp_evento', hasta)
+        .order('timestamp_evento', { ascending: true });
+
+      console.warn(
+        'EVIDENCIAS -> fallback temporal legacy (sin fotos por tabla fotos ni traceability_events.ruta_id)',
+      );
+
+      for (const ev of fallback.data || []) {
+        if (!ev?.foto_uri) continue;
+        const url = this.supabaseConfig.getPublicUrl(
+          'fotos_trazabilidad',
+          ev.foto_uri,
+        );
+        pushFoto(
+          String(ev.id ?? `legacy-${ev.foto_uri}`),
+          ev.etapa ?? null,
+          url,
+          ev.timestamp_evento ?? null,
+          'fallback_temporal',
+        );
       }
     }
 
@@ -431,7 +482,6 @@ export class RutasService {
 
     for (const e of entregasRows || []) {
       const candidate = (e?.firma_url || '').toString().trim();
-      // Datos legacy guardaron literalmente la cadena "null".
       if (candidate && candidate.toLowerCase() !== 'null') {
         firmaUrl = candidate;
         break;

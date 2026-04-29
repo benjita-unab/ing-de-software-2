@@ -318,7 +318,7 @@ function EvidenciasModal({ despacho, evidencias, loading, error, onClose }) {
               <div style={modalStyles.sectionTitle}>📷 Fotos de trazabilidad</div>
               {fotos.length === 0 ? (
                 <p style={modalStyles.emptyText}>
-                  Sin fotos de trazabilidad para este viaje.
+                  Sin fotos registradas para este despacho.
                 </p>
               ) : (
                 <div style={modalStyles.fotosGrid}>
@@ -395,7 +395,7 @@ export default function HistorialDespachos() {
       setLoading(true);
 
       let lista = [];
-      const resAll = await apiFetch("/api/rutas");
+      const resAll = await apiFetch("/api/rutas?estado=ENTREGADO");
       if (resAll.ok) {
         const payload = resAll.data;
         const data = Array.isArray(payload) ? payload : payload?.data ?? [];

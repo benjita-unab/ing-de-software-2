@@ -9,7 +9,12 @@ export type TraceabilityRecord = {
   timestamp: string;
 };
 
-export async function syncTraceabilityRecords(records: TraceabilityRecord[]): Promise<string[]> {
+export async function syncTraceabilityRecords(
+  records: TraceabilityRecord[],
+  /** UUID de la ruta activa; se envía como `ruta_id` para vincular evidencias en BD */
+  rutaIdOpcional?: string,
+): Promise<string[]> {
+  const rutaTrim = rutaIdOpcional?.trim();
   const syncedIds: string[] = [];
 
   for (const record of records) {
@@ -39,17 +44,22 @@ export async function syncTraceabilityRecords(records: TraceabilityRecord[]): Pr
       throw new Error(uploadPayload?.error ?? "Error subiendo evidencia");
     }
 
+    const eventBody: Record<string, unknown> = {
+      id: record.id,
+      etapa: record.stage,
+      foto_uri: uploadPayload.filePath,
+      latitud: record.latitude,
+      longitud: record.longitude,
+      timestamp_evento: record.timestamp,
+    };
+    if (rutaTrim) {
+      eventBody.ruta_id = rutaTrim;
+    }
+
     const eventResponse = await bffFetch("/api/trazabilidad", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id: record.id,
-        etapa: record.stage,
-        foto_uri: uploadPayload.filePath,
-        latitud: record.latitude,
-        longitud: record.longitude,
-        timestamp_evento: record.timestamp
-      })
+      body: JSON.stringify(eventBody),
     });
     const eventPayload = await eventResponse.json().catch(() => ({}));
     if (!eventResponse.ok && eventPayload?.code !== "23505") {
