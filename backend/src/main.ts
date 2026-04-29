@@ -3,11 +3,31 @@ import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import helmet from 'helmet';
 import compression from 'compression';
+import { json, urlencoded } from 'express';
 import type { NextFunction, Request, Response } from 'express';
 
 async function bootstrap() {
+  // Desactivamos el bodyParser default de Nest para poder definir nuestros
+  // propios límites (las fichas de despacho llegan como base64 ~5–15 MB).
   const app = await NestFactory.create(AppModule, {
     logger: ['log', 'error', 'warn', 'debug'],
+    bodyParser: false,
+  });
+
+  app.use(json({ limit: '20mb' }));
+  app.use(urlencoded({ limit: '20mb', extended: true }));
+
+  app.enableCors({
+    origin: [
+      'http://localhost:3001',
+      'http://localhost:3000',
+      'http://192.168.0.3:3000',
+      'http://192.168.0.4:3000',
+      /https:\/\/.*\.trycloudflare\.com$/,
+    ],
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
   app.use((req: Request, _res: Response, next: NextFunction) => {
@@ -18,18 +38,6 @@ async function bootstrap() {
   // Security
   app.use(helmet());
   app.use(compression());
-
-  // CORS
-  app.enableCors({
-    origin: [
-      'http://localhost:3000',
-      'http://localhost:19006',
-      process.env.FRONTEND_URL || '*',
-    ],
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-  });
 
   // Global validation
   app.useGlobalPipes(

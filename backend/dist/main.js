@@ -87,6 +87,8 @@ const email_module_1 = __webpack_require__(/*! ./modules/email/email.module */ "
 const storage_module_1 = __webpack_require__(/*! ./modules/storage/storage.module */ "./src/modules/storage/storage.module.ts");
 const trazabilidad_module_1 = __webpack_require__(/*! ./modules/trazabilidad/trazabilidad.module */ "./src/modules/trazabilidad/trazabilidad.module.ts");
 const auth_module_1 = __webpack_require__(/*! ./modules/auth/auth.module */ "./src/modules/auth/auth.module.ts");
+const clientes_module_1 = __webpack_require__(/*! ./modules/clientes/clientes.module */ "./src/modules/clientes/clientes.module.ts");
+const camiones_module_1 = __webpack_require__(/*! ./modules/camiones/camiones.module */ "./src/modules/camiones/camiones.module.ts");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -110,6 +112,8 @@ exports.AppModule = AppModule = __decorate([
             email_module_1.EmailModule,
             storage_module_1.StorageModule,
             trazabilidad_module_1.TrazabilidadModule,
+            clientes_module_1.ClientesModule,
+            camiones_module_1.CamionesModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [app_service_1.AppService, supabase_config_1.SupabaseConfigService, resend_config_1.ResendConfigService, jwt_strategy_1.JwtStrategy],
@@ -406,6 +410,29 @@ let SupabaseConfigService = class SupabaseConfigService {
         const { data } = this.supabaseClient.storage.from(bucket).getPublicUrl(path);
         return data.publicUrl;
     }
+    /**
+     * Lista archivos dentro de una carpeta de un bucket.
+     * Devuelve un arreglo vacío si la carpeta no existe o está vacía.
+     * `prefix` debe ser la ruta SIN slash final (ej: `comprobantes/${rutaId}`).
+     */
+    async listFiles(bucket, prefix, limit = 100) {
+        const { data, error } = await this.supabaseClient.storage
+            .from(bucket)
+            .list(prefix, {
+            limit,
+            sortBy: { column: 'created_at', order: 'desc' },
+        });
+        if (error) {
+            // No tirar error: tratamos "carpeta inexistente" como lista vacía.
+            return [];
+        }
+        return (data || [])
+            .filter((entry) => entry?.name && entry.name !== '.emptyFolderPlaceholder')
+            .map((entry) => ({
+            name: entry.name,
+            created_at: entry.created_at,
+        }));
+    }
     async deleteFile(bucket, path) {
         const { error } = await this.supabaseClient.storage.from(bucket).remove([path]);
         if (error) {
@@ -438,9 +465,27 @@ const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
 const app_module_1 = __webpack_require__(/*! ./app.module */ "./src/app.module.ts");
 const helmet_1 = __importDefault(__webpack_require__(/*! helmet */ "helmet"));
 const compression_1 = __importDefault(__webpack_require__(/*! compression */ "compression"));
+const express_1 = __webpack_require__(/*! express */ "express");
 async function bootstrap() {
+    // Desactivamos el bodyParser default de Nest para poder definir nuestros
+    // propios límites (las fichas de despacho llegan como base64 ~5–15 MB).
     const app = await core_1.NestFactory.create(app_module_1.AppModule, {
         logger: ['log', 'error', 'warn', 'debug'],
+        bodyParser: false,
+    });
+    app.use((0, express_1.json)({ limit: '20mb' }));
+    app.use((0, express_1.urlencoded)({ limit: '20mb', extended: true }));
+    app.enableCors({
+        origin: [
+            'http://localhost:3001',
+            'http://localhost:3000',
+            'http://192.168.0.3:3000',
+            'http://192.168.0.4:3000',
+            /https:\/\/.*\.trycloudflare\.com$/,
+        ],
+        methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+        credentials: true,
+        allowedHeaders: ['Content-Type', 'Authorization'],
     });
     app.use((req, _res, next) => {
         console.log(`[REQ] ${req.method} ${req.url}`);
@@ -449,17 +494,6 @@ async function bootstrap() {
     // Security
     app.use((0, helmet_1.default)());
     app.use((0, compression_1.default)());
-    // CORS
-    app.enableCors({
-        origin: [
-            'http://localhost:3000',
-            'http://localhost:19006',
-            process.env.FRONTEND_URL || '*',
-        ],
-        credentials: true,
-        methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-        allowedHeaders: ['Content-Type', 'Authorization'],
-    });
     // Global validation
     app.useGlobalPipes(new common_1.ValidationPipe({
         whitelist: true,
@@ -637,6 +671,378 @@ exports.AuthService = AuthService = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [typeof (_a = typeof jwt_1.JwtService !== "undefined" && jwt_1.JwtService) === "function" ? _a : Object, typeof (_b = typeof config_1.ConfigService !== "undefined" && config_1.ConfigService) === "function" ? _b : Object])
 ], AuthService);
+
+
+/***/ }),
+
+/***/ "./src/modules/camiones/camiones.controller.ts":
+/*!*****************************************************!*\
+  !*** ./src/modules/camiones/camiones.controller.ts ***!
+  \*****************************************************/
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var _a;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.CamionesController = void 0;
+const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
+const camiones_service_1 = __webpack_require__(/*! ./camiones.service */ "./src/modules/camiones/camiones.service.ts");
+const jwt_guard_1 = __webpack_require__(/*! ../../common/guards/jwt.guard */ "./src/common/guards/jwt.guard.ts");
+let CamionesController = class CamionesController {
+    constructor(camionesService) {
+        this.camionesService = camionesService;
+    }
+    /**
+     * GET /api/camiones
+     * Lista todos los camiones activos (con su estado real).
+     */
+    async list() {
+        return await this.camionesService.listCamiones();
+    }
+    /**
+     * GET /api/camiones/disponibles
+     * Lista solo camiones DISPONIBLES (útil para asignación de rutas).
+     */
+    async listDisponibles() {
+        return await this.camionesService.listCamionesDisponibles();
+    }
+};
+exports.CamionesController = CamionesController;
+__decorate([
+    (0, common_1.Get)(),
+    (0, common_1.UseGuards)(jwt_guard_1.JwtGuard),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], CamionesController.prototype, "list", null);
+__decorate([
+    (0, common_1.Get)('disponibles'),
+    (0, common_1.UseGuards)(jwt_guard_1.JwtGuard),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], CamionesController.prototype, "listDisponibles", null);
+exports.CamionesController = CamionesController = __decorate([
+    (0, common_1.Controller)('api/camiones'),
+    __metadata("design:paramtypes", [typeof (_a = typeof camiones_service_1.CamionesService !== "undefined" && camiones_service_1.CamionesService) === "function" ? _a : Object])
+], CamionesController);
+
+
+/***/ }),
+
+/***/ "./src/modules/camiones/camiones.module.ts":
+/*!*************************************************!*\
+  !*** ./src/modules/camiones/camiones.module.ts ***!
+  \*************************************************/
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.CamionesModule = void 0;
+const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
+const camiones_service_1 = __webpack_require__(/*! ./camiones.service */ "./src/modules/camiones/camiones.service.ts");
+const camiones_controller_1 = __webpack_require__(/*! ./camiones.controller */ "./src/modules/camiones/camiones.controller.ts");
+const supabase_config_1 = __webpack_require__(/*! ../../config/supabase.config */ "./src/config/supabase.config.ts");
+let CamionesModule = class CamionesModule {
+};
+exports.CamionesModule = CamionesModule;
+exports.CamionesModule = CamionesModule = __decorate([
+    (0, common_1.Module)({
+        providers: [camiones_service_1.CamionesService, supabase_config_1.SupabaseConfigService],
+        controllers: [camiones_controller_1.CamionesController],
+        exports: [camiones_service_1.CamionesService],
+    })
+], CamionesModule);
+
+
+/***/ }),
+
+/***/ "./src/modules/camiones/camiones.service.ts":
+/*!**************************************************!*\
+  !*** ./src/modules/camiones/camiones.service.ts ***!
+  \**************************************************/
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var _a;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.CamionesService = void 0;
+const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
+const supabase_config_1 = __webpack_require__(/*! ../../config/supabase.config */ "./src/config/supabase.config.ts");
+// Schema real de `public.camiones`:
+//   id, patente*, capacidad_kg, estado (enum estado_camion:
+//   DISPONIBLE | EN_RUTA | MANTENCION), activo, ultima_mantencion,
+//   proxima_mantencion, created_at.
+let CamionesService = class CamionesService {
+    constructor(supabaseConfig) {
+        this.supabaseConfig = supabaseConfig;
+    }
+    async listCamiones() {
+        const supabase = this.supabaseConfig.getClient();
+        const { data, error } = await supabase
+            .from('camiones')
+            .select('id, patente, capacidad_kg, estado, activo')
+            .eq('activo', true)
+            .order('patente', { ascending: true });
+        if (error) {
+            throw new common_1.BadRequestException(`Error al obtener camiones: ${error.message}`);
+        }
+        // Garantiza el contrato mínimo solicitado por la UI:
+        // [{ id, patente, estado }]. Si la BD trae estado null, fallback DISPONIBLE.
+        return (data || []).map((c) => ({
+            id: c.id,
+            patente: c.patente,
+            capacidad_kg: c.capacidad_kg ?? null,
+            estado: c.estado ?? 'DISPONIBLE',
+        }));
+    }
+    async listCamionesDisponibles() {
+        const supabase = this.supabaseConfig.getClient();
+        const { data, error } = await supabase
+            .from('camiones')
+            .select('id, patente, capacidad_kg, estado')
+            .eq('activo', true)
+            .eq('estado', 'DISPONIBLE')
+            .order('patente', { ascending: true });
+        if (error) {
+            throw new common_1.BadRequestException(`Error al obtener camiones disponibles: ${error.message}`);
+        }
+        return data || [];
+    }
+};
+exports.CamionesService = CamionesService;
+exports.CamionesService = CamionesService = __decorate([
+    (0, common_1.Injectable)(),
+    __metadata("design:paramtypes", [typeof (_a = typeof supabase_config_1.SupabaseConfigService !== "undefined" && supabase_config_1.SupabaseConfigService) === "function" ? _a : Object])
+], CamionesService);
+
+
+/***/ }),
+
+/***/ "./src/modules/clientes/clientes.controller.ts":
+/*!*****************************************************!*\
+  !*** ./src/modules/clientes/clientes.controller.ts ***!
+  \*****************************************************/
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
+var _a, _b;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ClientesController = void 0;
+const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
+const clientes_service_1 = __webpack_require__(/*! ./clientes.service */ "./src/modules/clientes/clientes.service.ts");
+const jwt_guard_1 = __webpack_require__(/*! ../../common/guards/jwt.guard */ "./src/common/guards/jwt.guard.ts");
+let ClientesController = class ClientesController {
+    constructor(clientesService) {
+        this.clientesService = clientesService;
+    }
+    /**
+     * POST /api/clientes
+     * Crea un nuevo cliente.
+     */
+    async createCliente(body) {
+        return await this.clientesService.createCliente(body);
+    }
+    /**
+     * GET /api/clientes
+     * Lista todos los clientes.
+     */
+    async listClientes() {
+        return await this.clientesService.listClientes();
+    }
+    /**
+     * GET /api/clientes/:id
+     * Obtiene el detalle de un cliente.
+     */
+    async getCliente(id) {
+        return await this.clientesService.getCliente(id);
+    }
+};
+exports.ClientesController = ClientesController;
+__decorate([
+    (0, common_1.Post)(),
+    (0, common_1.UseGuards)(jwt_guard_1.JwtGuard),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [typeof (_b = typeof clientes_service_1.CreateClienteDto !== "undefined" && clientes_service_1.CreateClienteDto) === "function" ? _b : Object]),
+    __metadata("design:returntype", Promise)
+], ClientesController.prototype, "createCliente", null);
+__decorate([
+    (0, common_1.Get)(),
+    (0, common_1.UseGuards)(jwt_guard_1.JwtGuard),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], ClientesController.prototype, "listClientes", null);
+__decorate([
+    (0, common_1.Get)(':id'),
+    (0, common_1.UseGuards)(jwt_guard_1.JwtGuard),
+    __param(0, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], ClientesController.prototype, "getCliente", null);
+exports.ClientesController = ClientesController = __decorate([
+    (0, common_1.Controller)('api/clientes'),
+    __metadata("design:paramtypes", [typeof (_a = typeof clientes_service_1.ClientesService !== "undefined" && clientes_service_1.ClientesService) === "function" ? _a : Object])
+], ClientesController);
+
+
+/***/ }),
+
+/***/ "./src/modules/clientes/clientes.module.ts":
+/*!*************************************************!*\
+  !*** ./src/modules/clientes/clientes.module.ts ***!
+  \*************************************************/
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ClientesModule = void 0;
+const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
+const clientes_service_1 = __webpack_require__(/*! ./clientes.service */ "./src/modules/clientes/clientes.service.ts");
+const clientes_controller_1 = __webpack_require__(/*! ./clientes.controller */ "./src/modules/clientes/clientes.controller.ts");
+const supabase_config_1 = __webpack_require__(/*! ../../config/supabase.config */ "./src/config/supabase.config.ts");
+let ClientesModule = class ClientesModule {
+};
+exports.ClientesModule = ClientesModule;
+exports.ClientesModule = ClientesModule = __decorate([
+    (0, common_1.Module)({
+        providers: [clientes_service_1.ClientesService, supabase_config_1.SupabaseConfigService],
+        controllers: [clientes_controller_1.ClientesController],
+        exports: [clientes_service_1.ClientesService],
+    })
+], ClientesModule);
+
+
+/***/ }),
+
+/***/ "./src/modules/clientes/clientes.service.ts":
+/*!**************************************************!*\
+  !*** ./src/modules/clientes/clientes.service.ts ***!
+  \**************************************************/
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var _a;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ClientesService = void 0;
+const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
+const supabase_config_1 = __webpack_require__(/*! ../../config/supabase.config */ "./src/config/supabase.config.ts");
+let ClientesService = class ClientesService {
+    constructor(supabaseConfig) {
+        this.supabaseConfig = supabaseConfig;
+    }
+    async createCliente(payload) {
+        if (!payload?.nombre?.trim()) {
+            throw new common_1.BadRequestException('El nombre es requerido');
+        }
+        const supabase = this.supabaseConfig.getClient();
+        const insertRow = {
+            nombre: payload.nombre.trim(),
+            rut: payload.rut?.trim() || null,
+            direccion: payload.direccion?.trim() || null,
+            contacto_nombre: payload.contacto_nombre?.trim() || null,
+            contacto_telefono: payload.contacto_telefono?.trim() || null,
+            contacto_email: payload.contacto_email?.trim() || null,
+        };
+        const { data, error } = await supabase
+            .from('clientes')
+            .insert([insertRow])
+            .select()
+            .single();
+        if (error) {
+            throw new common_1.BadRequestException(`Error al crear cliente: ${error.message}`);
+        }
+        return {
+            success: true,
+            message: 'Cliente creado exitosamente',
+            data,
+        };
+    }
+    async listClientes() {
+        const supabase = this.supabaseConfig.getClient();
+        const { data, error } = await supabase
+            .from('clientes')
+            .select('id, nombre, rut, direccion, contacto_nombre, contacto_telefono, contacto_email, activo, created_at')
+            .order('created_at', { ascending: false });
+        if (error) {
+            throw new common_1.BadRequestException(`Error al obtener clientes: ${error.message}`);
+        }
+        return data || [];
+    }
+    async getCliente(id) {
+        if (!id) {
+            throw new common_1.BadRequestException('id es requerido');
+        }
+        const supabase = this.supabaseConfig.getClient();
+        const { data, error } = await supabase
+            .from('clientes')
+            .select('id, nombre, rut, direccion, contacto_nombre, contacto_telefono, contacto_email, activo, created_at')
+            .eq('id', id)
+            .single();
+        if (error || !data) {
+            throw new common_1.NotFoundException(`Cliente no encontrado: ${error?.message ?? id}`);
+        }
+        return data;
+    }
+};
+exports.ClientesService = ClientesService;
+exports.ClientesService = ClientesService = __decorate([
+    (0, common_1.Injectable)(),
+    __metadata("design:paramtypes", [typeof (_a = typeof supabase_config_1.SupabaseConfigService !== "undefined" && supabase_config_1.SupabaseConfigService) === "function" ? _a : Object])
+], ClientesService);
 
 
 /***/ }),
@@ -1080,9 +1486,19 @@ let EmailController = class EmailController {
     /**
      * POST /api/email/enviar-qr
      * Genera y envía el código QR al cliente por correo.
+     *
+     * Body:
+     *   email          (req)  destinatario
+     *   clienteId      (req)  fallback legacy si no se entrega rutaId
+     *   nombreCliente  (req)  para saludo + asunto
+     *   rutaId         (opt)  RECOMENDADO. Hace que el QR codifique
+     *                          {ruta_id, codigo_otp} para que coincida
+     *                          con lo que escanea el scanner mobile.
+     *   codigoOtp      (opt)  Si no viene, el backend lo resuelve
+     *                          desde la tabla `entregas`.
      */
     async enviarQR(body) {
-        return await this.emailService.enviarQR(body.email, body.clienteId, body.nombreCliente);
+        return await this.emailService.enviarQR(body.email, body.clienteId, body.nombreCliente, body.rutaId, body.codigoOtp);
     }
 };
 exports.EmailController = EmailController;
@@ -1121,12 +1537,13 @@ const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
 const email_controller_1 = __webpack_require__(/*! ./email.controller */ "./src/modules/email/email.controller.ts");
 const email_service_1 = __webpack_require__(/*! ./email.service */ "./src/modules/email/email.service.ts");
 const resend_config_1 = __webpack_require__(/*! ../../config/resend.config */ "./src/config/resend.config.ts");
+const supabase_config_1 = __webpack_require__(/*! ../../config/supabase.config */ "./src/config/supabase.config.ts");
 let EmailModule = class EmailModule {
 };
 exports.EmailModule = EmailModule;
 exports.EmailModule = EmailModule = __decorate([
     (0, common_1.Module)({
-        providers: [email_service_1.EmailService, resend_config_1.ResendConfigService],
+        providers: [email_service_1.EmailService, resend_config_1.ResendConfigService, supabase_config_1.SupabaseConfigService],
         controllers: [email_controller_1.EmailController],
         exports: [email_service_1.EmailService],
     })
@@ -1151,16 +1568,26 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
-var _a;
+var _a, _b;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.EmailService = void 0;
 const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
 const resend_config_1 = __webpack_require__(/*! ../../config/resend.config */ "./src/config/resend.config.ts");
+const supabase_config_1 = __webpack_require__(/*! ../../config/supabase.config */ "./src/config/supabase.config.ts");
 let EmailService = class EmailService {
-    constructor(resendConfig) {
+    constructor(resendConfig, supabaseConfig) {
         this.resendConfig = resendConfig;
+        this.supabaseConfig = supabaseConfig;
     }
-    async enviarQR(email, clienteId, nombreCliente) {
+    /**
+     * Envía un correo al cliente con el QR de validación de entrega.
+     *
+     * El QR codifica un JSON con `{ ruta_id, codigo_otp }` para que coincida
+     * con el formato que escanea la app móvil. Si el caller no entrega
+     * `rutaId`, se mantiene el comportamiento legacy (QR con `clienteId`
+     * como texto plano), pero ese caso ya no debería ocurrir desde mobile.
+     */
+    async enviarQR(email, clienteId, nombreCliente, rutaId, codigoOtp) {
         if (!email?.trim()) {
             throw new common_1.BadRequestException('email es requerido');
         }
@@ -1170,8 +1597,30 @@ let EmailService = class EmailService {
         if (!nombreCliente?.trim()) {
             throw new common_1.BadRequestException('nombreCliente es requerido');
         }
+        let qrPayload;
+        const rutaIdLimpio = rutaId?.trim();
+        if (rutaIdLimpio) {
+            // Si no recibimos OTP explícito, intentamos resolverlo desde la BD
+            // para que el QR ya lo lleve. Si no existe, lo dejamos en null.
+            let codigoOtpResuelto = codigoOtp?.trim() || null;
+            if (!codigoOtpResuelto) {
+                codigoOtpResuelto = await this.buscarCodigoOtp(rutaIdLimpio);
+            }
+            qrPayload = JSON.stringify({
+                ruta_id: rutaIdLimpio,
+                codigo_otp: codigoOtpResuelto,
+            });
+        }
+        else {
+            // Compat legacy: QR con clienteId como texto plano. El scanner mobile
+            // lo intentará parsear como UUID y comparará contra rutaId actual,
+            // por lo que en la práctica fallará con "QR no corresponde".
+            qrPayload = clienteId.trim();
+        }
+        // TEMP: diagnóstico de "QR no corresponde". Eliminar luego de validar.
+        console.log('QR EMAIL PAYLOAD:', qrPayload);
         const nombreSeguro = this.escapeHtml(nombreCliente.trim());
-        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(clienteId.trim())}`;
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrPayload)}`;
         const html = `
       <!DOCTYPE html>
       <html>
@@ -1193,6 +1642,30 @@ let EmailService = class EmailService {
         }
         return { message: 'QR enviado correctamente' };
     }
+    /**
+     * Busca el `codigo_otp` más reciente vinculado a la ruta. Si no existe
+     * registro de entrega o la columna está vacía, devuelve null.
+     */
+    async buscarCodigoOtp(rutaId) {
+        try {
+            const supabase = this.supabaseConfig.getClient();
+            const { data } = await supabase
+                .from('entregas')
+                .select('codigo_otp, created_at')
+                .eq('ruta_id', rutaId)
+                .order('created_at', { ascending: false })
+                .limit(1);
+            const otp = data?.[0]?.codigo_otp;
+            if (typeof otp === 'string' && otp.trim()) {
+                return otp.trim();
+            }
+            return null;
+        }
+        catch (err) {
+            console.warn('No se pudo resolver codigo_otp para ruta', rutaId, err);
+            return null;
+        }
+    }
     escapeHtml(text) {
         return text
             .replace(/&/g, '&amp;')
@@ -1205,7 +1678,7 @@ let EmailService = class EmailService {
 exports.EmailService = EmailService;
 exports.EmailService = EmailService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [typeof (_a = typeof resend_config_1.ResendConfigService !== "undefined" && resend_config_1.ResendConfigService) === "function" ? _a : Object])
+    __metadata("design:paramtypes", [typeof (_a = typeof resend_config_1.ResendConfigService !== "undefined" && resend_config_1.ResendConfigService) === "function" ? _a : Object, typeof (_b = typeof supabase_config_1.SupabaseConfigService !== "undefined" && supabase_config_1.SupabaseConfigService) === "function" ? _b : Object])
 ], EmailService);
 
 
@@ -1379,20 +1852,27 @@ const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
 const supabase_config_1 = __webpack_require__(/*! ../../config/supabase.config */ "./src/config/supabase.config.ts");
 const resend_config_1 = __webpack_require__(/*! ../../config/resend.config */ "./src/config/resend.config.ts");
 const pdfkit_1 = __importDefault(__webpack_require__(/*! pdfkit */ "pdfkit"));
+const uuid_1 = __webpack_require__(/*! uuid */ "uuid");
 let EntregasService = class EntregasService {
     constructor(supabaseConfig, resendConfig) {
         this.supabaseConfig = supabaseConfig;
         this.resendConfig = resendConfig;
     }
     /**
-     * Cierra una entrega: genera PDF, envía email y marca como validada
+     * Cierra una entrega: genera PDF, envía email y marca como validada.
+     *
+     * Diseñado para que NUNCA un fallo opcional (firma faltante, foto
+     * corrupta, email caído, columna `estado` rara) tire 500. Solo se
+     * propaga error si la ruta no existe o si la subida del PDF falla
+     * sin alternativas.
      */
     async closeDelivery(rutaId, clienteEmail) {
+        console.log('CLOSE DELIVERY START -> rutaId:', rutaId, 'clienteEmail:', clienteEmail);
         if (!rutaId) {
             throw new common_1.BadRequestException('rutaId es requerido');
         }
         const supabase = this.supabaseConfig.getClient();
-        // Obtener información de la ruta
+        // ── 1) Cargar ruta ───────────────────────────────────────────
         const { data: ruta, error: rutaError } = await supabase
             .from('rutas')
             .select(`
@@ -1408,108 +1888,191 @@ let EntregasService = class EntregasService {
             .eq('id', rutaId)
             .single();
         if (rutaError || !ruta) {
-            throw new common_1.NotFoundException(`Ruta no encontrada: ${rutaError?.message}`);
+            console.warn('CLOSE DELIVERY -> ruta no encontrada:', rutaError);
+            throw new common_1.NotFoundException(`Ruta no encontrada: ${rutaError?.message ?? 'sin detalle'}`);
         }
-        const cliente = Array.isArray(ruta.clientes) ? ruta.clientes[0] : ruta.clientes;
-        // Obtener entregas asociadas
-        const { data: entregas, error: entregasError } = await supabase
-            .from('entregas')
-            .select('id, token_verificacion, codigo_otp')
-            .eq('ruta_id', rutaId);
-        if (entregasError) {
-            throw new common_1.BadRequestException(`Error al obtener entregas: ${entregasError.message}`);
-        }
+        console.log('CLOSE DELIVERY -> ruta cargada OK:', ruta.id);
+        const cliente = Array.isArray(ruta.clientes)
+            ? ruta.clientes[0]
+            : ruta.clientes;
         try {
-            // 0. Obtener firma del receptor (más reciente) desde BD
-            const { data: entregasFirma, error: firmaError } = await supabase
-                .from('entregas')
-                .select('firma_url, created_at')
-                .eq('ruta_id', rutaId)
-                .not('firma_url', 'is', null)
-                .order('created_at', { ascending: false });
-            if (firmaError) {
-                console.error('Error consultando firma:', firmaError);
-            }
-            const firmaUrl = entregasFirma?.[0]?.firma_url ?? null;
-            // TEMP LOG
-            console.log('PDF -> firmaUrl:', firmaUrl);
-            if (!firmaUrl) {
-                console.warn('⚠️ No hay firma_url en la BD al generar PDF');
-            }
-            // Descargar firma desde el bucket fotos_trazabilidad usando service_role
+            // ── 2) Firma del receptor (best effort) ───────────────────
+            console.log('PDF STEP -> descargando firma');
             let firmaBuffer = null;
-            if (firmaUrl) {
-                const marker = '/storage/v1/object/public/fotos_trazabilidad/';
-                const filePath = firmaUrl.includes(marker)
-                    ? firmaUrl.split(marker)[1]
-                    : null;
-                if (!filePath) {
-                    console.warn(`⚠️ firma_url no apunta a fotos_trazabilidad: ${firmaUrl}`);
+            let firmaUrl = null;
+            try {
+                const { data: entregasFirma } = await supabase
+                    .from('entregas')
+                    .select('firma_url, created_at')
+                    .eq('ruta_id', rutaId)
+                    .not('firma_url', 'is', null)
+                    .order('created_at', { ascending: false });
+                firmaUrl = entregasFirma?.[0]?.firma_url ?? null;
+                console.log('PDF STEP -> firmaUrl:', firmaUrl);
+                if (firmaUrl) {
+                    const marker = '/storage/v1/object/public/fotos_trazabilidad/';
+                    const filePath = firmaUrl.includes(marker)
+                        ? firmaUrl.split(marker)[1]
+                        : null;
+                    if (filePath) {
+                        try {
+                            const { data: firmaBlob, error: downloadError } = await supabase.storage
+                                .from('fotos_trazabilidad')
+                                .download(filePath);
+                            if (downloadError) {
+                                console.warn('PDF STEP ERROR -> firma download:', downloadError.message);
+                            }
+                            else if (firmaBlob) {
+                                const arrayBuffer = await firmaBlob.arrayBuffer();
+                                firmaBuffer = Buffer.from(arrayBuffer);
+                                console.log('PDF STEP -> firma bytes:', firmaBuffer.length);
+                            }
+                        }
+                        catch (e) {
+                            // Acá caen `fetch failed` y similares del cliente Supabase.
+                            console.warn('PDF STEP ERROR -> excepción red al descargar firma:', e?.message);
+                        }
+                    }
+                    else {
+                        console.warn('PDF STEP -> firma_url no apunta a fotos_trazabilidad:', firmaUrl);
+                    }
                 }
                 else {
-                    console.log('Descargando firma desde fotos_trazabilidad:', filePath);
-                    const { data: firmaBlob, error: downloadError } = await supabase.storage
-                        .from('fotos_trazabilidad')
-                        .download(filePath);
-                    if (downloadError) {
-                        console.error('Error descargando firma desde fotos_trazabilidad:', downloadError);
-                    }
-                    else if (firmaBlob) {
-                        const arrayBuffer = await firmaBlob.arrayBuffer();
-                        console.log('Firma descargada, bytes:', arrayBuffer.byteLength);
-                        firmaBuffer = Buffer.from(arrayBuffer);
-                    }
+                    console.warn('PDF STEP -> sin firma_url en BD');
                 }
             }
-            // 1. Generar PDF
-            const pdfBuffer = await this.generateDeliveryPDF({
-                rutaId: ruta.id,
-                origen: ruta.origen,
-                destino: ruta.destino,
-                fechaInicio: ruta.fecha_inicio,
-                fechaFin: ruta.fecha_fin,
-                cliente,
-                conductor: ruta.conductores,
-                camion: ruta.camiones,
-                firmaBuffer,
-            });
-            // 2. Subir PDF a Storage
-            const pdfPath = `comprobantes/${rutaId}/${Date.now()}.pdf`;
-            const { error: uploadError } = await supabase.storage
-                .from('entregas')
-                .upload(pdfPath, pdfBuffer, {
-                contentType: 'application/pdf',
-                upsert: false,
-            });
-            if (uploadError) {
-                throw new common_1.InternalServerErrorException(`Error al subir PDF: ${uploadError.message}`);
+            catch (e) {
+                // La firma es OPCIONAL para no bloquear el cierre.
+                console.warn('PDF STEP ERROR -> excepción obteniendo firma (continuamos sin firma):', e?.message);
             }
-            // Obtener URL pública
+            // ── 3) Evidencias fotográficas (best effort) ──────────────
+            console.log('PDF STEP -> descargando evidencias');
+            let evidencias = [];
+            try {
+                evidencias = await this.obtenerEvidenciasParaPDF(rutaId, ruta.fecha_inicio, ruta.fecha_fin);
+            }
+            catch (e) {
+                console.warn('PDF STEP ERROR -> evidencias (continuamos sin fotos):', e?.message);
+                evidencias = [];
+            }
+            console.log('PDF STEP -> evidencias listas:', evidencias.length);
+            // ── 4) Generar PDF (defensivo: nunca debe tirar) ─────────
+            console.log('PDF STEP -> generando PDF');
+            let pdfBuffer;
+            try {
+                pdfBuffer = await this.generateDeliveryPDF({
+                    rutaId: ruta.id,
+                    origen: ruta.origen,
+                    destino: ruta.destino,
+                    fechaInicio: ruta.fecha_inicio,
+                    fechaFin: ruta.fecha_fin,
+                    cliente,
+                    conductor: ruta.conductores,
+                    camion: ruta.camiones,
+                    firmaBuffer,
+                    evidencias,
+                });
+                console.log('PDF STEP -> PDF generado, bytes:', pdfBuffer?.length ?? 0);
+            }
+            catch (e) {
+                // Si por algún motivo el PDF falla CON evidencias, reintentamos
+                // sin evidencias (regla 9 del usuario).
+                console.warn('PDF STEP ERROR -> generateDeliveryPDF falló con evidencias, reintento sin evidencias:', e?.message);
+                try {
+                    pdfBuffer = await this.generateDeliveryPDF({
+                        rutaId: ruta.id,
+                        origen: ruta.origen,
+                        destino: ruta.destino,
+                        fechaInicio: ruta.fecha_inicio,
+                        fechaFin: ruta.fecha_fin,
+                        cliente,
+                        conductor: ruta.conductores,
+                        camion: ruta.camiones,
+                        firmaBuffer,
+                        evidencias: [],
+                    });
+                    console.log('PDF STEP -> PDF generado SIN evidencias, bytes:', pdfBuffer?.length ?? 0);
+                }
+                catch (e2) {
+                    console.error('PDF STEP ERROR -> generateDeliveryPDF falló incluso sin evidencias:', e2?.message, e2?.stack);
+                    throw new common_1.InternalServerErrorException(`No se pudo generar el comprobante PDF: ${e2?.message ?? 'error desconocido'}`);
+                }
+            }
+            // ── 5) Subir PDF a Storage con retry (única operación que SÍ
+            //     puede abortar el cierre, según la regla 6 del usuario). ──
+            console.log('PDF STEP -> subiendo PDF');
+            const pdfFilename = `${Date.now()}-${(0, uuid_1.v4)()}.pdf`;
+            const pdfPath = `comprobantes/${rutaId}/${pdfFilename}`;
+            const uploadOk = await this.subirPDFConRetry(supabase, pdfPath, pdfBuffer);
+            if (!uploadOk.success) {
+                console.error('PDF STEP ERROR -> upload definitivo (sin más retries):', uploadOk.error);
+                throw new common_1.InternalServerErrorException(`Error al subir PDF: ${uploadOk.error || 'fallo de red al guardar comprobante'}`);
+            }
+            console.log('PDF STEP -> PDF subido a:', pdfPath);
             const { data: publicUrlData } = supabase.storage
                 .from('entregas')
                 .getPublicUrl(pdfPath);
-            // 3. Enviar email al cliente
-            const emailDestino = clienteEmail || cliente?.contacto_email;
+            // ── 6) Enviar email (best effort: no rompe el cierre) ────
+            const emailDestino = clienteEmail || cliente?.contacto_email || null;
             if (emailDestino) {
-                await this.sendDeliveryEmail(emailDestino, cliente?.nombre || 'Cliente', pdfBuffer, rutaId);
+                try {
+                    await this.sendDeliveryEmail(emailDestino, cliente?.nombre || 'Cliente', pdfBuffer, rutaId);
+                    console.log('CLOSE DELIVERY -> email enviado a:', emailDestino);
+                }
+                catch (e) {
+                    console.warn('CLOSE DELIVERY -> error enviando email (continuamos):', e?.message);
+                }
             }
-            // 4. Marcar entregas como validadas
-            const { error: updateError } = await supabase
-                .from('entregas')
-                .update({
-                validado: true,
-                fecha_entrega_real: new Date().toISOString(),
-                estado: 'ENTREGADA',
-            })
-                .eq('ruta_id', rutaId);
-            if (updateError) {
-                console.warn(`No se pudieron marcar entregas como validadas: ${updateError.message}`);
+            else {
+                console.warn('CLOSE DELIVERY -> sin email destino, se omite envío de correo');
             }
-            // 5. Cambiar estado de ruta
-            await supabase
-                .from('rutas')
-                .update({ estado: 'ENTREGADA', fecha_fin: new Date().toISOString() })
-                .eq('id', rutaId);
+            // ── 7) Marcar entregas como validadas (tolerante al enum) ──
+            try {
+                // Algunos ambientes tienen el enum `estado_entrega` con valor
+                // ENTREGADA, otros no lo aceptan. Si el primer intento falla
+                // por enum/columna, reintentamos sin la columna `estado`.
+                const updatePayload = {
+                    validado: true,
+                    fecha_entrega_real: new Date().toISOString(),
+                    estado: 'ENTREGADA',
+                };
+                const { error: updateError } = await supabase
+                    .from('entregas')
+                    .update(updatePayload)
+                    .eq('ruta_id', rutaId);
+                if (updateError) {
+                    console.warn('CLOSE DELIVERY -> update entregas con estado falló, reintentando sin estado:', updateError.message);
+                    delete updatePayload.estado;
+                    const { error: retryError } = await supabase
+                        .from('entregas')
+                        .update(updatePayload)
+                        .eq('ruta_id', rutaId);
+                    if (retryError) {
+                        console.warn('CLOSE DELIVERY -> retry update entregas también falló:', retryError.message);
+                    }
+                }
+                console.log('CLOSE DELIVERY -> entregas marcadas validado=true');
+            }
+            catch (e) {
+                console.warn('CLOSE DELIVERY -> excepción marcando entregas validadas:', e?.message);
+            }
+            // ── 8) Pasar la ruta a ENTREGADO (enum estado_ruta) ──────
+            try {
+                const { error: estadoRutaError } = await supabase
+                    .from('rutas')
+                    .update({ estado: 'ENTREGADO', fecha_fin: new Date().toISOString() })
+                    .eq('id', rutaId);
+                if (estadoRutaError) {
+                    console.warn('CLOSE DELIVERY -> error actualizando rutas.estado a ENTREGADO:', estadoRutaError.message);
+                }
+                else {
+                    console.log('CLOSE DELIVERY -> rutas.estado=ENTREGADO OK');
+                }
+            }
+            catch (e) {
+                console.warn('CLOSE DELIVERY -> excepción actualizando rutas.estado:', e?.message);
+            }
+            console.log('CLOSE DELIVERY END -> OK rutaId:', rutaId);
             return {
                 success: true,
                 message: 'Entrega cerrada exitosamente',
@@ -1522,9 +2085,20 @@ let EntregasService = class EntregasService {
             };
         }
         catch (error) {
-            // TEMP LOG
-            console.error('ERROR CLOSE DELIVERY:', error);
-            throw new common_1.InternalServerErrorException(`Error cerrando entrega: ${error?.message}`);
+            // Log COMPLETO con todo lo que pueda venir desde Supabase / pdfkit / Resend.
+            console.error('ERROR CLOSE DELIVERY FULL:', {
+                message: error?.message,
+                stack: error?.stack,
+                response: error?.response,
+                code: error?.code,
+                details: error?.details,
+                hint: error?.hint,
+                name: error?.name,
+            });
+            // Mantenemos el throw para que mobile sepa que algo falló, pero
+            // con mensaje útil. NestJS lo serializa como
+            // {statusCode, message, error} y el mobile debe leer `message`.
+            throw new common_1.InternalServerErrorException(`Error cerrando entrega: ${error?.message ?? 'error desconocido'}`);
         }
     }
     /**
@@ -1667,70 +2241,450 @@ let EntregasService = class EntregasService {
     }
     // ========== HELPERS PRIVADOS ==========
     /**
-     * Genera un PDF de comprobante de entrega
+     * Formatea una fecha ISO al formato `dd-mm-yyyy, HH:mm` (hora local Chile).
+     * Si la fecha es inválida o vacía, devuelve "No registrada".
+     */
+    formatearFecha(iso) {
+        if (!iso)
+            return 'No registrada';
+        const d = new Date(iso);
+        if (Number.isNaN(d.getTime()))
+            return 'No registrada';
+        const dd = String(d.getDate()).padStart(2, '0');
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const yyyy = d.getFullYear();
+        const hh = String(d.getHours()).padStart(2, '0');
+        const mins = String(d.getMinutes()).padStart(2, '0');
+        return `${dd}-${mm}-${yyyy}, ${hh}:${mins}`;
+    }
+    /**
+     * Sube un PDF al bucket `entregas` con reintentos. El cliente Supabase
+     * usa `fetch` por debajo y cualquier blip de red (DNS, IPv6, TLS,
+     * timeout) lo reporta como `"fetch failed"`. Reintentamos con backoff
+     * exponencial antes de dar el error al usuario.
+     */
+    async subirPDFConRetry(supabase, pdfPath, pdfBuffer, maxIntentos = 3) {
+        let ultimoError = '';
+        for (let intento = 1; intento <= maxIntentos; intento++) {
+            try {
+                const { error } = await supabase.storage
+                    .from('entregas')
+                    .upload(pdfPath, pdfBuffer, {
+                    contentType: 'application/pdf',
+                    upsert: true,
+                    cacheControl: '3600',
+                });
+                if (!error) {
+                    if (intento > 1) {
+                        console.log(`PDF STEP -> upload OK en intento ${intento}`);
+                    }
+                    return { success: true };
+                }
+                ultimoError = error.message || 'error desconocido en upload';
+                console.warn(`PDF STEP ERROR -> upload intento ${intento}/${maxIntentos}: ${ultimoError}`);
+            }
+            catch (e) {
+                ultimoError = e?.message || 'excepción de red en upload';
+                console.warn(`PDF STEP ERROR -> excepción upload intento ${intento}/${maxIntentos}: ${ultimoError}`);
+            }
+            if (intento < maxIntentos) {
+                const espera = 500 * Math.pow(2, intento - 1);
+                await new Promise((r) => setTimeout(r, espera));
+            }
+        }
+        return { success: false, error: ultimoError };
+    }
+    /**
+     * Descarga una imagen desde su URL pública y devuelve un Buffer
+     * apto para `doc.image(...)`. Devuelve null si falla por red, 404,
+     * MIME no soportado por pdfkit (sólo PNG/JPEG), timeout, etc.
+     *
+     * El timeout es CRÍTICO: si el bucket no responde, sin esto el
+     * await del cierre de despacho queda colgado para siempre y mobile
+     * eventualmente lanza un 500 vía watchdog.
+     */
+    async descargarImagen(url, timeoutMs = 8000) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+            const res = await fetch(url, { signal: controller.signal });
+            if (!res.ok) {
+                console.warn(`PDF: no se pudo descargar imagen (${res.status}): ${url}`);
+                return null;
+            }
+            const arrayBuffer = await res.arrayBuffer();
+            return Buffer.from(arrayBuffer);
+        }
+        catch (err) {
+            const motivo = err?.name === 'AbortError' ? 'timeout' : err?.message ?? 'error';
+            console.warn(`PDF: error descargando imagen (${motivo}): ${url}`);
+            return null;
+        }
+        finally {
+            clearTimeout(timer);
+        }
+    }
+    /**
+     * Reúne las evidencias fotográficas de una ruta para insertarlas
+     * en el PDF. Misma estrategia que `RutasService.getEvidencias`:
+     *   1) Tabla `fotos` por `ruta_id`.
+     *   2) Fallback a `traceability_events` por `ruta_id`.
+     *   3) Fallback final por ventana temporal `[fecha_inicio, fecha_fin]`.
+     * Devuelve los buffers ya descargados, listos para `doc.image`.
+     */
+    async obtenerEvidenciasParaPDF(rutaId, fechaInicio, fechaFin) {
+        const fotosUrls = [];
+        let supabase;
+        try {
+            supabase = this.supabaseConfig.getClient();
+        }
+        catch (e) {
+            console.warn('EVIDENCIAS -> no se pudo instanciar supabase (continuamos sin fotos):', e?.message);
+            return [];
+        }
+        // 1) tabla `fotos` — best effort
+        try {
+            const { data: fotosRow, error: fotosErr } = await supabase
+                .from('fotos')
+                .select('etapa, url, created_at')
+                .eq('ruta_id', rutaId)
+                .order('created_at', { ascending: true });
+            if (fotosErr) {
+                console.warn('EVIDENCIAS -> query a tabla fotos falló:', fotosErr.message);
+            }
+            else {
+                for (const f of fotosRow || []) {
+                    const url = f?.url;
+                    if (!url)
+                        continue;
+                    fotosUrls.push({
+                        etapa: f?.etapa ?? null,
+                        url,
+                        timestamp: f?.created_at ?? null,
+                    });
+                }
+            }
+        }
+        catch (e) {
+            console.warn('EVIDENCIAS -> excepción consultando tabla fotos:', e?.message);
+        }
+        // 2) fallback en traceability_events — best effort
+        if (fotosUrls.length === 0) {
+            try {
+                let traceData = [];
+                const exactos = await supabase
+                    .from('traceability_events')
+                    .select('etapa, foto_uri, timestamp_evento')
+                    .eq('ruta_id', rutaId)
+                    .order('timestamp_evento', { ascending: true });
+                const colMissing = exactos.error &&
+                    ['42703', 'PGRST204'].includes(exactos.error.code || '');
+                if (!exactos.error && exactos.data && exactos.data.length > 0) {
+                    traceData = exactos.data;
+                }
+                else if ((colMissing || (!exactos.error && (exactos.data || []).length === 0)) &&
+                    fechaInicio) {
+                    const desde = fechaInicio;
+                    const hasta = fechaFin || new Date().toISOString();
+                    const fallback = await supabase
+                        .from('traceability_events')
+                        .select('etapa, foto_uri, timestamp_evento')
+                        .gte('timestamp_evento', desde)
+                        .lte('timestamp_evento', hasta)
+                        .order('timestamp_evento', { ascending: true });
+                    traceData = fallback.data || [];
+                }
+                for (const ev of traceData) {
+                    if (!ev?.foto_uri)
+                        continue;
+                    let url = null;
+                    try {
+                        url = this.supabaseConfig.getPublicUrl('fotos_trazabilidad', ev.foto_uri);
+                    }
+                    catch (e) {
+                        console.warn('EVIDENCIAS -> getPublicUrl falló para', ev.foto_uri, e?.message);
+                    }
+                    if (!url)
+                        continue;
+                    fotosUrls.push({
+                        etapa: ev.etapa ?? null,
+                        url,
+                        timestamp: ev.timestamp_evento ?? null,
+                    });
+                }
+            }
+            catch (e) {
+                console.warn('EVIDENCIAS -> excepción consultando traceability_events:', e?.message);
+            }
+        }
+        // 3) Descarga de buffers en paralelo (cada descarga ya captura su error)
+        let buffers = [];
+        try {
+            buffers = await Promise.all(fotosUrls.map((f) => this.descargarImagen(f.url)));
+        }
+        catch (e) {
+            console.warn('EVIDENCIAS -> Promise.all descargas falló:', e?.message);
+            buffers = fotosUrls.map(() => null);
+        }
+        const resultado = [];
+        for (let i = 0; i < fotosUrls.length; i++) {
+            const buf = buffers[i];
+            if (buf) {
+                resultado.push({
+                    etapa: fotosUrls[i].etapa,
+                    buffer: buf,
+                    timestamp: fotosUrls[i].timestamp,
+                });
+            }
+        }
+        return resultado;
+    }
+    /**
+     * Genera el PDF "Comprobante de despacho" con tabla Concepto/Detalle,
+     * firma digital del receptor y galería de evidencias agrupadas por etapa.
      */
     async generateDeliveryPDF(data) {
         return new Promise((resolve, reject) => {
-            const doc = new pdfkit_1.default();
+            const doc = new pdfkit_1.default({ size: 'A4', margin: 50 });
             const chunks = [];
             doc.on('data', (chunk) => chunks.push(chunk));
-            doc.on('end', () => {
-                resolve(Buffer.concat(chunks));
-            });
+            doc.on('end', () => resolve(Buffer.concat(chunks)));
             doc.on('error', reject);
-            // Encabezado
-            doc.fontSize(20).font('Helvetica-Bold').text('COMPROBANTE DE ENTREGA', {
+            const COLOR_TEXTO = '#111827';
+            const COLOR_TENUE = '#6B7280';
+            const COLOR_LINEA = '#D1D5DB';
+            const COLOR_HEADER_FONDO = '#F3F4F6';
+            const COLOR_ACENTO = '#1565C0';
+            const margenIzq = doc.page.margins.left;
+            const margenDer = doc.page.margins.right;
+            const anchoUtil = doc.page.width - margenIzq - margenDer;
+            // ── 1) ENCABEZADO ────────────────────────────────────────────
+            doc
+                .fillColor(COLOR_ACENTO)
+                .font('Helvetica-Bold')
+                .fontSize(22)
+                .text('COMPROBANTE DE DESPACHO', { align: 'center' });
+            doc
+                .fillColor(COLOR_TENUE)
+                .font('Helvetica-Oblique')
+                .fontSize(10)
+                .text(`Generado el ${this.formatearFecha(new Date().toISOString())}`, {
                 align: 'center',
             });
-            doc.fontSize(10).font('Helvetica');
-            doc.moveDown();
-            // Información de ruta
-            doc.text(`Ruta ID: ${data.rutaId}`);
-            doc.text(`Origen: ${data.origen}`);
-            doc.text(`Destino: ${data.destino}`);
-            doc.moveDown();
-            // Información del cliente
-            doc.text(`Cliente: ${data.cliente?.nombre || 'N/A'}`);
-            doc.moveDown();
-            // Información del conductor
-            doc.text(`Conductor: ${data.conductor?.rut || 'N/A'}`);
-            doc.moveDown();
-            // Información del vehículo
-            doc.text(`Vehículo: ${data.camion?.patente || 'N/A'}`);
-            doc.moveDown();
-            // Fechas
-            doc.text(`Fecha de inicio: ${new Date(data.fechaInicio).toLocaleString('es-CL')}`);
-            doc.text(`Fecha de fin: ${new Date(data.fechaFin).toLocaleString('es-CL')}`);
-            doc.moveDown();
-            // Firma digital del receptor
-            doc.font('Helvetica-Bold').text('Firma digital del receptor');
-            doc.font('Helvetica');
-            doc.moveDown(0.5);
+            doc.moveDown(1.2);
+            // Línea separadora
+            const yLinea1 = doc.y;
+            doc
+                .strokeColor(COLOR_LINEA)
+                .lineWidth(1)
+                .moveTo(margenIzq, yLinea1)
+                .lineTo(margenIzq + anchoUtil, yLinea1)
+                .stroke();
+            doc.moveDown(0.8);
+            // ── 2) TABLA Concepto / Detalle ─────────────────────────────
+            const filas = [
+                ['ID de ruta', data.rutaId],
+                ['Cliente', data.cliente?.nombre || 'N/A'],
+            ];
+            if (data.cliente?.contacto_email) {
+                filas.push(['Correo de contacto', data.cliente.contacto_email]);
+            }
+            filas.push(['Origen', data.origen || 'N/A'], ['Destino', data.destino || 'N/A'], ['Conductor', data.conductor?.rut || 'N/A'], ['Vehículo', data.camion?.patente || 'N/A'], ['Fecha de inicio', this.formatearFecha(data.fechaInicio)], ['Fecha de entrega', this.formatearFecha(data.fechaFin)], ['Estado validación', 'ENTREGADO – VALIDADO']);
+            const colConceptoAncho = anchoUtil * 0.32;
+            const colDetalleAncho = anchoUtil - colConceptoAncho;
+            const padCelda = 8;
+            // Header de la tabla
+            doc.fillColor(COLOR_TEXTO).font('Helvetica-Bold').fontSize(11);
+            const yHeader = doc.y;
+            const altoHeader = 22;
+            doc
+                .fillColor(COLOR_HEADER_FONDO)
+                .rect(margenIzq, yHeader, anchoUtil, altoHeader)
+                .fill();
+            doc
+                .fillColor(COLOR_TEXTO)
+                .text('Concepto', margenIzq + padCelda, yHeader + 6, {
+                width: colConceptoAncho - padCelda,
+                align: 'left',
+            });
+            doc.text('Detalle', margenIzq + colConceptoAncho + padCelda, yHeader + 6, { width: colDetalleAncho - padCelda * 2, align: 'left' });
+            doc.y = yHeader + altoHeader;
+            // Borde top tabla
+            doc
+                .strokeColor(COLOR_LINEA)
+                .lineWidth(0.5)
+                .rect(margenIzq, yHeader, anchoUtil, altoHeader)
+                .stroke();
+            // Filas
+            doc.font('Helvetica').fontSize(10).fillColor(COLOR_TEXTO);
+            for (const [concepto, detalle] of filas) {
+                const yFila = doc.y;
+                // Calcular alto requerido por la celda de detalle (texto puede ser largo)
+                const altoConcepto = doc.heightOfString(concepto, {
+                    width: colConceptoAncho - padCelda * 2,
+                });
+                const altoDetalle = doc.heightOfString(detalle, {
+                    width: colDetalleAncho - padCelda * 2,
+                });
+                const altoFila = Math.max(altoConcepto, altoDetalle) + padCelda * 2;
+                // Si no cabe, salto de página y repinto la cabecera básica
+                if (yFila + altoFila > doc.page.height - doc.page.margins.bottom) {
+                    doc.addPage();
+                }
+                const yActual = doc.y;
+                doc
+                    .strokeColor(COLOR_LINEA)
+                    .lineWidth(0.5)
+                    .rect(margenIzq, yActual, anchoUtil, altoFila)
+                    .stroke();
+                // Línea divisoria entre columnas
+                doc
+                    .moveTo(margenIzq + colConceptoAncho, yActual)
+                    .lineTo(margenIzq + colConceptoAncho, yActual + altoFila)
+                    .stroke();
+                doc
+                    .font('Helvetica-Bold')
+                    .fillColor(COLOR_TEXTO)
+                    .text(concepto, margenIzq + padCelda, yActual + padCelda, {
+                    width: colConceptoAncho - padCelda * 2,
+                });
+                doc
+                    .font('Helvetica')
+                    .fillColor(COLOR_TEXTO)
+                    .text(detalle, margenIzq + colConceptoAncho + padCelda, yActual + padCelda, { width: colDetalleAncho - padCelda * 2 });
+                doc.y = yActual + altoFila;
+            }
+            doc.moveDown(1.2);
+            // ── 3) FIRMA DIGITAL ────────────────────────────────────────
+            if (doc.y > doc.page.height - doc.page.margins.bottom - 180) {
+                doc.addPage();
+            }
+            doc
+                .font('Helvetica-Bold')
+                .fontSize(13)
+                .fillColor(COLOR_TEXTO)
+                .text('Firma digital del receptor', { align: 'center' });
+            doc.moveDown(0.6);
+            const firmaAncho = 220;
+            const firmaAlto = 110;
+            const xFirma = margenIzq + (anchoUtil - firmaAncho) / 2;
             if (data.firmaBuffer && data.firmaBuffer.length > 0) {
                 try {
-                    doc.image(data.firmaBuffer, {
-                        fit: [200, 100],
+                    doc.image(data.firmaBuffer, xFirma, doc.y, {
+                        fit: [firmaAncho, firmaAlto],
                         align: 'center',
                     });
-                    doc.moveDown();
+                    doc.y += firmaAlto + 6;
+                    // Línea base bajo la firma
+                    doc
+                        .strokeColor(COLOR_LINEA)
+                        .lineWidth(0.5)
+                        .moveTo(xFirma, doc.y)
+                        .lineTo(xFirma + firmaAncho, doc.y)
+                        .stroke();
                 }
                 catch (err) {
                     console.warn(`No se pudo insertar firma en PDF: ${err?.message}`);
-                    doc.text('Sin firma disponible');
-                    doc.moveDown();
+                    doc
+                        .font('Helvetica-Oblique')
+                        .fontSize(10)
+                        .fillColor(COLOR_TENUE)
+                        .text('Sin firma disponible', { align: 'center' });
                 }
             }
             else {
-                console.warn('⚠️ firmaBuffer vacío o inválido');
-                doc.text('Sin firma disponible');
-                doc.moveDown();
+                doc
+                    .font('Helvetica-Oblique')
+                    .fontSize(10)
+                    .fillColor(COLOR_TENUE)
+                    .text('Sin firma disponible', { align: 'center' });
             }
-            // Footer
+            doc.moveDown(1.5);
+            // ── 4) EVIDENCIAS FOTOGRÁFICAS ──────────────────────────────
+            if (doc.y > doc.page.height - doc.page.margins.bottom - 80) {
+                doc.addPage();
+            }
             doc
+                .font('Helvetica-Bold')
+                .fontSize(13)
+                .fillColor(COLOR_TEXTO)
+                .text('Evidencias fotográficas', { align: 'left' });
+            doc
+                .strokeColor(COLOR_LINEA)
+                .lineWidth(0.5)
+                .moveTo(margenIzq, doc.y + 2)
+                .lineTo(margenIzq + anchoUtil, doc.y + 2)
+                .stroke();
+            doc.moveDown(0.6);
+            const evidencias = data.evidencias || [];
+            if (evidencias.length === 0) {
+                doc
+                    .font('Helvetica-Oblique')
+                    .fontSize(10)
+                    .fillColor(COLOR_TENUE)
+                    .text('No hay evidencias registradas', { align: 'left' });
+            }
+            else {
+                // Agrupar por etapa
+                const grupos = new Map();
+                for (const ev of evidencias) {
+                    const etapa = (ev.etapa || 'Sin etapa').toString().trim() || 'Sin etapa';
+                    if (!grupos.has(etapa))
+                        grupos.set(etapa, []);
+                    grupos.get(etapa).push(ev);
+                }
+                // Imagen: 2 por fila
+                const fotoAncho = (anchoUtil - 12) / 2;
+                const fotoAlto = 130;
+                for (const [etapa, lista] of grupos) {
+                    if (doc.y > doc.page.height - doc.page.margins.bottom - 40) {
+                        doc.addPage();
+                    }
+                    doc
+                        .font('Helvetica-Bold')
+                        .fontSize(11)
+                        .fillColor(COLOR_ACENTO)
+                        .text(etapa, { align: 'left' });
+                    doc.moveDown(0.3);
+                    for (let i = 0; i < lista.length; i += 2) {
+                        // Si no cabe la fila, salto de página
+                        if (doc.y + fotoAlto + 12 >
+                            doc.page.height - doc.page.margins.bottom) {
+                            doc.addPage();
+                        }
+                        const yFoto = doc.y;
+                        const ev1 = lista[i];
+                        const ev2 = lista[i + 1];
+                        try {
+                            doc.image(ev1.buffer, margenIzq, yFoto, {
+                                fit: [fotoAncho, fotoAlto],
+                                align: 'center',
+                            });
+                        }
+                        catch (err) {
+                            console.warn(`No se pudo insertar evidencia (${etapa}): ${err?.message}`);
+                        }
+                        if (ev2) {
+                            try {
+                                doc.image(ev2.buffer, margenIzq + fotoAncho + 12, yFoto, { fit: [fotoAncho, fotoAlto], align: 'center' });
+                            }
+                            catch (err) {
+                                console.warn(`No se pudo insertar evidencia (${etapa}): ${err?.message}`);
+                            }
+                        }
+                        doc.y = yFoto + fotoAlto + 10;
+                    }
+                    doc.moveDown(0.4);
+                }
+            }
+            // ── 5) FOOTER ───────────────────────────────────────────────
+            doc.moveDown(1.2);
+            const yFooter = doc.page.height - doc.page.margins.bottom - 20;
+            doc
+                .font('Helvetica-Oblique')
                 .fontSize(8)
-                .text(`Documento generado el ${new Date().toLocaleString('es-CL')}`, {
-                align: 'center',
-            });
+                .fillColor(COLOR_TENUE)
+                .text(`LogiTrack — Documento generado el ${this.formatearFecha(new Date().toISOString())}`, margenIzq, yFooter, { align: 'center', width: anchoUtil });
             doc.end();
         });
     }
@@ -2035,6 +2989,14 @@ let RutasController = class RutasController {
         return await this.rutasService.getUnassignedRoutes();
     }
     /**
+     * GET /api/rutas/:id/evidencias
+     * Devuelve PDF de comprobante (si existe) y fotos de trazabilidad
+     * de la ruta. Usado por la vista Historial.
+     */
+    async getEvidencias(rutaId) {
+        return await this.rutasService.getEvidencias(rutaId);
+    }
+    /**
      * GET /api/rutas/:id
      * Obtiene información detallada de una ruta
      */
@@ -2077,6 +3039,14 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], RutasController.prototype, "getUnassignedRoutes", null);
+__decorate([
+    (0, common_1.Get)(':id/evidencias'),
+    (0, common_1.UseGuards)(jwt_guard_1.JwtGuard),
+    __param(0, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], RutasController.prototype, "getEvidencias", null);
 __decorate([
     (0, common_1.Get)(':id'),
     (0, common_1.UseGuards)(jwt_guard_1.JwtGuard),
@@ -2215,14 +3185,15 @@ let RutasService = class RutasService {
         if (ruta.conductor_id) {
             throw new common_1.ForbiddenException('La ruta ya tiene un conductor asignado');
         }
-        // PASO 4: Actualizar ruta con conductor y camión
+        // PASO 4: Actualizar ruta con conductor y camión.
+        // El enum real `estado_ruta` usa 'ASIGNADO' (masculino), no 'ASIGNADA'.
         const { data: rutaActualizada, error: updateError } = await supabase
             .from('rutas')
             .update({
             conductor_id: conductorId,
             camion_id: camionId,
             fecha_inicio: new Date().toISOString(),
-            estado: 'ASIGNADA',
+            estado: 'ASIGNADO',
         })
             .eq('id', rutaId)
             .select();
@@ -2233,7 +3204,7 @@ let RutasService = class RutasService {
         await supabase.from('historial_estados').insert([
             {
                 ruta_id: rutaId,
-                estado: 'ASIGNADA',
+                estado: 'ASIGNADO',
                 created_at: new Date().toISOString(),
             },
         ]);
@@ -2244,7 +3215,7 @@ let RutasService = class RutasService {
                 rutaId,
                 conductorId,
                 camionId,
-                estado: 'ASIGNADA',
+                estado: 'ASIGNADO',
             },
         };
     }
@@ -2318,8 +3289,17 @@ let RutasService = class RutasService {
             throw new common_1.BadRequestException('rutaId y nuevoEstado son requeridos');
         }
         const supabase = this.supabaseConfig.getClient();
-        // Estados válidos
-        const estadosValidos = ['PENDIENTE', 'ASIGNADA', 'EN_PROCESO', 'ENTREGADA', 'CANCELADA'];
+        // Enum real `estado_ruta` en Supabase.
+        const estadosValidos = [
+            'PENDIENTE',
+            'ASIGNADO',
+            'EN_CAMINO_ORIGEN',
+            'EN_CARGA',
+            'EN_TRANSITO',
+            'EN_DESTINO',
+            'ENTREGADO',
+            'CANCELADO',
+        ];
         if (!estadosValidos.includes(nuevoEstado)) {
             throw new common_1.BadRequestException(`Estado inválido. Acepta: ${estadosValidos.join(', ')}`);
         }
@@ -2327,7 +3307,7 @@ let RutasService = class RutasService {
             .from('rutas')
             .update({
             estado: nuevoEstado,
-            fecha_fin: nuevoEstado === 'ENTREGADA' ? new Date().toISOString() : null,
+            fecha_fin: nuevoEstado === 'ENTREGADO' ? new Date().toISOString() : null,
         })
             .eq('id', rutaId)
             .select();
@@ -2378,6 +3358,132 @@ let RutasService = class RutasService {
             throw new common_1.BadRequestException(`Error al obtener rutas: ${error.message}`);
         }
         return rutas || [];
+    }
+    /**
+     * Devuelve las evidencias de una ruta:
+     *  - `pdfs`: comprobantes guardados en Supabase Storage,
+     *    bucket `entregas`, carpeta `comprobantes/{rutaId}/...`.
+     *  - `fotos`: imágenes de trazabilidad. Preferimos la tabla `fotos`
+     *    (tiene `ruta_id` directo); como fallback, `traceability_events`
+     *    filtrados por ventana temporal porque ese registro no tiene `ruta_id`.
+     *  - `firmaUrl`: firma del cliente. Primero `entregas.firma_url` por
+     *    `ruta_id`; como fallback, busca en el bucket `fotos_trazabilidad/firmas/`
+     *    archivos cuyo nombre empiece con `{rutaId}-`.
+     */
+    async getEvidencias(rutaId) {
+        if (!rutaId) {
+            throw new common_1.BadRequestException('rutaId es requerido');
+        }
+        const supabase = this.supabaseConfig.getClient();
+        const { data: ruta, error: rutaError } = await supabase
+            .from('rutas')
+            .select('id, fecha_inicio, fecha_fin')
+            .eq('id', rutaId)
+            .single();
+        if (rutaError || !ruta) {
+            throw new common_1.NotFoundException('Ruta no encontrada');
+        }
+        // ── 1) PDFs en bucket `entregas`, carpeta `comprobantes/{rutaId}/...`
+        const pdfFiles = await this.supabaseConfig.listFiles('entregas', `comprobantes/${rutaId}`);
+        const pdfs = pdfFiles
+            .filter((f) => f.name.toLowerCase().endsWith('.pdf'))
+            .map((f) => ({
+            nombre: f.name,
+            url: this.supabaseConfig.getPublicUrl('entregas', `comprobantes/${rutaId}/${f.name}`),
+        }))
+            .filter((p) => !!p.url);
+        // ── 2) Fotos de trazabilidad
+        const fotos = [];
+        // 2a) Tabla `fotos` (vínculo directo por ruta_id)
+        const { data: fotosRow } = await supabase
+            .from('fotos')
+            .select('id, etapa, url, created_at')
+            .eq('ruta_id', rutaId)
+            .order('created_at', { ascending: true });
+        for (const f of fotosRow || []) {
+            if (!f?.url)
+                continue;
+            fotos.push({
+                id: String(f.id),
+                etapa: f.etapa ?? null,
+                url: f.url,
+                timestamp: f.created_at ?? null,
+            });
+        }
+        // 2b) Fallback en `traceability_events` SOLO si la tabla `fotos`
+        //     no devolvió nada. Estrategia en dos pasos:
+        //       1) Preferir eventos con `ruta_id = X` (fuente confiable).
+        //       2) Si la columna no existe aún (pre-migración) o no hay
+        //          eventos con ese ruta_id, caer al filtro por ventana
+        //          temporal usando rutas.fecha_inicio/fecha_fin.
+        if (fotos.length === 0) {
+            let traceEvents = [];
+            // Intento por ruta_id directo. Si la columna aún no existe en BD,
+            // PostgREST devuelve un error: lo capturamos y caemos al fallback.
+            const exactos = await supabase
+                .from('traceability_events')
+                .select('id, etapa, foto_uri, timestamp_evento')
+                .eq('ruta_id', rutaId)
+                .order('timestamp_evento', { ascending: true });
+            const colMissing = exactos.error &&
+                ['42703', 'PGRST204'].includes(exactos.error.code || '');
+            if (!exactos.error && exactos.data && exactos.data.length > 0) {
+                traceEvents = exactos.data;
+            }
+            else if ((colMissing || (!exactos.error && (exactos.data || []).length === 0)) &&
+                ruta.fecha_inicio) {
+                const desde = ruta.fecha_inicio;
+                const hasta = ruta.fecha_fin || new Date().toISOString();
+                const fallback = await supabase
+                    .from('traceability_events')
+                    .select('id, etapa, foto_uri, timestamp_evento')
+                    .gte('timestamp_evento', desde)
+                    .lte('timestamp_evento', hasta)
+                    .order('timestamp_evento', { ascending: true });
+                traceEvents = fallback.data || [];
+            }
+            for (const ev of traceEvents) {
+                if (!ev?.foto_uri)
+                    continue;
+                const url = this.supabaseConfig.getPublicUrl('fotos_trazabilidad', ev.foto_uri);
+                if (!url)
+                    continue;
+                fotos.push({
+                    id: String(ev.id),
+                    etapa: ev.etapa ?? null,
+                    url,
+                    timestamp: ev.timestamp_evento ?? null,
+                });
+            }
+        }
+        // ── 3) Firma: primero tabla `entregas`, fallback storage
+        let firmaUrl = null;
+        const { data: entregasRows } = await supabase
+            .from('entregas')
+            .select('firma_url, fecha_entrega_real, created_at')
+            .eq('ruta_id', rutaId)
+            .order('created_at', { ascending: false });
+        for (const e of entregasRows || []) {
+            const candidate = (e?.firma_url || '').toString().trim();
+            // Datos legacy guardaron literalmente la cadena "null".
+            if (candidate && candidate.toLowerCase() !== 'null') {
+                firmaUrl = candidate;
+                break;
+            }
+        }
+        if (!firmaUrl) {
+            const firmaFiles = await this.supabaseConfig.listFiles('fotos_trazabilidad', 'firmas');
+            const match = firmaFiles.find((f) => f.name.startsWith(`${rutaId}-`));
+            if (match) {
+                firmaUrl = this.supabaseConfig.getPublicUrl('fotos_trazabilidad', `firmas/${match.name}`);
+            }
+        }
+        return {
+            rutaId,
+            pdfs,
+            fotos,
+            firmaUrl,
+        };
     }
 };
 exports.RutasService = RutasService;
@@ -2569,7 +3675,7 @@ let TrazabilidadController = class TrazabilidadController {
     }
     async createEvent(body) {
         console.log('BODY TRAZABILIDAD:', body);
-        const { id, etapa, foto_uri, latitud, longitud, timestamp_evento } = body;
+        const { id, etapa, foto_uri, latitud, longitud, timestamp_evento, ruta_id } = body;
         if (typeof id !== 'string' || !id.trim()) {
             throw new common_1.BadRequestException('id es requerido');
         }
@@ -2592,6 +3698,7 @@ let TrazabilidadController = class TrazabilidadController {
             latitud,
             longitud,
             timestamp_evento,
+            ruta_id: typeof ruta_id === 'string' && ruta_id.trim() ? ruta_id.trim() : null,
         });
     }
 };
@@ -2664,24 +3771,54 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.TrazabilidadService = void 0;
 const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
 const supabase_config_1 = __webpack_require__(/*! ../../config/supabase.config */ "./src/config/supabase.config.ts");
+// Códigos de error de PostgREST cuando una columna no existe en la tabla.
+// Cubren versiones 42703 (postgres) y PGRST204 (postgrest) por seguridad.
+const COLUMN_NOT_FOUND_CODES = new Set(['42703', 'PGRST204']);
 let TrazabilidadService = class TrazabilidadService {
     constructor(supabaseConfig) {
         this.supabaseConfig = supabaseConfig;
+        // Cache para no reintentar incluir `ruta_id` después de saber que la
+        // columna no existe en la BD. Se reinicia al reiniciar el backend.
+        this.rutaIdColumnAvailable = true;
     }
     async createEvent(data) {
         const supabase = this.supabaseConfig.getClient();
-        const { data: row, error } = await supabase
-            .from('traceability_events')
-            .upsert({
+        const baseRow = {
             id: data.id,
             etapa: data.etapa,
             foto_uri: data.foto_uri,
             latitud: data.latitud,
             longitud: data.longitud,
             timestamp_evento: data.timestamp_evento,
-        }, { onConflict: 'id' })
+        };
+        // Solo intentamos persistir ruta_id si vino en el payload Y todavía
+        // no descubrimos que la columna no existe en esta instancia.
+        if (data.ruta_id && this.rutaIdColumnAvailable) {
+            baseRow.ruta_id = data.ruta_id;
+        }
+        let { data: row, error } = await supabase
+            .from('traceability_events')
+            .upsert(baseRow, { onConflict: 'id' })
             .select()
             .single();
+        // Si la columna ruta_id aún no se migró, recordamos y reintentamos
+        // sin el campo. Así el servicio sigue trabajando hasta que la
+        // migración SQL se aplique.
+        if (error &&
+            'ruta_id' in baseRow &&
+            COLUMN_NOT_FOUND_CODES.has(error.code || '')) {
+            console.warn('traceability_events.ruta_id no existe todavía: descarto el campo y reintento. ' +
+                'Aplica la migración SQL para habilitar el vínculo directo.');
+            this.rutaIdColumnAvailable = false;
+            delete baseRow.ruta_id;
+            const retry = await supabase
+                .from('traceability_events')
+                .upsert(baseRow, { onConflict: 'id' })
+                .select()
+                .single();
+            row = retry.data;
+            error = retry.error;
+        }
         if (error) {
             console.error('ERROR SUPABASE TRAZABILIDAD:', error);
             throw new common_1.BadRequestException(`Error al registrar evento: ${error.message}`);
@@ -2778,6 +3915,16 @@ module.exports = require("compression");
 
 /***/ }),
 
+/***/ "express":
+/*!**************************!*\
+  !*** external "express" ***!
+  \**************************/
+/***/ ((module) => {
+
+module.exports = require("express");
+
+/***/ }),
+
 /***/ "helmet":
 /*!*************************!*\
   !*** external "helmet" ***!
@@ -2825,6 +3972,16 @@ module.exports = require("pdfkit");
 /***/ ((module) => {
 
 module.exports = require("resend");
+
+/***/ }),
+
+/***/ "uuid":
+/*!***********************!*\
+  !*** external "uuid" ***!
+  \***********************/
+/***/ ((module) => {
+
+module.exports = require("uuid");
 
 /***/ })
 

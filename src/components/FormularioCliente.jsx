@@ -183,13 +183,13 @@ export default function FormularioCliente({ onGuardado }) {
     e.preventDefault();
     setLoading(true);
     try {
+      // La tabla `clientes` NO tiene columnas latitud/longitud,
+      // por lo que solo enviamos las columnas reales del schema.
       const payload = {
         nombre: formData.nombre,
         rut: formData.rut,
         contacto_telefono: formData.telefono,
         direccion: formData.direccion,
-        latitud: formData.latitud,
-        longitud: formData.longitud,
       };
 
       const res = await apiFetch("/api/clientes", {

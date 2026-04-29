@@ -27,7 +27,13 @@ export async function cerrarDespachoYEnviarComprobante(
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(payload?.error ?? "No se pudo cerrar despacho");
+    // NestJS responde { statusCode, message, error: "Internal Server Error" }.
+    // El mensaje útil está en `message`, no en `error` (que es el genérico).
+    const mensaje =
+      payload?.message ||
+      payload?.error ||
+      `No se pudo cerrar despacho (HTTP ${response.status})`;
+    throw new Error(String(mensaje));
   }
 
   return {
@@ -67,13 +73,17 @@ export async function enviarQRPrevio(rutaId: string): Promise<CierreDespachoResu
   // Correo forzado a peticion del usuario
   const correoForzado = 'oyanadelbastian5@gmail.com';
 
+  // Mandamos `rutaId` para que el backend genere el QR con
+  // {ruta_id, codigo_otp} en JSON. Sin esto el QR vendría con el
+  // clienteId crudo y el scanner mobile diría "QR no corresponde".
   const emailResponse = await bffFetch("/api/email/enviar-qr", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       email: correoForzado,
       clienteId,
-      nombreCliente: clienteNombre
+      nombreCliente: clienteNombre,
+      rutaId: id,
     })
   });
   if (!emailResponse.ok) {
@@ -87,40 +97,4 @@ export async function enviarQRPrevio(rutaId: string): Promise<CierreDespachoResu
     nombreCliente: clienteNombre,
   };
 }
-
-export async function subirFotoFichaEnSupabase(rutaId: string, base64Image: string) {
-  // Quitamos la cabecera si viene incluida (data:image/jpeg;base64,...)
-  const base64Data = base64Image.replace(/^data:image\/\w+;base64,/, "");
-  const filePath = `ficha_${rutaId}_${Date.now()}.jpg`;
-  
-  // 1. Subir al Bucket "fichas_despacho"
-  const { data, error } = await supabase.storage
-    .from("fichas_despacho")
-    .upload(filePath, decode(base64Data), {
-      contentType: "image/jpeg",
-      upsert: true,
-    });
-    
-  if (error) {
-    throw new Error(`No se pudo subir la foto de la ficha: ${error.message}`);
-  }
-
-  // 2. Obtener URL de acceso público
-  const { data: publicUrlData } = supabase.storage
-    .from("fichas_despacho")
-    .getPublicUrl(filePath);
-      
-  // 3. Escribir esa URL en la tabla "rutas"
-  if (publicUrlData?.publicUrl) {
-    const { error: updateError } = await supabase
-      .from("rutas")
-      .update({ ficha_despacho_url: publicUrlData.publicUrl })
-      .eq("id", rutaId);
-
-    if (updateError) {
-      throw new Error(`Error enlazando foto a la ruta: ${updateError.message}`);
-    }
-  }
-}
-
 

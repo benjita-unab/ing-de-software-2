@@ -52,6 +52,17 @@ export class RutasController {
   }
 
   /**
+   * GET /api/rutas/:id/evidencias
+   * Devuelve PDF de comprobante (si existe) y fotos de trazabilidad
+   * de la ruta. Usado por la vista Historial.
+   */
+  @Get(':id/evidencias')
+  @UseGuards(JwtGuard)
+  async getEvidencias(@Param('id') rutaId: string) {
+    return await this.rutasService.getEvidencias(rutaId);
+  }
+
+  /**
    * GET /api/rutas/:id
    * Obtiene información detallada de una ruta
    */

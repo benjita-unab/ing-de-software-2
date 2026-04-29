@@ -20,11 +20,15 @@ export class TrazabilidadController {
       latitud?: unknown;
       longitud?: unknown;
       timestamp_evento?: string;
+      // Opcional. Cuando mobile lo envíe, se persistirá si la columna
+      // existe en la BD (ver migración recomendada en docs).
+      ruta_id?: string | null;
     },
   ) {
     console.log('BODY TRAZABILIDAD:', body);
 
-    const { id, etapa, foto_uri, latitud, longitud, timestamp_evento } = body;
+    const { id, etapa, foto_uri, latitud, longitud, timestamp_evento, ruta_id } =
+      body;
 
     if (typeof id !== 'string' || !id.trim()) {
       throw new BadRequestException('id es requerido');
@@ -53,6 +57,8 @@ export class TrazabilidadController {
       latitud,
       longitud,
       timestamp_evento,
+      ruta_id:
+        typeof ruta_id === 'string' && ruta_id.trim() ? ruta_id.trim() : null,
     });
   }
 }

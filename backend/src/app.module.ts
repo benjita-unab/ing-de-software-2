@@ -15,6 +15,8 @@ import { EmailModule } from './modules/email/email.module';
 import { StorageModule } from './modules/storage/storage.module';
 import { TrazabilidadModule } from './modules/trazabilidad/trazabilidad.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { ClientesModule } from './modules/clientes/clientes.module';
+import { CamionesModule } from './modules/camiones/camiones.module';
 
 @Module({
   imports: [
@@ -35,6 +37,8 @@ import { AuthModule } from './modules/auth/auth.module';
     EmailModule,
     StorageModule,
     TrazabilidadModule,
+    ClientesModule,
+    CamionesModule,
   ],
   controllers: [AppController],
   providers: [AppService, SupabaseConfigService, ResendConfigService, JwtStrategy],

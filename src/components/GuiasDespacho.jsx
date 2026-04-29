@@ -61,7 +61,14 @@ const base = {
 };
 
 // Estados que se consideran "entregados" para excluir de las guías activas.
-const ESTADOS_FINALIZADOS = new Set(["ENTREGADA", "ENTREGADO", "CANCELADA"]);
+// Tolerancia de casing: el enum real es "ENTREGADO"/"CANCELADO" pero
+// dejamos las variantes femeninas por si quedan rutas antiguas con ese valor.
+const ESTADOS_FINALIZADOS = new Set([
+  "ENTREGADO",
+  "ENTREGADA",
+  "CANCELADO",
+  "CANCELADA",
+]);
 
 function readFileAsDataUrl(file) {
   return new Promise((resolve, reject) => {
@@ -153,9 +160,10 @@ export default function GuiasDespacho() {
     if (!window.confirm("¿Estás seguro de finalizar este despacho?")) return;
 
     try {
+      // El enum real `estado_ruta` en Supabase usa "ENTREGADO" (masculino).
       const res = await apiFetch(`/api/rutas/${ruta.id}/status`, {
         method: "PATCH",
-        json: { estado: "ENTREGADA" },
+        json: { estado: "ENTREGADO" },
       });
 
       if (!res.ok) {

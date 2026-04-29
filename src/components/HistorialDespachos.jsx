@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { apiFetch } from "../lib/apiClient";
 
 const base = {
@@ -46,6 +46,7 @@ const base = {
     borderBottom: "1px solid rgba(255,255,255,0.08)",
     fontSize: "15px",
     color: "#e2e8f0",
+    verticalAlign: "top",
   },
   badge: {
     display: "inline-block",
@@ -57,13 +58,335 @@ const base = {
     color: "#ffffff",
     border: "1px solid rgba(76,201,240,0.45)",
   },
+  evidenciasButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "6px",
+    padding: "8px 12px",
+    borderRadius: "8px",
+    background: "rgba(59,130,246,0.18)",
+    border: "1px solid rgba(59,130,246,0.45)",
+    color: "#93C5FD",
+    cursor: "pointer",
+    fontWeight: 600,
+    fontSize: "12px",
+    fontFamily: "inherit",
+  },
 };
 
-const ESTADOS_FINALIZADOS = ["ENTREGADA", "ENTREGADO"];
+const modalStyles = {
+  overlay: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(2,6,23,0.72)",
+    backdropFilter: "blur(4px)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1000,
+    padding: "20px",
+  },
+  dialog: {
+    width: "100%",
+    maxWidth: "720px",
+    maxHeight: "85vh",
+    overflow: "auto",
+    background: "rgba(8,8,12,0.96)",
+    border: "1px solid rgba(255,255,255,0.14)",
+    borderRadius: "16px",
+    boxShadow: "0 25px 60px rgba(0,0,0,0.6)",
+    color: "#E2E8F0",
+    padding: "22px 24px",
+    fontFamily: "'Inter', 'Poppins', sans-serif",
+  },
+  header: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: "18px",
+  },
+  headerTitle: {
+    fontSize: "16px",
+    fontWeight: 800,
+    letterSpacing: "0.12em",
+    textTransform: "uppercase",
+    color: "#fff",
+  },
+  headerSub: {
+    fontSize: "12px",
+    color: "#94A3B8",
+    marginTop: "4px",
+  },
+  closeButton: {
+    background: "transparent",
+    border: "1px solid rgba(255,255,255,0.18)",
+    color: "#E2E8F0",
+    width: "32px",
+    height: "32px",
+    borderRadius: "8px",
+    cursor: "pointer",
+    fontSize: "16px",
+    fontFamily: "inherit",
+  },
+  section: {
+    marginTop: "18px",
+    paddingTop: "16px",
+    borderTop: "1px solid rgba(255,255,255,0.08)",
+  },
+  sectionTitle: {
+    fontSize: "12px",
+    fontWeight: 700,
+    color: "#93C5FD",
+    letterSpacing: "0.16em",
+    textTransform: "uppercase",
+    marginBottom: "10px",
+  },
+  pdfRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "12px",
+    padding: "10px 12px",
+    background: "rgba(15,23,42,0.7)",
+    borderRadius: "10px",
+    border: "1px solid rgba(255,255,255,0.08)",
+    marginBottom: "8px",
+  },
+  pdfName: {
+    fontSize: "13px",
+    color: "#E2E8F0",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  pdfLink: {
+    flexShrink: 0,
+    padding: "6px 10px",
+    borderRadius: "8px",
+    background: "rgba(59,130,246,0.22)",
+    border: "1px solid rgba(59,130,246,0.5)",
+    color: "#BFDBFE",
+    textDecoration: "none",
+    fontSize: "12px",
+    fontWeight: 600,
+  },
+  fotosGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))",
+    gap: "10px",
+  },
+  fotoItem: {
+    background: "rgba(15,23,42,0.7)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: "10px",
+    overflow: "hidden",
+    textDecoration: "none",
+    color: "inherit",
+    display: "block",
+  },
+  fotoImg: {
+    display: "block",
+    width: "100%",
+    height: "100px",
+    objectFit: "cover",
+    background: "#0f172a",
+  },
+  fotoMeta: {
+    padding: "6px 8px",
+    fontSize: "11px",
+    color: "#94A3B8",
+  },
+  firmaWrap: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px",
+  },
+  firmaImg: {
+    maxWidth: "260px",
+    maxHeight: "150px",
+    background: "#fff",
+    borderRadius: "8px",
+    border: "1px solid rgba(255,255,255,0.16)",
+    padding: "6px",
+    objectFit: "contain",
+  },
+  emptyText: {
+    color: "#94A3B8",
+    fontSize: "12px",
+  },
+  errorText: {
+    color: "#FCA5A5",
+    fontSize: "12px",
+  },
+};
+
+const ESTADOS_FINALIZADOS = ["ENTREGADO", "ENTREGADA"];
+
+function formatFecha(value) {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("es-CL");
+}
+
+function EvidenciasModal({ despacho, evidencias, loading, error, onClose }) {
+  // Cierra con Escape para mejor UX (sin alterar estilos visibles).
+  useEffect(() => {
+    function onKey(e) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const pdfs = evidencias?.pdfs || [];
+  const fotos = evidencias?.fotos || [];
+  const firmaUrl = evidencias?.firmaUrl || null;
+  const noHayNada =
+    !loading && !error && pdfs.length === 0 && fotos.length === 0 && !firmaUrl;
+
+  return (
+    <div
+      style={modalStyles.overlay}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div style={modalStyles.dialog}>
+        <div style={modalStyles.header}>
+          <div>
+            <div style={modalStyles.headerTitle}>Evidencias del despacho</div>
+            <div style={modalStyles.headerSub}>
+              {despacho?.clientes?.nombre || "Cliente N/A"} ·{" "}
+              {despacho?.destino || "Destino N/A"} ·{" "}
+              {formatFecha(
+                despacho?.fecha_fin ||
+                  despacho?.fecha_inicio ||
+                  despacho?.created_at
+              )}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            style={modalStyles.closeButton}
+            aria-label="Cerrar"
+          >
+            ✕
+          </button>
+        </div>
+
+        {loading && <p style={modalStyles.emptyText}>Cargando evidencias…</p>}
+        {error && (
+          <p style={modalStyles.errorText}>
+            No se pudieron cargar las evidencias: {error}
+          </p>
+        )}
+
+        {!loading && !error && noHayNada && (
+          <p style={modalStyles.emptyText}>Sin evidencias disponibles.</p>
+        )}
+
+        {!loading && !error && (pdfs.length > 0 || fotos.length > 0 || firmaUrl) && (
+          <>
+            <div style={modalStyles.section}>
+              <div style={modalStyles.sectionTitle}>📄 Comprobante PDF</div>
+              {pdfs.length === 0 ? (
+                <p style={modalStyles.emptyText}>Sin comprobante adjunto.</p>
+              ) : (
+                pdfs.map((pdf, idx) => (
+                  <div key={pdf.url || idx} style={modalStyles.pdfRow}>
+                    <span style={modalStyles.pdfName} title={pdf.nombre}>
+                      {pdf.nombre}
+                    </span>
+                    <a
+                      href={pdf.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={modalStyles.pdfLink}
+                    >
+                      Ver comprobante
+                    </a>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div style={modalStyles.section}>
+              <div style={modalStyles.sectionTitle}>📷 Fotos de trazabilidad</div>
+              {fotos.length === 0 ? (
+                <p style={modalStyles.emptyText}>
+                  Sin fotos de trazabilidad para este viaje.
+                </p>
+              ) : (
+                <div style={modalStyles.fotosGrid}>
+                  {fotos.map((foto) => (
+                    <a
+                      key={foto.id}
+                      href={foto.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={modalStyles.fotoItem}
+                      title={foto.etapa || "Foto"}
+                    >
+                      <img
+                        src={foto.url}
+                        alt={foto.etapa || "evidencia"}
+                        style={modalStyles.fotoImg}
+                        loading="lazy"
+                      />
+                      <div style={modalStyles.fotoMeta}>
+                        {foto.etapa || "—"}
+                        {foto.timestamp
+                          ? " · " + formatFecha(foto.timestamp)
+                          : ""}
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={modalStyles.section}>
+              <div style={modalStyles.sectionTitle}>✍️ Firma del cliente</div>
+              {!firmaUrl ? (
+                <p style={modalStyles.emptyText}>Sin firma registrada.</p>
+              ) : (
+                <div style={modalStyles.firmaWrap}>
+                  <img
+                    src={firmaUrl}
+                    alt="Firma del cliente"
+                    style={modalStyles.firmaImg}
+                  />
+                  <a
+                    href={firmaUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={modalStyles.pdfLink}
+                  >
+                    Abrir firma en pestaña nueva
+                  </a>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function HistorialDespachos() {
   const [historial, setHistorial] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Estado del modal de evidencias.
+  const [seleccionado, setSeleccionado] = useState(null);
+  const [modalEvidencias, setModalEvidencias] = useState(null);
+  const [modalLoading, setModalLoading] = useState(false);
+  const [modalError, setModalError] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,38 +394,19 @@ export default function HistorialDespachos() {
     async function cargarHistorial() {
       setLoading(true);
 
-      // Intento 1: pedir directamente filtrado por backend (estado=ENTREGADA).
       let lista = [];
-      let firstError = null;
-
-      for (const estado of ESTADOS_FINALIZADOS) {
-        const res = await apiFetch(`/api/rutas?estado=${encodeURIComponent(estado)}`);
-        if (res.ok) {
-          const payload = res.data;
-          const data = Array.isArray(payload) ? payload : payload?.data ?? [];
-          lista = lista.concat(data);
-        } else if (!firstError) {
-          firstError = res.error;
-        }
+      const resAll = await apiFetch("/api/rutas");
+      if (resAll.ok) {
+        const payload = resAll.data;
+        const data = Array.isArray(payload) ? payload : payload?.data ?? [];
+        lista = data.filter((ruta) =>
+          ESTADOS_FINALIZADOS.includes(String(ruta?.estado || "").toUpperCase())
+        );
+      } else {
+        console.error("Error cargando historial de rutas:", resAll.error);
       }
 
-      // Fallback: si los dos intentos anteriores fallaron, traer todo y filtrar.
-      if (lista.length === 0 && firstError) {
-        const resAll = await apiFetch("/api/rutas");
-        if (resAll.ok) {
-          const payload = resAll.data;
-          const data = Array.isArray(payload) ? payload : payload?.data ?? [];
-          lista = data.filter((ruta) =>
-            ESTADOS_FINALIZADOS.includes(String(ruta?.estado || "").toUpperCase())
-          );
-        } else {
-          console.error("Error cargando historial de rutas:", resAll.error);
-        }
-      }
-
-      // Deduplicar por id por si el backend retorna ambos casings.
       const dedup = Array.from(new Map(lista.map((r) => [r.id, r])).values());
-      // Ordenar más recientes primero (fecha_fin > fecha_inicio > created_at).
       dedup.sort((a, b) => {
         const da = new Date(a.fecha_fin || a.fecha_inicio || a.created_at || 0).getTime();
         const db = new Date(b.fecha_fin || b.fecha_inicio || b.created_at || 0).getTime();
@@ -119,6 +423,40 @@ export default function HistorialDespachos() {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  const abrirEvidencias = useCallback(async (despacho) => {
+    setSeleccionado(despacho);
+    setModalEvidencias(null);
+    setModalError(null);
+    setModalLoading(true);
+
+    try {
+      const res = await apiFetch(`/api/rutas/${despacho.id}/evidencias`);
+      if (!res.ok) {
+        setModalError(res.error || "Error desconocido");
+        setModalEvidencias(null);
+      } else {
+        const payload = res.data?.data ?? res.data ?? {};
+        setModalEvidencias({
+          pdfs: Array.isArray(payload.pdfs) ? payload.pdfs : [],
+          fotos: Array.isArray(payload.fotos) ? payload.fotos : [],
+          firmaUrl: payload.firmaUrl || null,
+        });
+      }
+    } catch (e) {
+      setModalError(e?.message || "Error de red");
+      setModalEvidencias(null);
+    } finally {
+      setModalLoading(false);
+    }
+  }, []);
+
+  const cerrarModal = useCallback(() => {
+    setSeleccionado(null);
+    setModalEvidencias(null);
+    setModalError(null);
+    setModalLoading(false);
   }, []);
 
   return (
@@ -141,7 +479,7 @@ export default function HistorialDespachos() {
                   <th style={base.th}>Destino</th>
                   <th style={base.th}>Finalizado</th>
                   <th style={base.th}>Estado</th>
-                  <th style={base.th}>Ficha Adjunta</th>
+                  <th style={base.th}>Evidencias</th>
                 </tr>
               </thead>
               <tbody>
@@ -160,28 +498,20 @@ export default function HistorialDespachos() {
                       </div>
                     </td>
                     <td style={base.td}>{despacho.destino}</td>
-                    <td style={base.td}>
-                      {(() => {
-                        const fecha = despacho.fecha_fin || despacho.fecha_inicio || despacho.created_at;
-                        return fecha ? new Date(fecha).toLocaleString("es-CL") : "—";
-                      })()}
-                    </td>
+                    <td style={base.td}>{formatFecha(
+                      despacho.fecha_fin || despacho.fecha_inicio || despacho.created_at
+                    )}</td>
                     <td style={base.td}>
                       <span style={base.badge}>✅ {despacho.estado}</span>
                     </td>
                     <td style={base.td}>
-                      {despacho.ficha_despacho_url ? (
-                        <a
-                          href={despacho.ficha_despacho_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{ color: "#3B82F6", textDecoration: "none", fontWeight: 600, fontSize: "12px" }}
-                        >
-                          📄 Ver Ficha
-                        </a>
-                      ) : (
-                        <span style={{ color: "#94A3B8", fontSize: "12px" }}>Sin ficha</span>
-                      )}
+                      <button
+                        type="button"
+                        style={base.evidenciasButton}
+                        onClick={() => abrirEvidencias(despacho)}
+                      >
+                        🔍 Ver evidencias
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -190,6 +520,16 @@ export default function HistorialDespachos() {
           </div>
         )}
       </div>
+
+      {seleccionado && (
+        <EvidenciasModal
+          despacho={seleccionado}
+          evidencias={modalEvidencias}
+          loading={modalLoading}
+          error={modalError}
+          onClose={cerrarModal}
+        />
+      )}
     </div>
   );
 }

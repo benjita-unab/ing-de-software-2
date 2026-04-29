@@ -79,14 +79,15 @@ export class RutasService {
       throw new ForbiddenException('La ruta ya tiene un conductor asignado');
     }
 
-    // PASO 4: Actualizar ruta con conductor y camión
+    // PASO 4: Actualizar ruta con conductor y camión.
+    // El enum real `estado_ruta` usa 'ASIGNADO' (masculino), no 'ASIGNADA'.
     const { data: rutaActualizada, error: updateError } = await supabase
       .from('rutas')
       .update({
         conductor_id: conductorId,
         camion_id: camionId,
         fecha_inicio: new Date().toISOString(),
-        estado: 'ASIGNADA',
+        estado: 'ASIGNADO',
       })
       .eq('id', rutaId)
       .select();
@@ -99,7 +100,7 @@ export class RutasService {
     await supabase.from('historial_estados').insert([
       {
         ruta_id: rutaId,
-        estado: 'ASIGNADA',
+        estado: 'ASIGNADO',
         created_at: new Date().toISOString(),
       },
     ]);
@@ -111,7 +112,7 @@ export class RutasService {
         rutaId,
         conductorId,
         camionId,
-        estado: 'ASIGNADA',
+        estado: 'ASIGNADO',
       },
     };
   }
@@ -197,8 +198,17 @@ export class RutasService {
 
     const supabase = this.supabaseConfig.getClient();
 
-    // Estados válidos
-    const estadosValidos = ['PENDIENTE', 'ASIGNADA', 'EN_PROCESO', 'ENTREGADA', 'CANCELADA'];
+    // Enum real `estado_ruta` en Supabase.
+    const estadosValidos = [
+      'PENDIENTE',
+      'ASIGNADO',
+      'EN_CAMINO_ORIGEN',
+      'EN_CARGA',
+      'EN_TRANSITO',
+      'EN_DESTINO',
+      'ENTREGADO',
+      'CANCELADO',
+    ];
 
     if (!estadosValidos.includes(nuevoEstado)) {
       throw new BadRequestException(`Estado inválido. Acepta: ${estadosValidos.join(', ')}`);
@@ -208,7 +218,7 @@ export class RutasService {
       .from('rutas')
       .update({
         estado: nuevoEstado,
-        fecha_fin: nuevoEstado === 'ENTREGADA' ? new Date().toISOString() : null,
+        fecha_fin: nuevoEstado === 'ENTREGADO' ? new Date().toISOString() : null,
       })
       .eq('id', rutaId)
       .select();
@@ -274,5 +284,179 @@ export class RutasService {
     }
 
     return rutas || [];
+  }
+
+  /**
+   * Devuelve las evidencias de una ruta:
+   *  - `pdfs`: comprobantes guardados en Supabase Storage,
+   *    bucket `entregas`, carpeta `comprobantes/{rutaId}/...`.
+   *  - `fotos`: imágenes de trazabilidad. Preferimos la tabla `fotos`
+   *    (tiene `ruta_id` directo); como fallback, `traceability_events`
+   *    filtrados por ventana temporal porque ese registro no tiene `ruta_id`.
+   *  - `firmaUrl`: firma del cliente. Primero `entregas.firma_url` por
+   *    `ruta_id`; como fallback, busca en el bucket `fotos_trazabilidad/firmas/`
+   *    archivos cuyo nombre empiece con `{rutaId}-`.
+   */
+  async getEvidencias(rutaId: string) {
+    if (!rutaId) {
+      throw new BadRequestException('rutaId es requerido');
+    }
+
+    const supabase = this.supabaseConfig.getClient();
+
+    const { data: ruta, error: rutaError } = await supabase
+      .from('rutas')
+      .select('id, fecha_inicio, fecha_fin')
+      .eq('id', rutaId)
+      .single();
+
+    if (rutaError || !ruta) {
+      throw new NotFoundException('Ruta no encontrada');
+    }
+
+    // ── 1) PDFs en bucket `entregas`, carpeta `comprobantes/{rutaId}/...`
+    const pdfFiles = await this.supabaseConfig.listFiles(
+      'entregas',
+      `comprobantes/${rutaId}`,
+    );
+
+    const pdfs = pdfFiles
+      .filter((f) => f.name.toLowerCase().endsWith('.pdf'))
+      .map((f) => ({
+        nombre: f.name,
+        url: this.supabaseConfig.getPublicUrl(
+          'entregas',
+          `comprobantes/${rutaId}/${f.name}`,
+        ),
+      }))
+      .filter((p) => !!p.url);
+
+    // ── 2) Fotos de trazabilidad
+    const fotos: Array<{
+      id: string;
+      etapa: string | null;
+      url: string;
+      timestamp: string | null;
+    }> = [];
+
+    // 2a) Tabla `fotos` (vínculo directo por ruta_id)
+    const { data: fotosRow } = await supabase
+      .from('fotos')
+      .select('id, etapa, url, created_at')
+      .eq('ruta_id', rutaId)
+      .order('created_at', { ascending: true });
+
+    for (const f of fotosRow || []) {
+      if (!f?.url) continue;
+      fotos.push({
+        id: String(f.id),
+        etapa: f.etapa ?? null,
+        url: f.url,
+        timestamp: f.created_at ?? null,
+      });
+    }
+
+    // 2b) Fallback en `traceability_events` SOLO si la tabla `fotos`
+    //     no devolvió nada. Estrategia en dos pasos:
+    //       1) Preferir eventos con `ruta_id = X` (fuente confiable).
+    //       2) Si la columna no existe aún (pre-migración) o no hay
+    //          eventos con ese ruta_id, caer al filtro por ventana
+    //          temporal usando rutas.fecha_inicio/fecha_fin.
+    if (fotos.length === 0) {
+      let traceEvents: Array<{
+        id: string | null;
+        etapa: string | null;
+        foto_uri: string | null;
+        timestamp_evento: string | null;
+      }> = [];
+
+      // Intento por ruta_id directo. Si la columna aún no existe en BD,
+      // PostgREST devuelve un error: lo capturamos y caemos al fallback.
+      const exactos = await supabase
+        .from('traceability_events')
+        .select('id, etapa, foto_uri, timestamp_evento')
+        .eq('ruta_id', rutaId)
+        .order('timestamp_evento', { ascending: true });
+
+      const colMissing =
+        exactos.error &&
+        ['42703', 'PGRST204'].includes(
+          (exactos.error as { code?: string }).code || '',
+        );
+
+      if (!exactos.error && exactos.data && exactos.data.length > 0) {
+        traceEvents = exactos.data;
+      } else if (
+        (colMissing || (!exactos.error && (exactos.data || []).length === 0)) &&
+        ruta.fecha_inicio
+      ) {
+        const desde = ruta.fecha_inicio as unknown as string;
+        const hasta =
+          (ruta.fecha_fin as unknown as string) || new Date().toISOString();
+
+        const fallback = await supabase
+          .from('traceability_events')
+          .select('id, etapa, foto_uri, timestamp_evento')
+          .gte('timestamp_evento', desde)
+          .lte('timestamp_evento', hasta)
+          .order('timestamp_evento', { ascending: true });
+
+        traceEvents = fallback.data || [];
+      }
+
+      for (const ev of traceEvents) {
+        if (!ev?.foto_uri) continue;
+        const url = this.supabaseConfig.getPublicUrl(
+          'fotos_trazabilidad',
+          ev.foto_uri,
+        );
+        if (!url) continue;
+        fotos.push({
+          id: String(ev.id),
+          etapa: ev.etapa ?? null,
+          url,
+          timestamp: ev.timestamp_evento ?? null,
+        });
+      }
+    }
+
+    // ── 3) Firma: primero tabla `entregas`, fallback storage
+    let firmaUrl: string | null = null;
+
+    const { data: entregasRows } = await supabase
+      .from('entregas')
+      .select('firma_url, fecha_entrega_real, created_at')
+      .eq('ruta_id', rutaId)
+      .order('created_at', { ascending: false });
+
+    for (const e of entregasRows || []) {
+      const candidate = (e?.firma_url || '').toString().trim();
+      // Datos legacy guardaron literalmente la cadena "null".
+      if (candidate && candidate.toLowerCase() !== 'null') {
+        firmaUrl = candidate;
+        break;
+      }
+    }
+
+    if (!firmaUrl) {
+      const firmaFiles = await this.supabaseConfig.listFiles(
+        'fotos_trazabilidad',
+        'firmas',
+      );
+      const match = firmaFiles.find((f) => f.name.startsWith(`${rutaId}-`));
+      if (match) {
+        firmaUrl = this.supabaseConfig.getPublicUrl(
+          'fotos_trazabilidad',
+          `firmas/${match.name}`,
+        );
+      }
+    }
+
+    return {
+      rutaId,
+      pdfs,
+      fotos,
+      firmaUrl,
+    };
   }
 }

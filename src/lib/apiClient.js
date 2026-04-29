@@ -20,6 +20,12 @@ export function getApiBaseUrl() {
   return String(raw).replace(/\/+$/, '').replace(/\/api$/, '');
 }
 
+// TEMP: diagnóstico de "Failed to fetch" — eliminar luego de validar.
+if (typeof window !== 'undefined') {
+  // eslint-disable-next-line no-console
+  console.log('WEB API BASE URL:', getApiBaseUrl());
+}
+
 export function getAuthToken() {
   if (typeof window === 'undefined') return null;
   return (

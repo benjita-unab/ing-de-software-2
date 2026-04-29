@@ -71,7 +71,12 @@ const base = {
   },
 };
 
-const ESTADOS_FINALIZADOS = new Set(["ENTREGADA", "ENTREGADO", "CANCELADA"]);
+const ESTADOS_FINALIZADOS = new Set([
+  "ENTREGADO",
+  "ENTREGADA",
+  "CANCELADO",
+  "CANCELADA",
+]);
 
 export default function RutasActivas() {
   const [rutas, setRutas] = useState([]);
