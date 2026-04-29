@@ -51,6 +51,8 @@ function buildMapsLink(alert) {
 export default function AlertDetailPanel({ alert, onAcknowledge, onResolve, currentOperatorId }) {
   const [isAcknowledging, setIsAcknowledging] = useState(false);
   const [isResolving, setIsResolving]         = useState(false);
+  const [ackError, setAckError]               = useState(null);
+  const [resolveError, setResolveError]       = useState(null);
 
   // ── Estado vacío ────────────────────────────────────────────────────────
   if (!alert) {
@@ -73,15 +75,29 @@ export default function AlertDetailPanel({ alert, onAcknowledge, onResolve, curr
   const mapsLink   = buildMapsLink(alert);
 
   async function handleAcknowledge() {
+    setAckError(null);
     setIsAcknowledging(true);
-    await onAcknowledge(alert.id, currentOperatorId);
-    setIsAcknowledging(false);
+    try {
+      const res = await onAcknowledge(alert.id, currentOperatorId);
+      if (res && res.ok === false) {
+        setAckError(res.message || "No se pudo registrar el acuse.");
+      }
+    } finally {
+      setIsAcknowledging(false);
+    }
   }
 
   async function handleResolve() {
+    setResolveError(null);
     setIsResolving(true);
-    await onResolve(alert.id);
-    setIsResolving(false);
+    try {
+      const res = await onResolve(alert.id);
+      if (res && res.ok === false) {
+        setResolveError(res.message || "No se pudo marcar como resuelta.");
+      }
+    } finally {
+      setIsResolving(false);
+    }
   }
 
   return (
@@ -188,10 +204,12 @@ export default function AlertDetailPanel({ alert, onAcknowledge, onResolve, curr
         padding: "16px 28px",
         borderTop: "1px solid rgba(255,255,255,0.12)",
         display: "flex",
+        flexDirection: "column",
         gap: "10px",
         flexShrink: 0,
         background: "rgba(8,8,12,0.5)",
       }}>
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
         {isPending && (
           <button
             id="btn-acuse-recibo"
@@ -215,6 +233,23 @@ export default function AlertDetailPanel({ alert, onAcknowledge, onResolve, curr
         {!isPending && !isManaging && (
           <p style={{ color: "#445", fontSize: "13px", margin: 0, fontFamily: "'DM Mono', monospace" }}>
             Esta alerta ya fue resuelta.
+          </p>
+        )}
+        </div>
+        {(ackError || resolveError) && (
+          <p
+            role="alert"
+            style={{
+              margin: 0,
+              padding: "10px 12px",
+              fontSize: "12px",
+              color: "#ffcdd2",
+              background: "#b71c1c33",
+              borderRadius: "8px",
+              border: "1px solid #ff525280",
+            }}
+          >
+            {ackError || resolveError}
           </p>
         )}
       </div>

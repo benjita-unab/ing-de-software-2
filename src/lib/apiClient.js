@@ -47,9 +47,23 @@ export function clearAuthToken() {
   localStorage.removeItem(TOKEN_KEY_LEGACY);
 }
 
+/** Debe coincidir con DEBUG_EMAIL / DEBUG_PASSWORD del backend (.env). */
+function defaultLoginCredentials() {
+  return {
+    email:
+      process.env.REACT_APP_DEBUG_EMAIL ||
+      process.env.REACT_APP_AUTH_EMAIL ||
+      'test@test.com',
+    password:
+      process.env.REACT_APP_DEBUG_PASSWORD ||
+      process.env.REACT_APP_AUTH_PASSWORD ||
+      '123456',
+  };
+}
+
 export async function loginWeb(
-  email = 'test@test.com',
-  password = '123456',
+  email = defaultLoginCredentials().email,
+  password = defaultLoginCredentials().password,
 ) {
   const baseUrl = getApiBaseUrl();
   const res = await fetch(`${baseUrl}/api/auth/login`, {
@@ -59,6 +73,12 @@ export async function loginWeb(
   });
 
   const data = await res.json().catch(() => ({}));
+
+  // eslint-disable-next-line no-console
+  console.log(
+    'WEB LOGIN status',
+    res.ok ? `ok ${res.status}` : `fail ${res.status}`,
+  );
 
   if (!res.ok || !data?.accessToken) {
     throw new Error(
@@ -73,13 +93,16 @@ export async function loginWeb(
 /**
  * Wrapper genérico para llamadas al backend autenticadas.
  *
+ * Si la respuesta es 401 con `auth: true`, borra token, intenta login una vez
+ * y reintenta la petición original una sola vez (sin bucles).
+ *
  * @param {string} path - Path absoluto que comienza con `/api/...`.
  * @param {RequestInit & { auth?: boolean, json?: any }} [options]
  *   - `auth`: si es true (default) agrega `Authorization: Bearer <token>`.
  *   - `json`: si se entrega, serializa a JSON y setea Content-Type.
  * @returns {Promise<{ ok: boolean, status: number, data: any, error: string|null }>}
  */
-export async function apiFetch(path, options = {}) {
+async function apiFetchOnce(path, options, isRetryAfter401) {
   const { auth = true, json, headers, body, ...rest } = options;
   const baseUrl = getApiBaseUrl();
   const url = `${baseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
@@ -99,6 +122,13 @@ export async function apiFetch(path, options = {}) {
     }
   }
 
+  if (typeof window !== 'undefined') {
+    // eslint-disable-next-line no-console
+    console.log('WEB TOKEN exists', !!getAuthToken());
+    // eslint-disable-next-line no-console
+    console.log('WEB AUTH HEADER present', !!finalHeaders['Authorization']);
+  }
+
   let response;
   try {
     response = await fetch(url, { ...rest, headers: finalHeaders, body: finalBody });
@@ -114,6 +144,26 @@ export async function apiFetch(path, options = {}) {
     data = null;
   }
 
+  if (response.status === 401 && auth && !isRetryAfter401) {
+    // eslint-disable-next-line no-console
+    console.warn('WEB apiFetch -> 401, token limpio + login automático una vez');
+    clearAuthToken();
+    try {
+      await loginWeb();
+    } catch (loginErr) {
+      const msg =
+        loginErr instanceof Error ? loginErr.message : String(loginErr);
+      // eslint-disable-next-line no-console
+      console.log('WEB LOGIN status fail after 401', msg);
+      const error =
+        (data && (data.message || data.error)) ||
+        msg ||
+        `HTTP ${response.status}`;
+      return { ok: false, status: 401, data, error };
+    }
+    return apiFetchOnce(path, options, true);
+  }
+
   if (!response.ok) {
     const error =
       (data && (data.message || data.error)) ||
@@ -122,4 +172,8 @@ export async function apiFetch(path, options = {}) {
   }
 
   return { ok: true, status: response.status, data, error: null };
+}
+
+export async function apiFetch(path, options = {}) {
+  return apiFetchOnce(path, options, false);
 }

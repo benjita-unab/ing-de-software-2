@@ -7,6 +7,12 @@ import { json, urlencoded } from 'express';
 import type { NextFunction, Request, Response } from 'express';
 
 async function bootstrap() {
+  console.log('BACKEND ENV CHECK:', {
+    DEBUG_EMAIL_defined: !!process.env.DEBUG_EMAIL,
+    DEBUG_PASSWORD_defined: !!process.env.DEBUG_PASSWORD,
+    JWT_SECRET_defined: !!process.env.JWT_SECRET,
+  });
+
   // Desactivamos el bodyParser default de Nest para poder definir nuestros
   // propios límites (las fichas de despacho llegan como base64 ~5–15 MB).
   const app = await NestFactory.create(AppModule, {

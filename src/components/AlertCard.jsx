@@ -52,21 +52,37 @@ export default function AlertCard({
 }) {
   const [isAcknowledging, setIsAcknowledging] = useState(false);
   const [isResolving, setIsResolving]         = useState(false);
+  const [ackError, setAckError]               = useState(null);
+  const [resolveError, setResolveError]       = useState(null);
 
   const cfg       = PRIORITY_CONFIG[alert.priority] ?? PRIORITY_CONFIG.NORMAL;
   const isPending = alert.status === "PENDIENTE";
   const isManaging = alert.status === "EN_GESTION";
 
   async function handleAcknowledge() {
+    setAckError(null);
     setIsAcknowledging(true);
-    await onAcknowledge(alert.id, currentOperatorId);
-    setIsAcknowledging(false);
+    try {
+      const res = await onAcknowledge(alert.id, currentOperatorId);
+      if (res && res.ok === false) {
+        setAckError(res.message || "No se pudo registrar el acuse.");
+      }
+    } finally {
+      setIsAcknowledging(false);
+    }
   }
 
   async function handleResolve() {
+    setResolveError(null);
     setIsResolving(true);
-    await onResolve(alert.id);
-    setIsResolving(false);
+    try {
+      const res = await onResolve(alert.id);
+      if (res && res.ok === false) {
+        setResolveError(res.message || "No se pudo marcar como resuelta.");
+      }
+    } finally {
+      setIsResolving(false);
+    }
   }
 
   const mapsLink = buildMapsLink(alert);
@@ -167,6 +183,22 @@ export default function AlertCard({
           {isSelected ? "✦ Seleccionada" : "Ver Detalle →"}
         </button>
       </div>
+      {(ackError || resolveError) && (
+        <p
+          role="alert"
+          style={{
+            margin: "10px 0 0",
+            padding: "8px 10px",
+            fontSize: "12px",
+            color: "#ffcdd2",
+            background: "#b71c1c33",
+            borderRadius: "8px",
+            border: "1px solid #ff525280",
+          }}
+        >
+          {ackError || resolveError}
+        </p>
+      )}
     </div>
   );
 }

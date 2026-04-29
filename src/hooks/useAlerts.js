@@ -5,22 +5,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useState, useCallback } from "react";
-import { getAuthToken, loginWeb, getApiBaseUrl } from "../lib/apiClient";
-
-async function ensureToken() {
-  let token = getAuthToken();
-  if (!token) {
-    try {
-      token = await loginWeb();
-    } catch (e) {
-      console.error("Auto-login web falló:", e?.message || e);
-      return null;
-    }
-  }
-  return token;
-}
-
-const API_BASE_URL = getApiBaseUrl();
+import { apiFetch } from "../lib/apiClient";
 
 // ── Mapeo de valores de tipo/estado/prioridad ───────────────────────────────
 const TIPO_MAP = {
@@ -31,12 +16,18 @@ const TIPO_MAP = {
   MANTENCION:   "MANTENCION",
 };
 
+/** BD Supabase (`estado_incidencia`) usa etiquetas en minúsculas; la UI sigue usando tokens EN_* */
 const ESTADO_MAP = {
-  PENDIENTE:  "PENDIENTE",
+  // Enum Postgres actual: pendiente | en curso | resuelto
+  pendiente: "PENDIENTE",
+  "en curso": "EN_GESTION",
+  resuelto: "RESUELTA",
+  // Compatibilidad si algún entorno envía mayúsculas antiguas
+  PENDIENTE: "PENDIENTE",
   EN_GESTION: "EN_GESTION",
-  ATENDIDO:   "EN_GESTION",
-  RESUELTO:   "RESUELTA",
-  RESUELTA:   "RESUELTA",
+  ATENDIDO: "EN_GESTION",
+  RESUELTO: "RESUELTA",
+  RESUELTA: "RESUELTA",
 };
 
 const PRIORIDAD_MAP = {
@@ -95,6 +86,18 @@ function mapIncidencia(row) {
 // ── Orden de prioridad ──────────────────────────────────────────────────────
 const PRIORITY_ORDER = { CRITICA: 0, ALTA: 1, NORMAL: 2, BAJA: 3 };
 
+function friendlyApiFailure(result, fallback) {
+  const raw =
+    result?.data?.message ??
+    result?.data?.error ??
+    result?.error ??
+    "";
+  const text = Array.isArray(raw) ? raw.join(" ") : String(raw || "");
+  const trimmed = text.trim();
+  if (trimmed && trimmed.length < 280) return trimmed;
+  return fallback;
+}
+
 function sortAlerts(alerts) {
   return [...alerts].sort((a, b) => {
     const pa = PRIORITY_ORDER[a.priority] ?? 99;
@@ -112,24 +115,13 @@ export function useAlerts() {
   useEffect(() => {
     async function fetchAlerts() {
       setLoading(true);
-      const token = await ensureToken();
-      if (!token) {
-        console.warn("No authentication token found");
-        setLoading(false);
-        return;
-      }
-
       try {
-        const response = await fetch(`${API_BASE_URL}/api/incidencias`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        if (!response.ok) {
-          throw new Error(`Failed to fetch alerts: ${response.statusText}`);
+        const result = await apiFetch("/api/incidencias");
+        if (!result.ok) {
+          throw new Error(result.error || `HTTP ${result.status}`);
         }
-
-        const data = await response.json();
-        const alerts_array = Array.isArray(data) ? data : data.data || [];
+        const data = result.data;
+        const alerts_array = Array.isArray(data) ? data : data?.data || [];
         setAlerts(sortAlerts(alerts_array.map(mapIncidencia)));
       } catch (error) {
         console.error("Error al cargar incidencias:", error?.message);
@@ -145,28 +137,18 @@ export function useAlerts() {
     let interval;
     let cancelled = false;
 
-    (async () => {
-      const initialToken = await ensureToken();
-      if (!initialToken || cancelled) return;
-
-      interval = setInterval(async () => {
-        const token = getAuthToken();
-        if (!token) return;
-        try {
-          const response = await fetch(`${API_BASE_URL}/api/incidencias`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-
-          if (!response.ok) return;
-
-          const data = await response.json();
-          const alerts_array = Array.isArray(data) ? data : data.data || [];
-          setAlerts(sortAlerts(alerts_array.map(mapIncidencia)));
-        } catch (error) {
-          console.warn("Polling error:", error?.message);
-        }
-      }, 5000);
-    })();
+    interval = setInterval(async () => {
+      if (cancelled) return;
+      try {
+        const result = await apiFetch("/api/incidencias");
+        if (!result.ok) return;
+        const data = result.data;
+        const alerts_array = Array.isArray(data) ? data : data?.data || [];
+        setAlerts(sortAlerts(alerts_array.map(mapIncidencia)));
+      } catch (error) {
+        console.warn("Polling error:", error?.message);
+      }
+    }, 5000);
 
     return () => {
       cancelled = true;
@@ -176,64 +158,61 @@ export function useAlerts() {
 
   // ── Acuse de Recibo (CA-3) ─────────────────────────────────────────────────
   const acknowledgeAlert = useCallback(async (alertId, operatorId) => {
-    const token = await ensureToken();
-    if (!token) {
-      console.warn("No authentication token found");
-      return false;
-    }
-
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/incidencias/${alertId}/acknowledge`,
+      const result = await apiFetch(
+        `/api/incidencias/${alertId}/acknowledge`,
         {
           method: "PATCH",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ operatorId }),
+          json: { operatorId },
         }
       );
 
-      if (!response.ok) {
-        throw new Error(`Failed to acknowledge alert: ${response.statusText}`);
+      if (!result.ok) {
+        const msg = friendlyApiFailure(
+          result,
+          result.status >= 500
+            ? "El servidor no pudo registrar el acuse. La alerta sigue visible; intenta de nuevo en un momento."
+            : "No se pudo registrar el acuse."
+        );
+        console.warn("acuse incidencia:", result.status, msg);
+        return { ok: false, message: msg };
       }
 
-      return true;
+      return { ok: true };
     } catch (error) {
-      console.error("Error al hacer acuse de recibo:", error?.message);
-      return false;
+      const msg =
+        error?.message ||
+        "No se pudo registrar el acuse. Comprueba tu conexión e intenta de nuevo.";
+      console.error("Error al hacer acuse de recibo:", msg);
+      return { ok: false, message: msg };
     }
   }, []);
 
   // ── Resolver incidencia ───────────────────────────────────────────────────
   const resolveAlert = useCallback(async (alertId) => {
-    const token = await ensureToken();
-    if (!token) {
-      console.warn("No authentication token found");
-      return false;
-    }
-
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/incidencias/${alertId}/resolve`,
-        {
-          method: "PATCH",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      const result = await apiFetch(`/api/incidencias/${alertId}/resolve`, {
+        method: "PATCH",
+      });
 
-      if (!response.ok) {
-        throw new Error(`Failed to resolve alert: ${response.statusText}`);
+      if (!result.ok) {
+        const msg = friendlyApiFailure(
+          result,
+          result.status >= 500
+            ? "No pudimos marcar la incidencia como resuelta. Intenta de nuevo en un momento."
+            : "No se pudo resolver la incidencia."
+        );
+        console.warn("resolver incidencia:", result.status, msg);
+        return { ok: false, message: msg };
       }
 
-      return true;
+      return { ok: true };
     } catch (error) {
-      console.error("Error al resolver incidencia:", error?.message);
-      return false;
+      const msg =
+        error?.message ||
+        "No se pudo resolver la incidencia. Comprueba tu conexión.";
+      console.error("Error al resolver incidencia:", msg);
+      return { ok: false, message: msg };
     }
   }, []);
 
