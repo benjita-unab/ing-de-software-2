@@ -2,18 +2,20 @@ import { createClient } from "@supabase/supabase-js";
 
 // Necesitarás reemplazar estas variables por las reales que uses en tu .env o supabaseClient
 // Para el propósito de carga de datos rápida, utilizaremos process.env.
-// Asegúrate de correrlo con algo como: node seed_rutas.js
+// Ejecutar desde la carpeta `frontend`: `node scripts/seed_rutas.mjs`
 
-// Lee la configuración que deberías tener en "src/lib/supabaseClient.js". 
-// Vamos a requerirlas dinámicamente si es posible, o hardcodear para la prueba si las provees:
-import 'dotenv/config'; // Si usas dotenv
+// Lee la configuración en `src/lib/supabaseClient.js` (ruta relativa a este script).
 
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const frontendRoot = path.join(__dirname, '..');
+const supabaseClientPath = path.join(frontendRoot, 'src', 'lib', 'supabaseClient.js');
 
 async function run() {
-    // vamos a procesar supabaseClient.js para extraer las URL.
-    const file = fs.readFileSync(path.join(process.cwd(), 'src/lib/supabaseClient.js'), 'utf8');
+    const file = fs.readFileSync(supabaseClientPath, 'utf8');
     const urlMatch = file.match(/const supabaseUrl = (['"`])(.*?)\1/);
     const keyMatch = file.match(/const supabaseAnonKey = (['"`])(.*?)\1/);
     

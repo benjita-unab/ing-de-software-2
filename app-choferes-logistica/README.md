@@ -1,50 +1,88 @@
-# Welcome to your Expo app 👋
+# LogiTrack — App choferes (Expo)
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Aplicación móvil para conductores: trazabilidad, entregas, QR y cierre de despacho contra el backend LogiTrack.
 
-## Get started
+---
 
-1. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Cómo correr localmente
 
 ```bash
-npm run reset-project
+cd app-choferes-logistica
+npm install
+npx expo start -c
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+El flag `-c` limpia la caché de Metro; útil cuando cambias URLs o variables de entorno.
 
-## Learn more
+---
 
-To learn more about developing your project with Expo, look at the following resources:
+## Variables de entorno
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+Crea `app-choferes-logistica/.env` (plantilla: `.env.example`). Ejemplo con **placeholders** (no uses secretos reales en el repo):
 
-## Join the community
+```env
+EXPO_PUBLIC_API_URL=https://TU-TUNNEL.trycloudflare.com
+EXPO_PUBLIC_DEBUG_EMAIL=test@test.com
+EXPO_PUBLIC_DEBUG_PASSWORD=123456
+EXPO_PUBLIC_RUTA_ID=UUID_DE_RUTA_DE_PRUEBA
+```
 
-Join our community of developers creating universal apps.
+- `EXPO_PUBLIC_API_URL`: URL base del **backend** NestJS (en LAN con `http://TU_IP:3000`, o HTTPS del túnel).
+- Las variables `EXPO_PUBLIC_*` se incrustan en el bundle; reinicia Expo tras cualquier cambio.
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+---
+
+## Probar desde celular con Cloudflare Tunnel
+
+1. El backend en tu PC escucha en **`http://localhost:3000`**.
+2. Un celular **no** puede abrir `localhost` de tu ordenador.
+3. Opciones: IP en la misma Wi‑Fi (a veces bloqueada por firewall) o **exponer el backend** con Cloudflare.
+
+### Comando típico
+
+Con el backend ya en marcha (`cd backend && npm run start:dev`), en otra terminal:
+
+```bash
+cloudflared tunnel --url http://localhost:3000
+```
+
+Copia la URL generada, por ejemplo:
+
+`https://xxxxx.trycloudflare.com`
+
+Pégala en este archivo como:
+
+```env
+EXPO_PUBLIC_API_URL=https://xxxxx.trycloudflare.com
+```
+
+Guarda, y reinicia la app de desarrollo:
+
+```bash
+npx expo start -c
+```
+
+### Sobre `npx expo start --tunnel`
+
+Si **ngrok** o el túnel de Expo fallan, **no es requisito** para probar el API. Aquí el túnel de **Cloudflare expone el backend**; la app solo necesita `EXPO_PUBLIC_API_URL` correcta. No confundas el túnel de Expo con el de `cloudflared` hacia el puerto 3000.
+
+Opcional: el mismo dominio `trycloudflare.com` puede usarse en `frontend/.env` como `REACT_APP_API_URL` si quieres probar también el portal web contra ese endpoint (ver README raíz).
+
+---
+
+## Documentación
+
+- Repositorio (arquitectura, Docker, troubleshooting general): `../README.md`
+- Endpoints: `../docs/guias/guia_endpoints_logitrack.md`
+
+---
+
+## Troubleshooting
+
+| Problema | Qué revisar |
+|----------|-------------|
+| **Network request failed** | `EXPO_PUBLIC_API_URL` (HTTPS, URL actual del túnel, backend encendido). |
+| **HTTP 530** | Túnel cerrado o URL antigua; genera otra URL con `cloudflared` y actualiza `.env`. |
+| **401 Unauthorized** | Misma pareja `DEBUG_EMAIL` / `DEBUG_PASSWORD` que en `backend/.env`; `JWT_SECRET` coherente; borra sesión/token en la app si aplica. |
+| Cambié `.env` y no pasa nada | `npx expo start -c`; las variables se leen al empaquetar. |
+| Sigue usando IP o URL vieja | Limpia caché con `-c`; en Expo Go, borra datos de la app si hace falta. |

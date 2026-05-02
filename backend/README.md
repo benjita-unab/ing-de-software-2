@@ -1,464 +1,75 @@
-# 🚀 LogiTrack Backend API
+# LogiTrack — Backend (NestJS)
 
-Backend centralizado para el sistema de logística LogiTrack. Construido con **NestJS**, **TypeScript** y **Supabase**.
-
-## 📋 Tabla de Contenidos
-
-- [Características](#características)
-- [Requisitos](#requisitos)
-- [Instalación](#instalación)
-- [Configuración](#configuración)
-- [Ejecución](#ejecución)
-- [Estructura del Proyecto](#estructura-del-proyecto)
-- [API Endpoints](#api-endpoints)
-- [Seguridad](#seguridad)
-- [Despliegue](#despliegue)
-- [Troubleshooting](#troubleshooting)
+API REST para el portal web y la app móvil. Datos y archivos vía Supabase.
 
 ---
 
-## ✨ Características
-
-✅ **Autenticación JWT** - Validación de tokens Supabase  
-✅ **Validación de Licencias** - Verificación automática de licencias vigentes  
-✅ **Subida de Documentos** - Upload seguro a Supabase Storage  
-✅ **Gestión de Rutas** - Asignación de conductores y validaciones  
-✅ **Cierre de Entregas** - Generación de PDF y envío de comprobantes  
-✅ **Email Transaccional** - Integración con Resend  
-✅ **Tipo Seguro** - Código 100% TypeScript  
-✅ **Docker Ready** - Dockerfile multi-stage optimizado  
-
----
-
-## 📦 Requisitos
-
-- **Node.js** 18+ (recomendado 20)
-- **npm** 9+ o **pnpm**
-- **Docker & Docker Compose** (para despliegue)
-- **Cuenta Supabase** con Service Role Key
-- **Cuenta Resend** para emails
-
----
-
-## 🔧 Instalación
-
-### 1. Clonar y navegar al directorio backend
+## Cómo correr localmente
 
 ```bash
 cd backend
-```
-
-### 2. Instalar dependencias
-
-```bash
 npm install
-```
-
-### 3. Crear archivo `.env`
-
-Copia el archivo `.env.example` y completa con tus credenciales:
-
-```bash
-cp .env.example .env
-```
-
-Edita `.env` con:
-- `SUPABASE_URL` - URL de tu proyecto
-- `SUPABASE_SERVICE_ROLE_KEY` - Service Role Key (⚠️ SECRETO)
-- `SUPABASE_PUBLIC_KEY` - Public Key para JWT
-- `RESEND_API_KEY` - API Key de Resend
-
----
-
-## ⚙️ Configuración
-
-### Variables de Entorno Requeridas
-
-```env
-# Supabase (obligatorio)
-SUPABASE_URL=https://xxx.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=eyJhbGc...
-SUPABASE_PUBLIC_KEY=eyJhbGc...
-
-# Resend (obligatorio para emails)
-RESEND_API_KEY=re_...
-RESEND_FROM_EMAIL=noreply@tudominio.com
-
-# Opcional
-NODE_ENV=development
-PORT=3000
-LOG_LEVEL=debug
-```
-
-### Configuración de Supabase
-
-1. Crea los Storage buckets:
-   - `driver_licenses` - Licencias de conductores
-   - `entregas` - Firmas, fotos y comprobantes
-
-2. Habilita RLS (Row Level Security) en las tablas críticas
-
-3. Crea políticas de seguridad según sea necesario
-
----
-
-## ▶️ Ejecución
-
-### Desarrollo
-
-```bash
 npm run start:dev
 ```
 
-El servidor estará disponible en `http://localhost:3000`
+Por defecto el servidor usa el puerto **3000** (definible con `PORT` en `.env`).
 
-### Producción
-
-```bash
-npm run build
-npm run start:prod
-```
-
-### Con Docker Compose
+Otras tareas:
 
 ```bash
-docker-compose up -d
-```
-
-Logs:
-```bash
-docker-compose logs -f logitrack-backend
+npm run build        # compilación
+npm run start:prod   # ejecutar dist compilado (tras build)
 ```
 
 ---
 
-## 📁 Estructura del Proyecto
+## Variables de entorno
 
+Crea `backend/.env` a partir de `.env.example`. Ejemplo con **placeholders** (sustituye en local; no subas `.env` a Git):
+
+```env
+PORT=3000
+DEBUG_EMAIL=test@test.com
+DEBUG_PASSWORD=123456
+JWT_SECRET=super_secret_key_123456
+SUPABASE_URL=https://tu-proyecto.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=tu_service_role_key
+RESEND_API_KEY=re_tu_clave_resend
 ```
-backend/
-├── src/
-│   ├── main.ts                      # Punto de entrada
-│   ├── app.module.ts                # Módulo raíz
-│   ├── app.controller.ts            # Controlador principal
-│   ├── app.service.ts               # Servicio principal
-│   │
-│   ├── common/
-│   │   ├── decorators/
-│   │   │   └── user.decorator.ts    # @CurrentUser()
-│   │   ├── guards/
-│   │   │   └── jwt.guard.ts         # Protección de rutas
-│   │   └── strategies/
-│   │       └── jwt.strategy.ts      # Estrategia JWT
-│   │
-│   ├── config/
-│   │   ├── supabase.config.ts       # Cliente Supabase
-│   │   └── resend.config.ts         # Cliente Resend
-│   │
-│   └── modules/
-│       ├── conductores/             # Módulo de conductores
-│       │   ├── conductores.controller.ts
-│       │   ├── conductores.service.ts
-│       │   └── conductores.module.ts
-│       ├── rutas/                   # Módulo de rutas
-│       │   ├── rutas.controller.ts
-│       │   ├── rutas.service.ts
-│       │   └── rutas.module.ts
-│       └── entregas/                # Módulo de entregas
-│           ├── entregas.controller.ts
-│           ├── entregas.service.ts
-│           └── entregas.module.ts
-│
-├── test/
-├── Dockerfile                       # Build multi-stage
-├── docker-compose.yml               # Desarrollo
-├── package.json
-├── tsconfig.json
-├── nest-cli.json
-└── README.md
-```
+
+- `DEBUG_EMAIL` / `DEBUG_PASSWORD`: credenciales que el flujo de login de desarrollo valida contra el servidor.
+- `JWT_SECRET`: debe coincidir con lo que espera la validación de tokens emitidos por este backend.
+- `SUPABASE_*` y `RESEND_*`: secretos solo en el servidor; nunca en el frontend ni en la app móvil.
 
 ---
 
-## 📡 API Endpoints
+## App móvil y Cloudflare Tunnel
 
-### Health Check
+Este servicio escucha en **`http://localhost:3000`** en tu máquina. Los celulares no ven ese `localhost`.
 
-```
-GET /health
-```
-
-Respuesta:
-```json
-{
-  "status": "ok",
-  "timestamp": "2024-01-15T10:30:00Z",
-  "version": "1.0.0"
-}
-```
-
-### 🚗 Conductores
-
-#### Subir Licencia
-
-```
-POST /api/conductores/upload-license
-Authorization: Bearer {JWT}
-Content-Type: multipart/form-data
-
-Body:
-- file: (archivo PDF/JPG/PNG, max 5MB)
-- expiryDate: "2025-12-31"
-```
-
-#### Validar Estado de Licencia
-
-```
-GET /api/conductores/:id/license-status
-Authorization: Bearer {JWT}
-```
-
-Respuesta:
-```json
-{
-  "isValid": true,
-  "status": "VALID",
-  "message": "Licencia vigente",
-  "expiryDate": "2025-12-31",
-  "daysUntilExpiry": 320
-}
-```
-
-#### Obtener Detalles del Conductor
-
-```
-GET /api/conductores/:id
-Authorization: Bearer {JWT}
-```
-
-#### Listar Conductores Activos
-
-```
-GET /api/conductores
-Authorization: Bearer {JWT}
-```
-
----
-
-### 🗺️ Rutas
-
-#### Asignar Conductor a Ruta
-
-```
-POST /api/rutas/assign
-Authorization: Bearer {JWT}
-Content-Type: application/json
-
-Body:
-{
-  "rutaId": "uuid-xxx",
-  "conductorId": "uuid-xxx",
-  "camionId": "uuid-xxx",
-  "cargaRequeridaKg": 1000
-}
-```
-
-#### Obtener Rutas Sin Asignar
-
-```
-GET /api/rutas/unassigned
-Authorization: Bearer {JWT}
-```
-
-#### Obtener Información de Ruta
-
-```
-GET /api/rutas/:id
-Authorization: Bearer {JWT}
-```
-
-#### Cambiar Estado de Ruta
-
-```
-PATCH /api/rutas/:id/status
-Authorization: Bearer {JWT}
-Content-Type: application/json
-
-Body:
-{
-  "estado": "EN_PROCESO"
-}
-```
-
-Estados válidos: `PENDIENTE`, `ASIGNADA`, `EN_PROCESO`, `ENTREGADA`, `CANCELADA`
-
----
-
-### 📦 Entregas
-
-#### Cerrar Entrega (generar PDF + email)
-
-```
-POST /api/entregas/:rutaId/close
-Authorization: Bearer {JWT}
-Content-Type: application/json
-
-Body:
-{
-  "clienteEmail": "cliente@example.com"  // Opcional
-}
-```
-
-#### Guardar Firma
-
-```
-POST /api/entregas/:rutaId/signature
-Authorization: Bearer {JWT}
-Content-Type: application/json
-
-Body:
-{
-  "base64Signature": "data:image/png;base64,..."
-}
-```
-
-#### Guardar Foto de Ficha
-
-```
-POST /api/entregas/:rutaId/photo
-Authorization: Bearer {JWT}
-Content-Type: application/json
-
-Body:
-{
-  "base64Photo": "data:image/jpeg;base64,..."
-}
-```
-
-#### Obtener Estado de Entrega
-
-```
-GET /api/entregas/:rutaId
-Authorization: Bearer {JWT}
-```
-
----
-
-## 🔐 Seguridad
-
-### Autenticación JWT
-
-Todos los endpoints (excepto health check) requieren un JWT válido de Supabase:
-
-```
-Authorization: Bearer {JWT}
-```
-
-El middleware valida automáticamente:
-- ✅ Firma del token
-- ✅ Expiración
-- ✅ Audiencia (aud)
-- ✅ Emisor (iss)
-
-### Protección de Secretos
-
-⚠️ **NUNCA** exponga en el frontend:
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `RESEND_API_KEY`
-
-Estas claves deben permanecer solo en el backend.
-
-### CORS
-
-Por defecto, se permiten requests desde:
-- `http://localhost:3000`
-- `http://localhost:19006` (Expo)
-- Variable `FRONTEND_URL`
-
----
-
-## 🐳 Despliegue
-
-### Docker Swarm
-
-1. Build de la imagen:
+Para pruebas desde el teléfono suele usarse un túnel HTTPS hacia este puerto, por ejemplo:
 
 ```bash
-docker build -t logitrack-backend:latest .
+cloudflared tunnel --url http://localhost:3000
 ```
 
-2. Push a tu registry:
-
-```bash
-docker tag logitrack-backend:latest tu-registry/logitrack-backend:latest
-docker push tu-registry/logitrack-backend:latest
-```
-
-3. Deploy en Swarm:
-
-```bash
-docker service create \
-  --name logitrack-backend \
-  --publish 3000:3000 \
-  --env-file .env \
-  --limit-memory 512M \
-  --limit-cpus 1 \
-  tu-registry/logitrack-backend:latest
-```
-
-### Dokploy
-
-1. Conecta tu repositorio a Dokploy
-2. Selecciona la rama `main`
-3. Configura las variables de entorno
-4. Deploy automático en cada push
+La URL `https://xxxxx.trycloudflare.com` que imprime el comando debe configurarse en **la app Expo** como `EXPO_PUBLIC_API_URL`, no aquí. Detalle paso a paso: **README.md en la raíz del repositorio** y `app-choferes-logistica/README.md`.
 
 ---
 
-## 🔧 Troubleshooting
+## Documentación técnica
 
-### Error: "SUPABASE_SERVICE_ROLE_KEY is not defined"
-
-```bash
-# Verificar que .env existe
-cat .env
-
-# Asegúrate de que las variables están configuradas
-echo $SUPABASE_SERVICE_ROLE_KEY
-```
-
-### Error: "Invalid token"
-
-```bash
-# Verificar que SUPABASE_PUBLIC_KEY es correcta
-# Obtén del dashboard de Supabase > Settings > API
-```
-
-### Error: "CORS blocked"
-
-Añade tu URL de frontend a la variable `FRONTEND_URL` en `.env`
-
-### Error: "Email not sent"
-
-```bash
-# Verificar que RESEND_API_KEY es válida
-# Verificar que RESEND_FROM_EMAIL está verificado en Resend
-```
+- `../docs/arquitectura/ARQUITECTURA_BACKEND.md`
+- `../docs/guias/guia_endpoints_logitrack.md`
 
 ---
 
-## 📚 Documentación Adicional
+## Troubleshooting (backend)
 
-- [NestJS Docs](https://docs.nestjs.com)
-- [Supabase Docs](https://supabase.com/docs)
-- [Resend Docs](https://resend.com/docs)
-- [JWT en NestJS](https://docs.nestjs.com/security/authentication)
+| Síntoma | Acción |
+|---------|--------|
+| **401** en clientes | Revisa `DEBUG_EMAIL`, `DEBUG_PASSWORD`, `JWT_SECRET`; los clientes deben usar el mismo esquema de auth que este servicio. |
+| Cliente no llega desde el móvil | El problema suele ser red o URL en el cliente; expón este puerto con `cloudflared` y actualiza `EXPO_PUBLIC_API_URL` en la app. |
+| Cambié `.env` y sigue igual | Reinicia `npm run start:dev`; Nest carga variables al arrancar. |
 
----
-
-## 📄 Licencia
-
-MIT
-
----
-
-**¿Necesitas ayuda?** Crea un issue en el repositorio o contacta al equipo de desarrollo.
+Casos de túnel 530 o “network failed” en el móvil: ver tabla en el README raíz.

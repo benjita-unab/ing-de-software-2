@@ -3,6 +3,8 @@ node_modules/
 
 # Build
 build/
+dist/
+.expo/
 
 # Variables de entorno locales (nunca subir a Git)
 .env
@@ -20,3 +22,5 @@ yarn-error.log*
 .DS_Store
 .vscode/
 *.swp
+# Build backend
+backend/dist/

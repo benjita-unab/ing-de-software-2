@@ -8,19 +8,12 @@ import {
   View,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Constants from 'expo-constants';
-
 import RegistroViaje from '../../scripts/RegistroViaje';
 import { BotonCerrarDespacho } from '../../src/components/BotonCerrarDespacho';
 import { bffFetch } from '../../src/services/bffService';
 
 /** Persistencia local del UUID de ruta elegido por el chofer */
 const STORAGE_RUTA_ACTIVA_ID = 'logitrack_ruta_activa_id';
-
-const FALLBACK_RUTA_ID =
-  process.env.EXPO_PUBLIC_RUTA_ID ??
-  Constants.expoConfig?.extra?.rutaId ??
-  '36515438-9272-4841-b3e4-c0d3b943b1c7';
 
 type RutaApi = {
   id: string;
@@ -87,50 +80,39 @@ export default function HomeScreen() {
       const persisted = await AsyncStorage.getItem(STORAGE_RUTA_ACTIVA_ID);
       const persistedTrim = persisted?.trim() ?? '';
 
-      /** Fuente única fuera del montaje inicial: AsyncStorage / selección manual */
       if (persistedTrim) {
         const encontrada = activas.find((r) => mismoId(r.id, persistedTrim));
-        const usarId = encontrada ? encontrada.id : persistedTrim;
-        setRutaActivaId(usarId);
-        if (encontrada && usarId !== persistedTrim) {
-          await AsyncStorage.setItem(STORAGE_RUTA_ACTIVA_ID, usarId);
+        if (encontrada) {
+          console.log('USANDO RUTA GUARDADA');
+          setRutaActivaId(encontrada.id);
+          if (encontrada.id !== persistedTrim) {
+            await AsyncStorage.setItem(STORAGE_RUTA_ACTIVA_ID, encontrada.id);
+          }
+          return;
         }
-        return;
+        await AsyncStorage.removeItem(STORAGE_RUTA_ACTIVA_ID);
       }
 
       if (activas.length === 0) {
-        console.log('SET AUTO:', FALLBACK_RUTA_ID);
-        setRutaActivaId(FALLBACK_RUTA_ID);
-        return;
-      }
-
-      if (activas.length > 1) {
-        console.log('SET AUTO: elegir ruta (lista visible, sin id hasta tap)');
         setRutaActivaId(null);
         return;
       }
 
-      const primera = activas[0].id;
-      console.log('SET AUTO:', primera);
-      setRutaActivaId(primera);
-      await AsyncStorage.setItem(STORAGE_RUTA_ACTIVA_ID, primera);
+      if (activas.length > 1) {
+        console.log('MOSTRANDO SELECTOR DE RUTAS');
+        setRutaActivaId(null);
+        return;
+      }
+
+      const solo = activas[0].id;
+      console.log('SET AUTO SOLO UNA RUTA');
+      setRutaActivaId(solo);
+      await AsyncStorage.setItem(STORAGE_RUTA_ACTIVA_ID, solo);
     } catch (e: unknown) {
       const mensaje =
         e instanceof Error ? e.message : 'No se pudieron cargar las rutas';
       setErrorRutas(mensaje);
-      try {
-        const persisted = await AsyncStorage.getItem(STORAGE_RUTA_ACTIVA_ID);
-        const pt = persisted?.trim();
-        if (pt) {
-          setRutaActivaId(pt);
-        } else {
-          console.log('SET AUTO:', FALLBACK_RUTA_ID);
-          setRutaActivaId(FALLBACK_RUTA_ID);
-        }
-      } catch {
-        console.log('SET AUTO:', FALLBACK_RUTA_ID);
-        setRutaActivaId(FALLBACK_RUTA_ID);
-      }
+      setRutaActivaId(null);
     } finally {
       if (!silent) setCargandoRutas(false);
     }
@@ -153,6 +135,7 @@ export default function HomeScreen() {
     await AsyncStorage.removeItem(STORAGE_RUTA_ACTIVA_ID);
     setTodoSincronizado(false);
     setRutaActivaId(null);
+    console.log('MOSTRANDO SELECTOR DE RUTAS');
   }, []);
 
   /** Curry estable: una función por id, sin arrow inline en cada Pressable */
@@ -258,6 +241,7 @@ export default function HomeScreen() {
             onPress={() => void cambiarRuta()}
             accessibilityRole="button"
             accessibilityLabel="Cambiar de ruta"
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
             <Text style={styles.btnCambiarRutaText}>Cambiar ruta</Text>
           </Pressable>
@@ -271,7 +255,7 @@ export default function HomeScreen() {
       ) : (
         <View style={styles.selectorSingle}>
           <Text style={styles.selectorSingleText}>
-            Sin rutas activas en servidor — usando EXPO_PUBLIC_RUTA_ID / valor por defecto
+            Sin rutas operativas en servidor — elija cuando haya rutas disponibles
           </Text>
         </View>
       )}
@@ -367,10 +351,12 @@ const styles = StyleSheet.create({
   selectorSingleText: { fontSize: 13, color: '#334155' },
   cambiarRutaBar: {
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 10,
     backgroundColor: '#e8f4fc',
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#bfdbfe',
+    zIndex: 24,
+    elevation: Platform.OS === 'android' ? 24 : 0,
   },
   btnCambiarRuta: {
     alignSelf: 'flex-start',

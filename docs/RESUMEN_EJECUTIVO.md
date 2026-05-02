@@ -35,9 +35,9 @@ Mobile React Native ├──> Backend NestJS ──> Supabase (Service Role Key
 
 | Archivo | Propósito |
 |---------|-----------|
-| `ARQUITECTURA_BACKEND.md` | 📐 Diseño completo, riesgos, plan de migración |
-| `GUIA_REFACTORIZACION_FRONTEND.md` | 🔄 Cómo cambiar código del Frontend |
-| `EJEMPLO_API_CLIENT.js` | 💻 Cliente HTTP listo para copiar |
+| `docs/arquitectura/ARQUITECTURA_BACKEND.md` | 📐 Diseño completo, riesgos, plan de migración |
+| `docs/guias/GUIA_REFACTORIZACION_FRONTEND.md` | 🔄 Cómo cambiar código del Frontend |
+| `docs/guias/EJEMPLO_API_CLIENT.js` | 💻 Cliente HTTP listo para copiar |
 
 ### 2. **Backend NestJS** (carpeta `/backend`)
 
@@ -136,7 +136,7 @@ El código está 100% listo. Solo necesitas:
 
 **Duración:** 4-6 horas
 
-1. ✅ Copiar `EJEMPLO_API_CLIENT.js` a `src/lib/apiClient.js`
+1. ✅ Copiar `docs/guias/EJEMPLO_API_CLIENT.js` a `frontend/src/lib/apiClient.js` (si aún usas el ejemplo; el proyecto ya incluye un `apiClient.js` integrado)
 
 2. ✅ Actualizar archivos del Frontend:
 

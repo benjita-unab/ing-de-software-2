@@ -1,17 +1,20 @@
 version: "3.8"
 
 services:
-  backend-next:
+  backend:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
-    image: logitrack-backend-next:latest
-    container_name: logitrack-backend-next
+    image: logitrack-backend:latest
+    container_name: logitrack-backend
     environment:
+      NODE_ENV: production
+      PORT: 3000
       SUPABASE_URL: ${SUPABASE_URL}
-      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
-      SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET}
+      JWT_SECRET: ${JWT_SECRET}
+      DEBUG_EMAIL: ${DEBUG_EMAIL:-}
+      DEBUG_PASSWORD: ${DEBUG_PASSWORD:-}
       RESEND_API_KEY: ${RESEND_API_KEY}
       RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL}
     ports:
@@ -22,7 +25,7 @@ services:
     image: nginx:1.25-alpine
     container_name: logitrack-backend-proxy
     depends_on:
-      - backend-next
+      - backend
     ports:
       - "8080:80"
     volumes:

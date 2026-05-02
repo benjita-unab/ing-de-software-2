@@ -3,6 +3,7 @@ import {
   BadRequestException,
   NotFoundException,
   InternalServerErrorException,
+  HttpException,
 } from '@nestjs/common';
 import { SupabaseConfigService } from '../../config/supabase.config';
 import { ResendConfigService } from '../../config/resend.config';
@@ -62,55 +63,39 @@ export class EntregasService {
       : ruta.clientes;
 
     try {
-      // ── 2) Firma del receptor (esperar firma_url tras POST /signature)
-      console.log('PDF STEP -> cargando firma desde entregas');
+      // ── 2) Firma obligatoria (no cerrar con PDF si no hubo POST /signature OK)
+      console.log('PDF STEP -> validando firma en entregas');
+      const { data: entregaFirma } = await supabase
+        .from('entregas')
+        .select('id, firma_url')
+        .eq('ruta_id', rutaId)
+        .maybeSingle();
+
+      const firmaUrlUsada = entregaFirma?.firma_url?.trim() ?? '';
+      if (!firmaUrlUsada) {
+        throw new BadRequestException(
+          'No existe firma guardada para esta ruta. Complete POST /api/entregas/:rutaId/signature antes de cerrar.',
+        );
+      }
+
       let firmaBuffer: Buffer | null = null;
-      let firmaUrlUsada: string | null = null;
-
       try {
-        let intentos = 0;
-        while (intentos < 5) {
-          const { data: entregaRow } = await supabase
-            .from('entregas')
-            .select('*')
-            .eq('ruta_id', rutaId)
-            .maybeSingle();
-
-          const urlCandidate = entregaRow?.firma_url?.trim();
-          console.log(`FIRMA URL EN BD: ${!!urlCandidate}`);
-
-          if (urlCandidate) {
-            firmaUrlUsada = urlCandidate;
-            break;
-          }
-
-          console.log(`Esperando firma... intento ${intentos + 1}`);
-          await new Promise((r) => setTimeout(r, 500));
-          intentos++;
-        }
-
-        if (!firmaUrlUsada) {
-          console.warn('No se encontró firma_url tras reintentos');
-        } else {
-          firmaBuffer = await this.downloadFirmaBuffer(
-            supabase,
-            firmaUrlUsada,
-          );
-          console.log(
-            'PDF -> usando firma:',
-            firmaUrlUsada.slice(0, 96),
-            firmaUrlUsada.length > 96 ? '…' : '',
-          );
-          console.log(
-            'PDF generateDeliveryPDF precarga -> firmaBuffer bytes:',
-            firmaBuffer?.length ?? 0,
-          );
-        }
+        firmaBuffer = await this.downloadFirmaBuffer(supabase, firmaUrlUsada);
+        console.log(
+          'PDF -> firma URL presente; firmaBuffer bytes:',
+          firmaBuffer?.length ?? 0,
+        );
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
-        console.warn(
-          'PDF STEP ERROR -> obteniendo firma (continuamos sin firma):',
-          msg,
+        console.warn('PDF STEP ERROR -> descargando firma:', msg);
+        throw new BadRequestException(
+          `No se pudo obtener la imagen de firma guardada: ${msg}`,
+        );
+      }
+
+      if (!firmaBuffer || firmaBuffer.length === 0) {
+        throw new BadRequestException(
+          'La firma guardada no se pudo descargar para el PDF. Verifique Storage y la URL en entregas.firma_url.',
         );
       }
 
@@ -296,7 +281,9 @@ export class EntregasService {
         },
       };
     } catch (error: any) {
-      // Log COMPLETO con todo lo que pueda venir desde Supabase / pdfkit / Resend.
+      if (error instanceof HttpException) {
+        throw error;
+      }
       console.error('ERROR CLOSE DELIVERY FULL:', {
         message: error?.message,
         stack: error?.stack,
@@ -306,9 +293,6 @@ export class EntregasService {
         hint: error?.hint,
         name: error?.name,
       });
-      // Mantenemos el throw para que mobile sepa que algo falló, pero
-      // con mensaje útil. NestJS lo serializa como
-      // {statusCode, message, error} y el mobile debe leer `message`.
       throw new InternalServerErrorException(
         `Error cerrando entrega: ${error?.message ?? 'error desconocido'}`,
       );
@@ -317,28 +301,81 @@ export class EntregasService {
 
   /**
    * Guarda la firma de recepción
+   *
+   * **Dónde debería existir la fila `entregas`:** lo ideal es crearla cuando la
+   * operación de negocio abre la entrega (p. ej. al asignar ruta o al iniciar
+   * despacho en web). Si no existe, aquí aplicamos **opción B** (fix mínimo):
+   * intentar `insert` usando `ruta_id` + `cliente_id` de `rutas`.
+   *
+   * - Opción A: crear al enviar QR (`email`) — acopla envío de correo a BD.
+   * - Opción C: crear al asignar ruta — requiere cambios en `rutas`/frontend web.
    */
   async saveSignature(rutaId: string, base64Signature: string) {
-    console.log("ENTRO A SAVE SIGNATURE");
-    console.log("DATA:", { rutaId, base64Signature });
+    console.log('SAVE SIGNATURE -> rutaId:', rutaId, 'payload length:', base64Signature?.length ?? 0);
     if (!rutaId || !base64Signature) {
+      console.warn('SIGNATURE validation: falta rutaId o base64Signature');
       throw new BadRequestException('rutaId y base64Signature son requeridos');
     }
 
     const supabase = this.supabaseConfig.getClient();
 
     try {
+      let { data: entregaRows, error: entregaLookupErr } = await supabase
+        .from('entregas')
+        .select('id,ruta_id,firma_url')
+        .eq('ruta_id', rutaId);
+
+      if (entregaLookupErr) {
+        console.warn(
+          'SIGNATURE entrega lookup error:',
+          entregaLookupErr.message,
+          {
+            code: (entregaLookupErr as { code?: string }).code,
+            details: (entregaLookupErr as { details?: string }).details,
+            hint: (entregaLookupErr as { hint?: string }).hint,
+          },
+        );
+      }
+
+      let n = entregaRows?.length ?? 0;
+      console.log('SIGNATURE entrega rows count:', n);
+
+      if (n === 0) {
+        const ensured = await this.tryEnsureEntregaRowForSignature(supabase, rutaId);
+        if (ensured) {
+          const again = await supabase
+            .from('entregas')
+            .select('id,ruta_id,firma_url')
+            .eq('ruta_id', rutaId);
+          entregaRows = again.data;
+          if (again.error) {
+            console.warn('SIGNATURE re-query after ensure:', again.error.message);
+          }
+          n = entregaRows?.length ?? 0;
+          console.log('SIGNATURE entrega rows count after ensure:', n);
+        }
+      }
+
+      if (n === 0) {
+        console.warn(
+          'SIGNATURE abort: sin fila entregas y ensure falló o no aplicó para ruta_id=',
+          rutaId,
+        );
+        throw new BadRequestException(
+          `No existe entrega para ruta_id=${rutaId}. Debe crearse la entrega antes de firmar.`,
+        );
+      }
+
       // Remover header de data URI
       const base64Data = base64Signature.replace(/^data:image\/\w+;base64,/, '');
 
       // Convertir base64 a Buffer
       const buffer = Buffer.from(base64Data, 'base64');
 
-      // Generar path único
+      // Bucket fotos_trazabilidad, prefijo firmas/ (ruta en Storage)
       const filePath = `firmas/${rutaId}-${Date.now()}.png`;
 
-      // Subir a Storage
-      const { data, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('fotos_trazabilidad')
         .upload(filePath, buffer, {
           contentType: 'image/png',
@@ -346,17 +383,19 @@ export class EntregasService {
         });
 
       if (uploadError) {
+        console.error('SIGNATURE storage upload error:', {
+          message: uploadError.message,
+          name: (uploadError as { name?: string }).name,
+        });
         throw new BadRequestException(
           `Error al subir firma: ${uploadError.message}`,
         );
       }
 
-      // Obtener URL pública
       const { data: publicUrlData } = supabase.storage
         .from('fotos_trazabilidad')
         .getPublicUrl(filePath);
 
-      // Actualizar registro de entrega
       const {
         data: updatedRows,
         error: updateError,
@@ -367,7 +406,12 @@ export class EntregasService {
         .select('id, ruta_id, firma_url');
 
       if (updateError) {
-        console.warn(`No se pudo actualizar firma en BD: ${updateError.message}`);
+        console.error('SIGNATURE DB update error:', {
+          message: updateError.message,
+          code: updateError.code,
+          details: updateError.details,
+          hint: updateError.hint,
+        });
         throw new BadRequestException(
           `Error actualizando firma en BD: ${updateError.message}`,
         );
@@ -375,14 +419,15 @@ export class EntregasService {
 
       if (!updatedRows || updatedRows.length === 0) {
         console.warn(
-          `⚠️ UPDATE firma_url afectó 0 filas para ruta_id=${rutaId}`,
+          'SIGNATURE update firma_url affected 0 rows for ruta_id=',
+          rutaId,
         );
         throw new BadRequestException(
-          `No existe entrega para ruta_id=${rutaId}`,
+          `No existe entrega para ruta_id=${rutaId}. Debe crearse la entrega antes de firmar.`,
         );
       }
 
-      console.log('Firma actualizada en BD, filas:', updatedRows);
+      console.log('Firma actualizada en BD, filas:', updatedRows.length);
 
       return {
         success: true,
@@ -393,11 +438,20 @@ export class EntregasService {
           entregas: updatedRows,
         },
       };
-    } catch (error: any) {
-      // TEMP LOG
-      console.error('ERROR SAVE SIGNATURE:', error);
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      const err = error as Record<string, unknown> & Error;
+      console.error('ERROR SAVE SIGNATURE FULL', {
+        message: err?.message,
+        stack: err?.stack,
+        code: err?.code,
+        details: err?.details,
+        hint: err?.hint,
+      });
       throw new InternalServerErrorException(
-        `Error guardando firma: ${error?.message}`,
+        `Error guardando firma: ${err?.message ?? 'error desconocido'}`,
       );
     }
   }
@@ -495,6 +549,59 @@ export class EntregasService {
   }
 
   // ========== HELPERS PRIVADOS ==========
+
+  /**
+   * Opción B: crea una fila mínima en `entregas` si la ruta existe.
+   * Falla silenciosamente (retorna false) si RLS/NOT NULL/schema impiden insert.
+   */
+  private async tryEnsureEntregaRowForSignature(
+    supabase: ReturnType<SupabaseConfigService['getClient']>,
+    rutaId: string,
+  ): Promise<boolean> {
+    const { data: ruta, error: rutaErr } = await supabase
+      .from('rutas')
+      .select('id, cliente_id')
+      .eq('id', rutaId)
+      .maybeSingle();
+
+    if (rutaErr) {
+      console.warn('SIGNATURE ensure -> rutas lookup:', rutaErr.message);
+    }
+    if (!ruta?.id) {
+      console.warn('SIGNATURE ensure -> no hay ruta en BD para id=', rutaId);
+      return false;
+    }
+
+    const insertPayload: Record<string, unknown> = {
+      ruta_id: rutaId,
+      validado: false,
+    };
+    if (ruta.cliente_id != null) {
+      insertPayload.cliente_id = ruta.cliente_id;
+    }
+
+    const { data: inserted, error: insErr } = await supabase
+      .from('entregas')
+      .insert(insertPayload)
+      .select('id')
+      .maybeSingle();
+
+    if (insErr) {
+      console.error('SIGNATURE ensure -> insert entregas failed:', {
+        message: insErr.message,
+        code: insErr.code,
+        details: insErr.details,
+        hint: insErr.hint,
+      });
+      return false;
+    }
+
+    console.log(
+      'SIGNATURE ensure -> fila entregas creada (opción B), id:',
+      inserted?.id,
+    );
+    return true;
+  }
 
   /**
    * Formatea una fecha ISO al formato `dd-mm-yyyy, HH:mm` (hora local Chile).
