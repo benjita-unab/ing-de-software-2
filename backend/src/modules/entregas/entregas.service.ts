@@ -305,7 +305,8 @@ export class EntregasService {
    * **Dónde debería existir la fila `entregas`:** lo ideal es crearla cuando la
    * operación de negocio abre la entrega (p. ej. al asignar ruta o al iniciar
    * despacho en web). Si no existe, aquí aplicamos **opción B** (fix mínimo):
-   * intentar `insert` usando `ruta_id` + `cliente_id` de `rutas`.
+   * insertar solo columnas que existen en `entregas` (`ruta_id`, etc.; no
+   * `cliente_id` — vive en `rutas`).
    *
    * - Opción A: crear al enviar QR (`email`) — acopla envío de correo a BD.
    * - Opción C: crear al asignar ruta — requiere cambios en `rutas`/frontend web.
@@ -341,19 +342,28 @@ export class EntregasService {
       console.log('SIGNATURE entrega rows count:', n);
 
       if (n === 0) {
-        const ensured = await this.tryEnsureEntregaRowForSignature(supabase, rutaId);
-        if (ensured) {
-          const again = await supabase
-            .from('entregas')
-            .select('id,ruta_id,firma_url')
-            .eq('ruta_id', rutaId);
-          entregaRows = again.data;
-          if (again.error) {
-            console.warn('SIGNATURE re-query after ensure:', again.error.message);
-          }
-          n = entregaRows?.length ?? 0;
-          console.log('SIGNATURE entrega rows count after ensure:', n);
+        const ensureResult =
+          await this.tryEnsureEntregaRowForSignature(supabase, rutaId);
+        if (ensureResult.ok === false) {
+          const fail = ensureResult;
+          throw new BadRequestException(
+            `No se pudo crear la fila de entrega para ruta_id=${rutaId}. ` +
+              `Columnas intentadas: ${fail.columnsTried.join(', ')}. ` +
+              `Error BD: ${fail.dbMessage}` +
+              (fail.code ? ` (${fail.code})` : ''),
+          );
         }
+
+        const again = await supabase
+          .from('entregas')
+          .select('id,ruta_id,firma_url')
+          .eq('ruta_id', rutaId);
+        entregaRows = again.data;
+        if (again.error) {
+          console.warn('SIGNATURE re-query after ensure:', again.error.message);
+        }
+        n = entregaRows?.length ?? 0;
+        console.log('SIGNATURE entrega rows count after ensure:', n);
       }
 
       if (n === 0) {
@@ -552,15 +562,23 @@ export class EntregasService {
 
   /**
    * Opción B: crea una fila mínima en `entregas` si la ruta existe.
-   * Falla silenciosamente (retorna false) si RLS/NOT NULL/schema impiden insert.
+   * Solo usa columnas que existen en `entregas` (p. ej. no `cliente_id`).
    */
   private async tryEnsureEntregaRowForSignature(
     supabase: ReturnType<SupabaseConfigService['getClient']>,
     rutaId: string,
-  ): Promise<boolean> {
+  ): Promise<
+    | { ok: true }
+    | {
+        ok: false;
+        dbMessage: string;
+        code?: string;
+        columnsTried: string[];
+      }
+  > {
     const { data: ruta, error: rutaErr } = await supabase
       .from('rutas')
-      .select('id, cliente_id')
+      .select('id')
       .eq('id', rutaId)
       .maybeSingle();
 
@@ -569,22 +587,51 @@ export class EntregasService {
     }
     if (!ruta?.id) {
       console.warn('SIGNATURE ensure -> no hay ruta en BD para id=', rutaId);
-      return false;
+      return {
+        ok: false,
+        dbMessage: 'La ruta no existe en la base de datos',
+        code: rutaErr?.code,
+        columnsTried: [],
+      };
     }
 
-    const insertPayload: Record<string, unknown> = {
+    const tryInsert = async (payload: Record<string, unknown>) => {
+      return await supabase
+        .from('entregas')
+        .insert(payload)
+        .select('id')
+        .maybeSingle();
+    };
+
+    const payloadWithValidado: Record<string, unknown> = {
       ruta_id: rutaId,
       validado: false,
+      firma_url: null,
+      comprobante_url: null,
+      fecha_entrega_real: null,
     };
-    if (ruta.cliente_id != null) {
-      insertPayload.cliente_id = ruta.cliente_id;
-    }
 
-    const { data: inserted, error: insErr } = await supabase
-      .from('entregas')
-      .insert(insertPayload)
-      .select('id')
-      .maybeSingle();
+    let columnsTried = Object.keys(payloadWithValidado);
+    let { data: inserted, error: insErr } =
+      await tryInsert(payloadWithValidado);
+
+    if (insErr) {
+      const msg = insErr.message ?? '';
+      const missingColumn =
+        /Could not find the '(\w+)' column/i.exec(msg)?.[1] ?? null;
+
+      if (
+        missingColumn &&
+        missingColumn in payloadWithValidado &&
+        missingColumn !== 'ruta_id'
+      ) {
+        const minimal: Record<string, unknown> = { ruta_id: rutaId };
+        columnsTried = Object.keys(minimal);
+        const second = await tryInsert(minimal);
+        inserted = second.data;
+        insErr = second.error;
+      }
+    }
 
     if (insErr) {
       console.error('SIGNATURE ensure -> insert entregas failed:', {
@@ -593,14 +640,19 @@ export class EntregasService {
         details: insErr.details,
         hint: insErr.hint,
       });
-      return false;
+      return {
+        ok: false,
+        dbMessage: insErr.message,
+        code: insErr.code,
+        columnsTried,
+      };
     }
 
     console.log(
       'SIGNATURE ensure -> fila entregas creada (opción B), id:',
       inserted?.id,
     );
-    return true;
+    return { ok: true };
   }
 
   /**
