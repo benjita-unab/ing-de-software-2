@@ -21,12 +21,14 @@ export default function OperatorDashboard({ operator, onSignOut }) {
   const [isLightMode, setIsLightMode] = useState(false);
 
   const handleResolveAlert = async (alertId) => {
-    const success = await rawResolveAlert(alertId);
-    if (success) {
+    const res = await rawResolveAlert(alertId);
+    if (res?.ok) {
       alert("✅ El problema ya está resuelto y removido de la cola.");
       if (selectedAlert?.id === alertId) {
         setSelectedAlert(null);
       }
+    } else if (res?.message) {
+      alert(res.message);
     }
   };
 

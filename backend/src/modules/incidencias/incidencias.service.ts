@@ -6,6 +6,13 @@ import {
 } from '@nestjs/common';
 import { SupabaseConfigService } from '../../config/supabase.config';
 
+/** Valores del enum Postgres `estado_incidencia` (tabla `incidencias.estado`). */
+const ESTADO_INCIDENCIA = {
+  PENDIENTE: 'pendiente',
+  EN_CURSO: 'en curso',
+  RESUELTO: 'resuelto',
+} as const;
+
 @Injectable()
 export class IncidenciasService {
   constructor(private readonly supabaseConfig: SupabaseConfigService) {}
@@ -52,14 +59,20 @@ export class IncidenciasService {
     const { data, error } = await supabase
       .from('incidencias')
       .update({
-        estado: 'EN_GESTION',
+        estado: ESTADO_INCIDENCIA.EN_CURSO,
         atendido_por: operatorId,
         fecha_atencion: new Date().toISOString(),
       })
       .eq('id', incidenciaId)
+      .select()
       .single();
 
     if (error) {
+      // TEMP: diagnóstico completo (retirar cuando el flujo esté estable)
+      console.warn(
+        'acknowledgeIncidencia Supabase error (full JSON):',
+        JSON.stringify(error),
+      );
       throw new InternalServerErrorException(
         `Error al actualizar incidencia: ${error.message}`,
       );
@@ -82,13 +95,18 @@ export class IncidenciasService {
     const { data, error } = await supabase
       .from('incidencias')
       .update({
-        estado: 'RESUELTO',
+        estado: ESTADO_INCIDENCIA.RESUELTO,
         fecha_resolucion: new Date().toISOString(),
       })
       .eq('id', incidenciaId)
+      .select()
       .single();
 
     if (error) {
+      console.warn(
+        'resolveIncidencia Supabase error (full JSON):',
+        JSON.stringify(error),
+      );
       throw new InternalServerErrorException(
         `Error al resolver incidencia: ${error.message}`,
       );

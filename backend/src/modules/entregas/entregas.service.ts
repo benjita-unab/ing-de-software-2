@@ -62,65 +62,55 @@ export class EntregasService {
       : ruta.clientes;
 
     try {
-      // ── 2) Firma del receptor (best effort) ───────────────────
-      console.log('PDF STEP -> descargando firma');
+      // ── 2) Firma del receptor (esperar firma_url tras POST /signature)
+      console.log('PDF STEP -> cargando firma desde entregas');
       let firmaBuffer: Buffer | null = null;
-      let firmaUrl: string | null = null;
+      let firmaUrlUsada: string | null = null;
+
       try {
-        const { data: entregasFirma } = await supabase
-          .from('entregas')
-          .select('firma_url, created_at')
-          .eq('ruta_id', rutaId)
-          .not('firma_url', 'is', null)
-          .order('created_at', { ascending: false });
+        let intentos = 0;
+        while (intentos < 5) {
+          const { data: entregaRow } = await supabase
+            .from('entregas')
+            .select('*')
+            .eq('ruta_id', rutaId)
+            .maybeSingle();
 
-        firmaUrl = entregasFirma?.[0]?.firma_url ?? null;
-        console.log('PDF STEP -> firmaUrl:', firmaUrl);
+          const urlCandidate = entregaRow?.firma_url?.trim();
+          console.log(`FIRMA URL EN BD: ${!!urlCandidate}`);
 
-        if (firmaUrl) {
-          const marker = '/storage/v1/object/public/fotos_trazabilidad/';
-          const filePath = firmaUrl.includes(marker)
-            ? firmaUrl.split(marker)[1]
-            : null;
-
-          if (filePath) {
-            try {
-              const { data: firmaBlob, error: downloadError } =
-                await supabase.storage
-                  .from('fotos_trazabilidad')
-                  .download(filePath);
-
-              if (downloadError) {
-                console.warn(
-                  'PDF STEP ERROR -> firma download:',
-                  downloadError.message,
-                );
-              } else if (firmaBlob) {
-                const arrayBuffer = await firmaBlob.arrayBuffer();
-                firmaBuffer = Buffer.from(arrayBuffer);
-                console.log('PDF STEP -> firma bytes:', firmaBuffer.length);
-              }
-            } catch (e: any) {
-              // Acá caen `fetch failed` y similares del cliente Supabase.
-              console.warn(
-                'PDF STEP ERROR -> excepción red al descargar firma:',
-                e?.message,
-              );
-            }
-          } else {
-            console.warn(
-              'PDF STEP -> firma_url no apunta a fotos_trazabilidad:',
-              firmaUrl,
-            );
+          if (urlCandidate) {
+            firmaUrlUsada = urlCandidate;
+            break;
           }
-        } else {
-          console.warn('PDF STEP -> sin firma_url en BD');
+
+          console.log(`Esperando firma... intento ${intentos + 1}`);
+          await new Promise((r) => setTimeout(r, 500));
+          intentos++;
         }
-      } catch (e: any) {
-        // La firma es OPCIONAL para no bloquear el cierre.
+
+        if (!firmaUrlUsada) {
+          console.warn('No se encontró firma_url tras reintentos');
+        } else {
+          firmaBuffer = await this.downloadFirmaBuffer(
+            supabase,
+            firmaUrlUsada,
+          );
+          console.log(
+            'PDF -> usando firma:',
+            firmaUrlUsada.slice(0, 96),
+            firmaUrlUsada.length > 96 ? '…' : '',
+          );
+          console.log(
+            'PDF generateDeliveryPDF precarga -> firmaBuffer bytes:',
+            firmaBuffer?.length ?? 0,
+          );
+        }
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
         console.warn(
-          'PDF STEP ERROR -> excepción obteniendo firma (continuamos sin firma):',
-          e?.message,
+          'PDF STEP ERROR -> obteniendo firma (continuamos sin firma):',
+          msg,
         );
       }
 
@@ -523,6 +513,73 @@ export class EntregasService {
   }
 
   /**
+   * Descarga imagen de firma: primero fetch(URL pública); fallback storage en fotos_trazabilidad.
+   */
+  private async downloadFirmaBuffer(
+    supabase: ReturnType<SupabaseConfigService['getClient']>,
+    firmaUrl: string,
+  ): Promise<Buffer | null> {
+    const trimmed = firmaUrl.trim();
+    if (!trimmed) return null;
+
+    try {
+      const response = await fetch(trimmed);
+      if (response.ok) {
+        const buf = Buffer.from(await response.arrayBuffer());
+        if (buf.length > 0) {
+          console.log('downloadFirmaBuffer -> fetch OK, bytes:', buf.length);
+          return buf;
+        }
+      } else {
+        console.warn(
+          'downloadFirmaBuffer -> fetch status:',
+          response.status,
+          trimmed.slice(0, 120),
+        );
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn('downloadFirmaBuffer -> fetch error:', msg);
+    }
+
+    const markerPublic = '/storage/v1/object/public/fotos_trazabilidad/';
+    if (trimmed.includes(markerPublic)) {
+      const rest = trimmed.split(markerPublic)[1]?.split('?')[0];
+      if (rest) {
+        try {
+          const pathDecoded = decodeURIComponent(rest);
+          const { data: firmaBlob, error: downloadError } =
+            await supabase.storage
+              .from('fotos_trazabilidad')
+              .download(pathDecoded);
+
+          if (!downloadError && firmaBlob) {
+            const buf = Buffer.from(await firmaBlob.arrayBuffer());
+            console.log(
+              'downloadFirmaBuffer -> storage.download OK, bytes:',
+              buf.length,
+            );
+            return buf;
+          }
+          console.warn(
+            'downloadFirmaBuffer -> storage:',
+            downloadError?.message,
+          );
+        } catch (e: unknown) {
+          const msg = e instanceof Error ? e.message : String(e);
+          console.warn('downloadFirmaBuffer -> storage exception:', msg);
+        }
+      }
+    }
+
+    console.warn(
+      'downloadFirmaBuffer -> sin buffer; URL parcial:',
+      trimmed.slice(0, 140),
+    );
+    return null;
+  }
+
+  /**
    * Sube un PDF al bucket `entregas` con reintentos. El cliente Supabase
    * usa `fetch` por debajo y cualquier blip de red (DNS, IPv6, TLS,
    * timeout) lo reporta como `"fetch failed"`. Reintentamos con backoff
@@ -591,6 +648,10 @@ export class EntregasService {
     camion: any;
     firmaBuffer?: Buffer | null;
   }): Promise<Buffer> {
+    console.log(
+      'PDF generateDeliveryPDF -> firmaBuffer bytes:',
+      data.firmaBuffer?.length ?? 0,
+    );
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({ size: 'A4', margin: 50 });
       const chunks: Buffer[] = [];

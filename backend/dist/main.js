@@ -100,9 +100,13 @@ exports.AppModule = AppModule = __decorate([
                 envFilePath: '.env',
             }),
             passport_1.PassportModule,
-            jwt_1.JwtModule.register({
-                secret: process.env.SUPABASE_PUBLIC_KEY,
-                signOptions: { expiresIn: '24h' },
+            jwt_1.JwtModule.registerAsync({
+                imports: [config_1.ConfigModule],
+                inject: [config_1.ConfigService],
+                useFactory: (config) => ({
+                    secret: config.get('JWT_SECRET'),
+                    signOptions: { expiresIn: '24h' },
+                }),
             }),
             auth_module_1.AuthModule,
             conductores_module_1.ConductoresModule,
@@ -262,6 +266,11 @@ let JwtStrategy = class JwtStrategy extends (0, passport_1.PassportStrategy)(pas
         });
     }
     validate(payload) {
+        console.log('JWT VALIDATE', {
+            email: payload?.email,
+            sub: payload?.sub,
+            role: payload?.role ?? payload?.user_role,
+        });
         return {
             id: payload.sub,
             email: payload.email,
@@ -467,6 +476,11 @@ const helmet_1 = __importDefault(__webpack_require__(/*! helmet */ "helmet"));
 const compression_1 = __importDefault(__webpack_require__(/*! compression */ "compression"));
 const express_1 = __webpack_require__(/*! express */ "express");
 async function bootstrap() {
+    console.log('BACKEND ENV CHECK:', {
+        DEBUG_EMAIL_defined: !!process.env.DEBUG_EMAIL,
+        DEBUG_PASSWORD_defined: !!process.env.DEBUG_PASSWORD,
+        JWT_SECRET_defined: !!process.env.JWT_SECRET,
+    });
     // Desactivamos el bodyParser default de Nest para poder definir nuestros
     // propios límites (las fichas de despacho llegan como base64 ~5–15 MB).
     const app = await core_1.NestFactory.create(app_module_1.AppModule, {
@@ -1896,54 +1910,40 @@ let EntregasService = class EntregasService {
             ? ruta.clientes[0]
             : ruta.clientes;
         try {
-            // ── 2) Firma del receptor (best effort) ───────────────────
-            console.log('PDF STEP -> descargando firma');
+            // ── 2) Firma del receptor (esperar firma_url tras POST /signature)
+            console.log('PDF STEP -> cargando firma desde entregas');
             let firmaBuffer = null;
-            let firmaUrl = null;
+            let firmaUrlUsada = null;
             try {
-                const { data: entregasFirma } = await supabase
-                    .from('entregas')
-                    .select('firma_url, created_at')
-                    .eq('ruta_id', rutaId)
-                    .not('firma_url', 'is', null)
-                    .order('created_at', { ascending: false });
-                firmaUrl = entregasFirma?.[0]?.firma_url ?? null;
-                console.log('PDF STEP -> firmaUrl:', firmaUrl);
-                if (firmaUrl) {
-                    const marker = '/storage/v1/object/public/fotos_trazabilidad/';
-                    const filePath = firmaUrl.includes(marker)
-                        ? firmaUrl.split(marker)[1]
-                        : null;
-                    if (filePath) {
-                        try {
-                            const { data: firmaBlob, error: downloadError } = await supabase.storage
-                                .from('fotos_trazabilidad')
-                                .download(filePath);
-                            if (downloadError) {
-                                console.warn('PDF STEP ERROR -> firma download:', downloadError.message);
-                            }
-                            else if (firmaBlob) {
-                                const arrayBuffer = await firmaBlob.arrayBuffer();
-                                firmaBuffer = Buffer.from(arrayBuffer);
-                                console.log('PDF STEP -> firma bytes:', firmaBuffer.length);
-                            }
-                        }
-                        catch (e) {
-                            // Acá caen `fetch failed` y similares del cliente Supabase.
-                            console.warn('PDF STEP ERROR -> excepción red al descargar firma:', e?.message);
-                        }
+                let intentos = 0;
+                while (intentos < 5) {
+                    const { data: entregaRow } = await supabase
+                        .from('entregas')
+                        .select('*')
+                        .eq('ruta_id', rutaId)
+                        .maybeSingle();
+                    const urlCandidate = entregaRow?.firma_url?.trim();
+                    console.log(`FIRMA URL EN BD: ${!!urlCandidate}`);
+                    if (urlCandidate) {
+                        firmaUrlUsada = urlCandidate;
+                        break;
                     }
-                    else {
-                        console.warn('PDF STEP -> firma_url no apunta a fotos_trazabilidad:', firmaUrl);
-                    }
+                    console.log(`Esperando firma... intento ${intentos + 1}`);
+                    await new Promise((r) => setTimeout(r, 500));
+                    intentos++;
+                }
+                if (!firmaUrlUsada) {
+                    console.warn('No se encontró firma_url tras reintentos');
                 }
                 else {
-                    console.warn('PDF STEP -> sin firma_url en BD');
+                    firmaBuffer = await this.downloadFirmaBuffer(supabase, firmaUrlUsada);
+                    console.log('PDF -> usando firma:', firmaUrlUsada.slice(0, 96), firmaUrlUsada.length > 96 ? '…' : '');
+                    console.log('PDF generateDeliveryPDF precarga -> firmaBuffer bytes:', firmaBuffer?.length ?? 0);
                 }
             }
             catch (e) {
-                // La firma es OPCIONAL para no bloquear el cierre.
-                console.warn('PDF STEP ERROR -> excepción obteniendo firma (continuamos sin firma):', e?.message);
+                const msg = e instanceof Error ? e.message : String(e);
+                console.warn('PDF STEP ERROR -> obteniendo firma (continuamos sin firma):', msg);
             }
             // ── 3) Generar PDF (sin evidencias: el PDF del correo solo
             //     incluye comprobante formal; las fotos se ven en el
@@ -2248,6 +2248,55 @@ let EntregasService = class EntregasService {
         return `${dd}-${mm}-${yyyy}, ${hh}:${mins}`;
     }
     /**
+     * Descarga imagen de firma: primero fetch(URL pública); fallback storage en fotos_trazabilidad.
+     */
+    async downloadFirmaBuffer(supabase, firmaUrl) {
+        const trimmed = firmaUrl.trim();
+        if (!trimmed)
+            return null;
+        try {
+            const response = await fetch(trimmed);
+            if (response.ok) {
+                const buf = Buffer.from(await response.arrayBuffer());
+                if (buf.length > 0) {
+                    console.log('downloadFirmaBuffer -> fetch OK, bytes:', buf.length);
+                    return buf;
+                }
+            }
+            else {
+                console.warn('downloadFirmaBuffer -> fetch status:', response.status, trimmed.slice(0, 120));
+            }
+        }
+        catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            console.warn('downloadFirmaBuffer -> fetch error:', msg);
+        }
+        const markerPublic = '/storage/v1/object/public/fotos_trazabilidad/';
+        if (trimmed.includes(markerPublic)) {
+            const rest = trimmed.split(markerPublic)[1]?.split('?')[0];
+            if (rest) {
+                try {
+                    const pathDecoded = decodeURIComponent(rest);
+                    const { data: firmaBlob, error: downloadError } = await supabase.storage
+                        .from('fotos_trazabilidad')
+                        .download(pathDecoded);
+                    if (!downloadError && firmaBlob) {
+                        const buf = Buffer.from(await firmaBlob.arrayBuffer());
+                        console.log('downloadFirmaBuffer -> storage.download OK, bytes:', buf.length);
+                        return buf;
+                    }
+                    console.warn('downloadFirmaBuffer -> storage:', downloadError?.message);
+                }
+                catch (e) {
+                    const msg = e instanceof Error ? e.message : String(e);
+                    console.warn('downloadFirmaBuffer -> storage exception:', msg);
+                }
+            }
+        }
+        console.warn('downloadFirmaBuffer -> sin buffer; URL parcial:', trimmed.slice(0, 140));
+        return null;
+    }
+    /**
      * Sube un PDF al bucket `entregas` con reintentos. El cliente Supabase
      * usa `fetch` por debajo y cualquier blip de red (DNS, IPv6, TLS,
      * timeout) lo reporta como `"fetch failed"`. Reintentamos con backoff
@@ -2294,6 +2343,7 @@ let EntregasService = class EntregasService {
      * endpoint GET /api/rutas/:id/evidencias).
      */
     async generateDeliveryPDF(data) {
+        console.log('PDF generateDeliveryPDF -> firmaBuffer bytes:', data.firmaBuffer?.length ?? 0);
         return new Promise((resolve, reject) => {
             const doc = new pdfkit_1.default({ size: 'A4', margin: 50 });
             const chunks = [];
@@ -2664,6 +2714,12 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.IncidenciasService = void 0;
 const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
 const supabase_config_1 = __webpack_require__(/*! ../../config/supabase.config */ "./src/config/supabase.config.ts");
+/** Valores del enum Postgres `estado_incidencia` (tabla `incidencias.estado`). */
+const ESTADO_INCIDENCIA = {
+    PENDIENTE: 'pendiente',
+    EN_CURSO: 'en curso',
+    RESUELTO: 'resuelto',
+};
 let IncidenciasService = class IncidenciasService {
     constructor(supabaseConfig) {
         this.supabaseConfig = supabaseConfig;
@@ -2700,13 +2756,16 @@ let IncidenciasService = class IncidenciasService {
         const { data, error } = await supabase
             .from('incidencias')
             .update({
-            estado: 'EN_GESTION',
+            estado: ESTADO_INCIDENCIA.EN_CURSO,
             atendido_por: operatorId,
             fecha_atencion: new Date().toISOString(),
         })
             .eq('id', incidenciaId)
+            .select()
             .single();
         if (error) {
+            // TEMP: diagnóstico completo (retirar cuando el flujo esté estable)
+            console.warn('acknowledgeIncidencia Supabase error (full JSON):', JSON.stringify(error));
             throw new common_1.InternalServerErrorException(`Error al actualizar incidencia: ${error.message}`);
         }
         if (!data) {
@@ -2722,12 +2781,14 @@ let IncidenciasService = class IncidenciasService {
         const { data, error } = await supabase
             .from('incidencias')
             .update({
-            estado: 'RESUELTO',
+            estado: ESTADO_INCIDENCIA.RESUELTO,
             fecha_resolucion: new Date().toISOString(),
         })
             .eq('id', incidenciaId)
+            .select()
             .single();
         if (error) {
+            console.warn('resolveIncidencia Supabase error (full JSON):', JSON.stringify(error));
             throw new common_1.InternalServerErrorException(`Error al resolver incidencia: ${error.message}`);
         }
         if (!data) {
