@@ -11,7 +11,7 @@ const NAV_ITEMS = [
   { id: "asignacion",icon: "📋", label: "Asignar Rutas" },
   { id: "historial", icon: "📜", label: "Historial Despachos" },
   { id: "clientes",  icon: "👤", label: "Crear Cliente" },
-  { id: "rutas",     icon: "🗺️",  label: "Rutas Activas" },
+  { id: "rutas",     icon: "🗺️",  label: "Rutas" },
   { id: "despachos", icon: "📑", label: "Guías de Despacho" },
   { id: "camiones",  icon: "🚛", label: "Estado de Flota" },
   { id: "mensajes",  icon: "💬", label: "Mensajería" },
