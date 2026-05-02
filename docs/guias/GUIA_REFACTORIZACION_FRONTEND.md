@@ -481,7 +481,7 @@ Solución: Configura `FRONTEND_URL` en el `.env` del backend
 
 ## 📚 Referencias
 
-- [API del Backend](./backend/README.md)
-- [Documentación de Arquitectura](./ARQUITECTURA_BACKEND.md)
+- [API del Backend](../../backend/README.md)
+- [Documentación de Arquitectura](../arquitectura/ARQUITECTURA_BACKEND.md)
 - [Fetch API](https://developer.mozilla.org/es/docs/Web/API/Fetch_API)
 

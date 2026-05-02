@@ -1,183 +1,173 @@
-# LogiTrack - Migración BaaS a Backend Next.js
+# LogiTrack
 
-## 1) Descripción
-Se reemplazó la lógica backend de Supabase cliente por un backend propio en `Next.js` (`backend-next`), manteniendo Supabase como:
-- Base de datos PostgreSQL.
-- Storage para archivos.
+Sistema de logística para gestión de rutas, entregas, evidencias fotográficas, códigos QR, firmas y documentos PDF: portal web (React), app para choferes (Expo) y API NestJS sobre Supabase (PostgreSQL y Storage).
 
-El frontend web y la app móvil ahora consumen endpoints REST propios (`/api/*`) y dejan de depender de `supabase.auth.getSession()`.
+## Estructura del repositorio
 
-## 2) Arquitectura objetivo
-- `backend-next` (Next.js App Router + API routes)
-- Supabase:
-  - Auth solo para emisión de token en login (`signInWithPassword` desde backend).
-  - PostgreSQL para datos.
-  - Storage para evidencias/firma.
-- Cliente/admin Supabase con `SUPABASE_SERVICE_ROLE_KEY` solo en backend.
+| Ruta | Contenido |
+|------|-----------|
+| `backend/` | API NestJS |
+| `frontend/` | Portal web React (Create React App) |
+| `app-choferes-logistica/` | App móvil Expo |
+| `docs/` | Arquitectura, guías y entregables |
+| `docker-compose.yml` | Backend en contenedor + proxy Nginx |
+| `nginx.conf` | Reverse proxy hacia el servicio `backend` |
 
-Estructura principal:
-- `backend-next/app/api/auth/login/route.ts`
-- `backend-next/app/api/email/enviar-qr/route.ts`
-- `backend-next/app/api/storage/upload/route.ts`
-- `backend-next/app/api/trazabilidad/route.ts`
-- `backend-next/app/api/dispatch/close/route.ts`
-- `backend-next/app/api/routes/[id]/route.ts`
-- `backend-next/app/api/entregas/route.ts`
-- `backend-next/middleware.ts`
-- `backend-next/lib/supabase.ts`
-- `backend-next/lib/auth.ts`
+---
 
-## 3) Flujo de autenticación
-1. Cliente llama `POST /api/auth/login` con email/password.
-2. Backend ejecuta `supabase.auth.signInWithPassword`.
-3. Backend consulta `usuarios` por `id = auth.user.id` para obtener perfil extendido.
-4. Backend devuelve JWT (`accessToken`) + `perfil`.
-5. Cliente guarda token y envía `Authorization: Bearer <token>`.
-6. `middleware.ts` valida JWT con `SUPABASE_JWT_SECRET`.
+## Cómo correr localmente
 
-Nota: la columna `password` de `usuarios` no se usa para autenticación.
+### Backend (NestJS)
 
-## 4) Endpoints documentados
-
-### `POST /api/auth/login` (público)
-Request:
-```json
-{ "email": "operador@empresa.cl", "password": "123456" }
-```
-Response:
-```json
-{
-  "accessToken": "...",
-  "refreshToken": "...",
-  "expiresIn": 3600,
-  "tokenType": "bearer",
-  "user": { "id": "uuid" }
-}
-```
-
-### `POST /api/email/enviar-qr` (protegido)
-Request:
-```json
-{ "email": "cliente@correo.com", "clienteId": "cli-001", "nombreCliente": "Cliente Uno" }
-```
-Response:
-```json
-{ "ok": true, "provider": { "id": "resend-id" } }
-```
-
-### `POST /api/storage/upload` (protegido)
-`multipart/form-data`:
-- `file`
-- `bucket` (opcional, default `fotos_trazabilidad`)
-- `folder` (opcional, default `uploads`)
-
-Response:
-```json
-{
-  "bucket": "fotos_trazabilidad",
-  "filePath": "firmas/1711111_firma.png",
-  "publicUrl": "https://...supabase.co/storage/v1/object/public/..."
-}
-```
-
-### `POST /api/trazabilidad` (protegido)
-Inserta en `traceability_events`.
-
-### `POST /api/dispatch/close` (protegido)
-Valida entregas por `rutaId`, marca `validado=true` y opcionalmente envía email de cierre.
-
-### `GET /api/routes/:id` (protegido)
-Devuelve ruta + cliente + entregas.
-
-### `POST /api/entregas` (protegido)
-Crea entrega con OTP.
-
-## 5) Variables de entorno
-Usar `.env` basado en `.env.example`:
-
-```env
-SUPABASE_URL=
-SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
-SUPABASE_JWT_SECRET=
-
-RESEND_API_KEY=
-RESEND_FROM_EMAIL=
-
-NEXT_PUBLIC_API_URL=
-REACT_APP_API_URL=
-EXPO_PUBLIC_API_URL=
-```
-
-## 6) Cómo correr
-
-### Local backend
 ```bash
-cd backend-next
+cd backend
 npm install
-npm run dev
+npm run start:dev
 ```
-API en `http://localhost:3000/api`.
 
-### Local web
+La API escucha en `http://localhost:3000` (puerto configurable con `PORT` en `backend/.env`).
+
+### Frontend web (React)
+
 ```bash
+cd frontend
 npm install
 npm start
 ```
-Configurar `REACT_APP_API_URL=http://localhost:3000`.
 
-### Local móvil (Expo)
-En `app-choferes-logistica/.env`:
-```env
-EXPO_PUBLIC_API_URL=http://<IP-PC>:3000
-```
-Luego:
+### App móvil (Expo)
+
 ```bash
 cd app-choferes-logistica
 npm install
 npx expo start -c
 ```
 
-## 7) Docker
-Levanta backend y proxy nginx:
-```bash
-docker compose up --build
+---
+
+## Variables de entorno (placeholders)
+
+No copies secretos reales al README ni a Git. Usa valores locales en cada `.env`.
+
+### `frontend/.env`
+
+```env
+REACT_APP_API_URL=http://localhost:3000
+REACT_APP_GOOGLE_MAPS_API_KEY=TU_API_KEY
 ```
 
-Servicios:
-- `backend-next` en `3000`.
-- `nginx` reverse proxy en `8080`.
+Si pruebas el **frontend contra el backend expuesto con Cloudflare**:
 
-## 8) Despliegue en servidor universitario
-1. Instalar Docker + Docker Compose.
-2. Copiar repo y crear `.env` con claves reales.
-3. Ejecutar `docker compose up -d --build`.
-4. Abrir puertos `3000` (backend directo) o `8080` (nginx).
-5. Configurar app móvil con `EXPO_PUBLIC_API_URL=http://<IP_SERVIDOR>:3000`.
+```env
+REACT_APP_API_URL=https://TU-TUNNEL.trycloudflare.com
+REACT_APP_GOOGLE_MAPS_API_KEY=TU_API_KEY
+```
 
-## 9) Troubleshooting
+### `app-choferes-logistica/.env`
 
-### Network request failed
-- Verificar IP/puerto accesible desde celular.
-- Confirmar `EXPO_PUBLIC_API_URL` sin slash final.
-- Revisar firewall en PC/servidor.
+```env
+EXPO_PUBLIC_API_URL=https://TU-TUNNEL.trycloudflare.com
+EXPO_PUBLIC_DEBUG_EMAIL=test@test.com
+EXPO_PUBLIC_DEBUG_PASSWORD=123456
+EXPO_PUBLIC_RUTA_ID=UUID_DE_RUTA_DE_PRUEBA
+```
 
-### JWT inválido
-- Revisar `SUPABASE_JWT_SECRET` del proyecto Supabase correcto.
-- Confirmar que el token enviado sea `accessToken` vigente.
-- Revisar header `Authorization: Bearer ...`.
+### `backend/.env`
 
-### CORS
-- Backend responde `Access-Control-Allow-*`.
-- Verificar que requests `OPTIONS` no estén bloqueadas por proxy/firewall.
+```env
+PORT=3000
+DEBUG_EMAIL=test@test.com
+DEBUG_PASSWORD=123456
+JWT_SECRET=super_secret_key_123456
+SUPABASE_URL=https://tu-proyecto.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=tu_service_role_key
+RESEND_API_KEY=re_tu_clave_resend
+```
 
-## 10) Cambios realizados en frontend
-- App móvil:
-  - Nuevo `src/services/bffService.ts` (cliente API + token).
-  - Nuevo `src/services/syncEngine.ts` (sincronización trazabilidad por API).
-  - `cierreDespachoService.ts` migrado a endpoints backend.
-  - `entregasService.ts` migrado a endpoint backend.
-  - `scripts/RegistroViaje.js` migrado a `syncEngine`.
-- Web:
-  - `src/hooks/useAuth.js` ahora usa `POST /api/auth/login` y token local en vez de `getSession()`.
+Plantillas: `frontend/.env.example`, `app-choferes-logistica/.env.example`, `backend/.env.example`.
 
+---
+
+## Probar desde celular con Cloudflare Tunnel
+
+- El backend en tu PC corre en **`http://localhost:3000`**.
+- El celular **no** puede usar `localhost` de tu PC.
+- A veces la IP de la red local funciona, pero firewalls o redes separadas la impiden; lo más fiable para pruebas es **exponer solo el backend** con `cloudflared`.
+
+### Pasos
+
+1. Instala [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/installation/) (`cloudflared`).
+2. Levanta el backend: `cd backend && npm run start:dev`.
+3. En otra terminal, expón el puerto del API:
+
+   ```bash
+   cloudflared tunnel --url http://localhost:3000
+   ```
+
+4. Copia la URL que muestra el comando, del estilo:
+
+   `https://xxxxx.trycloudflare.com`
+
+5. Pégala en **`app-choferes-logistica/.env`**:
+
+   `EXPO_PUBLIC_API_URL=https://xxxxx.trycloudflare.com`
+
+   Opcional: si quieres que el **frontend web** también hable con el API por el túnel, pon la misma URL en **`frontend/.env`** como `REACT_APP_API_URL`.
+
+6. Reinicia Expo con caché limpia:
+
+   ```bash
+   cd app-choferes-logistica
+   npx expo start -c
+   ```
+
+El backend ya incluye CORS para `https://*.trycloudflare.com`.
+
+**Importante:** si `npx expo start --tunnel` (ngrok/Expo) te falla, no es obligatorio para este flujo. **Cloudflare solo expone el backend**; la app móvil debe apuntar a esa URL con `EXPO_PUBLIC_API_URL`, no hace falta túnel de Expo para el API.
+
+---
+
+## Docker (backend + Nginx)
+
+Desde la raíz del repo, con variables de entorno definidas (según `backend/.env.example`):
+
+```bash
+docker compose up --build -d
+```
+
+- Backend: puerto `3000`.
+- Nginx: puerto `8080` → proxy al contenedor `backend`.
+
+---
+
+## Flujo funcional (resumen)
+
+1. Rutas y asignación  
+2. Evidencias y trazabilidad  
+3. QR y validación de entrega  
+4. Firma y cierre de despacho  
+5. PDF e historial  
+
+Más detalle: `docs/guias/guia_endpoints_logitrack.md` y `docs/arquitectura/ARQUITECTURA_BACKEND.md`.
+
+---
+
+## Documentación
+
+Índice: `docs/INDICE_MAESTRO.md`. Guías en `docs/guias/`, arquitectura en `docs/arquitectura/`, entregables en `docs/entregables/`.
+
+Archivos a revisar manualmente: `docs/REVISAR_MANUALMENTE.md`.
+
+---
+
+## Troubleshooting
+
+| Problema | Qué hacer |
+|----------|-----------|
+| **Network request failed** (móvil) | Revisa `EXPO_PUBLIC_API_URL` (HTTPS del túnel, sin barra final incorrecta). Confirma que el backend sigue en marcha y que la URL del túnel es la actual. |
+| **HTTP 530** | Túnel caído o URL vieja: vuelve a ejecutar `cloudflared tunnel --url http://localhost:3000` y actualiza `.env` con la nueva URL. |
+| **401 Unauthorized** | Alinea `DEBUG_EMAIL` / `DEBUG_PASSWORD` entre `backend/.env` y lo que envía el cliente; revisa `JWT_SECRET`. En web, limpia `localStorage` / datos del sitio para tokens viejos. |
+| **Cambié `.env` y no pasa nada** | Reinicia backend, frontend (`npm start`) y Expo (`npx expo start -c`). CRA y Expo leen variables al arrancar. |
+| **La app sigue usando IP o URL vieja** | `npx expo start -c`; si usas Expo Go, borra caché o datos de la app si hace falta. |
+
+README específicos: `frontend/README.md`, `app-choferes-logistica/README.md`, `backend/README.md`.

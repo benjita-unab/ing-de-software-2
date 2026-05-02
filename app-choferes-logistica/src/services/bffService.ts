@@ -24,23 +24,34 @@ export async function clearAccessToken(): Promise<void> {
   await AsyncStorage.removeItem(TOKEN_KEY);
 }
 
-export async function ensureLoggedIn(): Promise<string | null> {
+/**
+ * Obtiene token válido. Si force === true, borra el guardado y fuerza login nuevo.
+ * Si force === false y hay token en storage, lo reutiliza.
+ */
+export async function ensureLoggedIn(force = false): Promise<string | null> {
   try {
+    if (force) {
+      await clearAccessToken();
+      console.log("TOKEN EXISTS:", false);
+      console.log("Login automático ejecutado");
+      await loginBff(DEBUG_EMAIL, DEBUG_PASSWORD);
+      const newToken = await getAccessToken();
+      console.log("TOKEN EXISTS:", !!newToken);
+      return newToken;
+    }
+
     const existingToken = await getAccessToken();
+    console.log("TOKEN EXISTS:", !!existingToken);
     if (existingToken) {
-      console.log("Token reutilizado");
-      console.log("Token obtenido:", existingToken.slice(0, 20));
       return existingToken;
     }
 
     console.log("Login automático ejecutado");
     await loginBff(DEBUG_EMAIL, DEBUG_PASSWORD);
     const newToken = await getAccessToken();
-    if (newToken) {
-      console.log("Token obtenido:", newToken.slice(0, 20));
-    }
+    console.log("TOKEN EXISTS:", !!newToken);
     return newToken;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.log("Error en ensureLoggedIn:", error);
     return null;
   }
@@ -52,34 +63,51 @@ export async function loginBff(email: string, password: string) {
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password })
+    body: JSON.stringify({ email, password }),
   });
-  console.log("Response status:", response.status);
+  console.log("API STATUS:", response.status);
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(payload?.error ?? "No fue posible iniciar sesión");
+    throw new Error((payload as { error?: string })?.error ?? "No fue posible iniciar sesión");
   }
-  if (payload.accessToken) {
-    await saveAccessToken(payload.accessToken);
-    // TODO: quitar el log de abajo tras probar en Postman (no dejar el token en consola en producción)
-    console.log("TOKEN_POSTMAN_COPY:", payload.accessToken);
+  if ((payload as { accessToken?: string }).accessToken) {
+    await saveAccessToken((payload as { accessToken: string }).accessToken);
   }
   return payload;
 }
 
-export async function bffFetch(path: string, init: RequestInit = {}) {
-  const token = await ensureLoggedIn();
+function buildAuthHeaders(init: RequestInit, token: string | null): Headers {
   const headers = new Headers(init.headers ?? {});
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
   }
+  return headers;
+}
+
+async function performFetch(
+  path: string,
+  init: RequestInit,
+  token: string | null,
+): Promise<Response> {
+  const headers = buildAuthHeaders(init, token);
   const url = `${requiredApiUrl()}${path}`;
   console.log("Calling API:", url);
-  console.log("Token:", token?.slice(0, 20));
-  const response = await fetch(url, {
-    ...init,
-    headers
-  });
-  console.log("Response status:", response.status);
+  console.log("TOKEN EXISTS:", !!token);
+  return fetch(url, { ...init, headers });
+}
+
+export async function bffFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  let token = await ensureLoggedIn(false);
+  let response = await performFetch(path, init, token);
+  console.log("API STATUS:", response.status);
+
+  if (response.status === 401) {
+    console.log("401 detectado, relogueando una vez");
+    await clearAccessToken();
+    token = await ensureLoggedIn(true);
+    response = await performFetch(path, init, token);
+    console.log("API STATUS:", response.status);
+  }
+
   return response;
 }

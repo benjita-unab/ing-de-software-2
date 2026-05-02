@@ -17,7 +17,7 @@ Este es tu **plan completo de migración** de un ecosistema de logística (Web +
 
 ## 📖 Documentos Principales
 
-### 1. 📐 **[ARQUITECTURA_BACKEND.md](./ARQUITECTURA_BACKEND.md)**
+### 1. 📐 **[ARQUITECTURA_BACKEND.md](./arquitectura/ARQUITECTURA_BACKEND.md)**
    - **Qué es:** Análisis arquitectónico completo
    - **Contiene:**
      - 🚨 Auditoría de riesgos de seguridad
@@ -29,7 +29,7 @@ Este es tu **plan completo de migración** de un ecosistema de logística (Web +
    - **Lee primero si:** Necesitas entender el problema y la solución
    - **Tiempo de lectura:** 15-20 min
 
-### 2. 🛡️ **[GUIA_SEGURIDAD.md](./GUIA_SEGURIDAD.md)**
+### 2. 🛡️ **[GUIA_SEGURIDAD.md](./guias/GUIA_SEGURIDAD.md)**
    - **Qué es:** Guía detallada de seguridad
    - **Contiene:**
      - 🚨 Problemas actuales (críticos)
@@ -43,7 +43,7 @@ Este es tu **plan completo de migración** de un ecosistema de logística (Web +
    - **Lee si:** Te importa la seguridad (DEBE ser tu prioridad)
    - **Tiempo de lectura:** 20-25 min
 
-### 3. 🔄 **[GUIA_REFACTORIZACION_FRONTEND.md](./GUIA_REFACTORIZACION_FRONTEND.md)**
+### 3. 🔄 **[GUIA_REFACTORIZACION_FRONTEND.md](./guias/GUIA_REFACTORIZACION_FRONTEND.md)**
    - **Qué es:** Cómo cambiar tu código Frontend
    - **Contiene:**
      - ❌ Código actual (MAL)
@@ -54,7 +54,7 @@ Este es tu **plan completo de migración** de un ecosistema de logística (Web +
    - **Lee si:** Estás refactorizando el Frontend (Web o Mobile)
    - **Tiempo de lectura:** 15-20 min
 
-### 4. 💻 **[EJEMPLO_API_CLIENT.js](./EJEMPLO_API_CLIENT.js)**
+### 4. 💻 **[EJEMPLO_API_CLIENT.js](./guias/EJEMPLO_API_CLIENT.js)**
    - **Qué es:** Cliente HTTP listo para usar
    - **Contiene:**
      - 📡 Todas las funciones de API
@@ -63,7 +63,7 @@ Este es tu **plan completo de migración** de un ecosistema de logística (Web +
    - **Usa:** Copia este archivo a `src/lib/apiClient.js`
    - **Tiempo de implementación:** 5 min (copy-paste)
 
-### 5. 🧪 **[GUIA_TESTING.md](./GUIA_TESTING.md)**
+### 5. 🧪 **[GUIA_TESTING.md](./guias/GUIA_TESTING.md)**
    - **Qué es:** Cómo probar los endpoints
    - **Contiene:**
      - 🧪 Ejemplos con curl
@@ -182,8 +182,9 @@ npm run start:dev
 ### 3. Refactorizar Frontend
 
 ```bash
+cd frontend
 # Copiar apiClient
-cp ../EJEMPLO_API_CLIENT.js src/lib/apiClient.js
+cp ../docs/guias/EJEMPLO_API_CLIENT.js src/lib/apiClient.js
 
 # Actualizar componentes para usar apiClient
 # - LicenseUploadForm.jsx

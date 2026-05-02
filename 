@@ -1,0 +1,69 @@
+ .env.example                                       |   33 [31m-[m
+ .gitignore                                         |    4 [32m+[m
+ AlertCard.jsx                                      |  274 [31m--[m
+ AlertQueue.jsx                                     |  208 [31m--[m
+ App.js                                             |    8 [31m-[m
+ Dockerfile                                         |   14 [31m-[m
+ MapView.jsx                                        |  260 [31m--[m
+ OperatorDashboard.jsx                              |  235 [31m--[m
+ README.md                                          |  302 [32m+[m[31m-[m
+ Sidebar.jsx                                        |  126 [31m-[m
+ app-choferes-logistica/README.md                   |   96 [32m+[m[31m-[m
+ app-choferes-logistica/app/(tabs)/index.tsx        |   56 [32m+[m[31m-[m
+ .../src/components/BotonCerrarDespacho.tsx         |   22 [32m+[m[31m-[m
+ app-choferes-logistica/src/services/bffService.ts  |   72 [32m+[m[31m-[m
+ .../src/services/cierreDespachoService.ts          |   12 [32m+[m[31m-[m
+ backend/.env.example                               |   53 [32m+[m[31m-[m
+ backend/README.md                                  |  457 [32m+[m[31m--[m
+ backend/dist/main.js                               | 3906 [31m--------------------[m
+ backend/src/modules/entregas/entregas.service.ts   |  235 [32m+[m[31m-[m
+ docker-compose.yml                                 |   17 [32m+[m[31m-[m
+ INDICE_MAESTRO.md => docs/INDICE_MAESTRO.md        |   13 [32m+[m[31m-[m
+ docs/README.md                                     |    8 [32m+[m
+ RESUMEN_EJECUTIVO.md => docs/RESUMEN_EJECUTIVO.md  |    8 [32m+[m[31m-[m
+ docs/REVISAR_MANUALMENTE.md                        |   19 [32m+[m
+ .../arquitectura/ARQUITECTURA_BACKEND.md           |    0
+ .../entregables/Entregable 1.pdf                   |  Bin
+ .../entregables/Entregable 2-ing_soft2.pdf         |  Bin
+ .../entregables/ing_soft2_entrega3.docx            |  Bin
+ .../guias/EJEMPLO_API_CLIENT.js                    |    0
+ .../guias/GUIA_REFACTORIZACION_FRONTEND.md         |    4 [32m+[m[31m-[m
+ GUIA_SEGURIDAD.md => docs/guias/GUIA_SEGURIDAD.md  |    0
+ GUIA_TESTING.md => docs/guias/GUIA_TESTING.md      |    0
+ .../guias/guia_endpoints_logitrack.md              |    0
+ .../guias/legacy/registro-viaje-root-temp.js       |  Bin
+ update-email.js => docs/guias/update-email.js      |    0
+ frontend/.env.example                              |   13 [32m+[m
+ frontend/README.md                                 |   77 [32m+[m
+ package-lock.json => frontend/package-lock.json    |    0
+ package.json => frontend/package.json              |    0
+ {public => frontend/public}/index.html             |    0
+ seed_rutas.mjs => frontend/scripts/seed_rutas.mjs  |   14 [32m+[m[31m-[m
+ {src => frontend/src}/App.js                       |    0
+ {src => frontend/src}/components/AlertCard.jsx     |    0
+ .../src}/components/AlertDetailPanel.jsx           |    0
+ {src => frontend/src}/components/AlertQueue.jsx    |    0
+ .../src}/components/AsignacionRutas.jsx            |    0
+ .../src}/components/FormularioCliente.jsx          |    0
+ {src => frontend/src}/components/GuiasDespacho.jsx |    0
+ .../src}/components/HU-2.code-workspace            |    0
+ .../src}/components/HistorialDespachos.jsx         |    0
+ .../src}/components/LicenseUploadForm.jsx          |    0
+ {src => frontend/src}/components/LoginPage.jsx     |    0
+ {src => frontend/src}/components/MapView.jsx       |    0
+ .../src}/components/MonitoreoLicencias.jsx         |    0
+ .../src}/components/OperatorDashboard.jsx          |    0
+ {src => frontend/src}/components/RutasActivas.jsx  |    0
+ .../src}/components/SelectorCoordenadas.jsx        |    0
+ {src => frontend/src}/components/Sidebar.jsx       |    0
+ {src => frontend/src}/hooks/useAlerts.js           |    0
+ {src => frontend/src}/hooks/useAuth.js             |    0
+ {src => frontend/src}/index.js                     |    0
+ {src => frontend/src}/lib/apiClient.js             |    0
+ {src => frontend/src}/lib/rutasService.js          |    0
+ {src => frontend/src}/lib/supabaseClient.js        |    0
+ {src => frontend/src}/styles/premium-theme.css     |    0
+ nginx.conf                                         |    2 [32m+[m[31m-[m
+ supabaseClient.js                                  |   26 [31m-[m
+ useAlerts.js                                       |  140 [31m-[m
+ 68 files changed, 680 insertions(+), 6034 deletions(-)

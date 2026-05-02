@@ -262,12 +262,22 @@ export function BotonCerrarDespacho({
 
     try {
       await guardarFirmaEnSupabase(rutaId, firmaBase64);
-      // Mensaje claro mientras el backend genera el PDF y envía mail.
-      setEstadoTexto("Generando comprobante y enviando correo...");
+    } catch {
+      cancelarWatchdogLoading();
+      setCargando(false);
+      setEstadoTexto("");
+      Alert.alert(
+        "Firma",
+        "No se pudo guardar la firma. Intente nuevamente.",
+      );
+      return;
+    }
 
+    setEstadoTexto("Generando comprobante y enviando correo...");
+
+    try {
       const resultado = await cerrarDespachoYEnviarComprobante(rutaId);
 
-      // Solo avanzamos a "hecho" cuando /close respondió OK.
       setEstadoFlujo("hecho");
       try {
         await onDespachoFinalizado?.();
@@ -279,17 +289,11 @@ export function BotonCerrarDespacho({
         `La guía de despacho PDF (con firma) se generó y envió exitosamente a ${resultado.emailEnviadoA}. La entrega quedó validada.`,
       );
     } catch (err) {
-      // Usamos warn (no error) para no abrir el LogBox rojo en dev:
-      // el cierre puede fallar por motivos esperables (sin internet,
-      // backend reiniciando, etc) y queremos manejarlo con Alert.
       console.warn("CIERRE DESPACHO ERROR:", err);
       const mensaje =
         err instanceof Error && err.message
           ? err.message
           : "No se pudo finalizar el despacho. Inténtalo nuevamente.";
-      // No avanzamos: nos quedamos en estado "firmar". Cuando se reactive
-      // la pizarra (al apagarse `cargando` en el finally), el usuario
-      // puede volver a tocar "Guardar Firma" para reintentar el cierre.
       Alert.alert("Error al finalizar despacho", mensaje);
     } finally {
       cancelarWatchdogLoading();

@@ -45,16 +45,22 @@ export async function cerrarDespachoYEnviarComprobante(
 
 export async function guardarFirmaEnSupabase(rutaId: string, base64Signature: string) {
   const dataUri = String(base64Signature || "");
-  if (!dataUri.trim()) return;
+  if (!dataUri.trim()) {
+    throw new Error("Firma vacía.");
+  }
 
   const uploadResponse = await bffFetch(`/api/entregas/${rutaId}/signature`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ base64Signature: dataUri }),
   });
+  const payload = await uploadResponse.json().catch(() => ({}));
   if (!uploadResponse.ok) {
-    const payload = await uploadResponse.json().catch(() => ({}));
-    console.warn("No se pudo subir la firma.", payload?.error ?? "error");
+    const mensaje =
+      payload?.message ||
+      payload?.error ||
+      `No se pudo guardar la firma (HTTP ${uploadResponse.status})`;
+    throw new Error(String(mensaje));
   }
 }
 
