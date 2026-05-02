@@ -362,6 +362,7 @@ export class RutasService {
       url: string;
       timestamp: string | null;
       fuente?: FuenteFoto;
+      tipo?: string | null;
     }> = [];
 
     const urlsVistas = new Set<string>();
@@ -372,6 +373,7 @@ export class RutasService {
       url: string | null | undefined,
       timestamp: string | null,
       fuente: FuenteFoto,
+      tipo?: string | null,
     ) => {
       if (!url || typeof url !== 'string') return;
       const u = url.trim();
@@ -383,7 +385,15 @@ export class RutasService {
         url: u,
         timestamp,
         fuente,
+        tipo: tipo ?? null,
       });
+    };
+
+    const esFichaDespacho = (f: (typeof fotos)[number]) => {
+      if (String(f.tipo || '').toUpperCase() === 'FICHA_DESPACHO') {
+        return true;
+      }
+      return String(f.etapa || '').trim().toLowerCase() === 'ficha';
     };
 
     // 2a) Tabla `fotos` (prioridad por vínculo directo ruta_id)
@@ -404,11 +414,24 @@ export class RutasService {
     }
 
     // 2b) traceability_events por ruta_id (si existe la columna)
-    const traceRuta = await supabase
+    const traceConTipo = await supabase
       .from('traceability_events')
-      .select('id, etapa, foto_uri, timestamp_evento')
+      .select('id, etapa, foto_uri, timestamp_evento, tipo')
       .eq('ruta_id', rutaId)
       .order('timestamp_evento', { ascending: true });
+
+    const errMsgTipo = (traceConTipo.error as { message?: string } | undefined)
+      ?.message;
+    const traceSinTipo =
+      traceConTipo.error && /tipo/i.test(errMsgTipo || '')
+        ? await supabase
+            .from('traceability_events')
+            .select('id, etapa, foto_uri, timestamp_evento')
+            .eq('ruta_id', rutaId)
+            .order('timestamp_evento', { ascending: true })
+        : null;
+
+    const traceRuta = traceSinTipo ?? traceConTipo;
 
     const errTrace =
       traceRuta.error &&
@@ -423,12 +446,15 @@ export class RutasService {
           'fotos_trazabilidad',
           ev.foto_uri,
         );
+        const tipoEv =
+          'tipo' in (ev as object) ? (ev as { tipo?: string | null }).tipo : null;
         pushFoto(
           String(ev.id ?? `ev-${ev.foto_uri}`),
           ev.etapa ?? null,
           url,
           ev.timestamp_evento ?? null,
           'traceability_ruta',
+          tipoEv ?? null,
         );
       }
     } else if (errTrace) {
@@ -502,10 +528,15 @@ export class RutasService {
       }
     }
 
+    const fichasDespacho = fotos.filter((f) => esFichaDespacho(f));
+    const fotosEvidencia = fotos.filter((f) => !esFichaDespacho(f));
+
     return {
       rutaId,
       pdfs,
       fotos,
+      fotosEvidencia,
+      fichasDespacho,
       firmaUrl,
     };
   }

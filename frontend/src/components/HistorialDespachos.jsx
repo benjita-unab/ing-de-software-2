@@ -241,9 +241,29 @@ function EvidenciasModal({ despacho, evidencias, loading, error, onClose }) {
 
   const pdfs = evidencias?.pdfs || [];
   const fotos = evidencias?.fotos || [];
+  const fotosEvidencia =
+    evidencias?.fotosEvidencia != null
+      ? Array.isArray(evidencias.fotosEvidencia)
+        ? evidencias.fotosEvidencia
+        : []
+      : fotos.filter(
+          (f) => String(f?.etapa || "").trim().toLowerCase() !== "ficha",
+        );
+  const fichasDespacho =
+    evidencias?.fichasDespacho != null
+      ? Array.isArray(evidencias.fichasDespacho)
+        ? evidencias.fichasDespacho
+        : []
+      : fotos.filter(
+          (f) => String(f?.etapa || "").trim().toLowerCase() === "ficha",
+        );
   const firmaUrl = evidencias?.firmaUrl || null;
   const noHayNada =
-    !loading && !error && pdfs.length === 0 && fotos.length === 0 && !firmaUrl;
+    !loading &&
+    !error &&
+    pdfs.length === 0 &&
+    fotos.length === 0 &&
+    !firmaUrl;
 
   return (
     <div
@@ -315,14 +335,14 @@ function EvidenciasModal({ despacho, evidencias, loading, error, onClose }) {
             </div>
 
             <div style={modalStyles.section}>
-              <div style={modalStyles.sectionTitle}>📷 Fotos de trazabilidad</div>
-              {fotos.length === 0 ? (
+              <div style={modalStyles.sectionTitle}>📷 Evidencias fotográficas</div>
+              {fotosEvidencia.length === 0 ? (
                 <p style={modalStyles.emptyText}>
-                  Sin fotos registradas para este despacho.
+                  Sin evidencias fotográficas para este despacho.
                 </p>
               ) : (
                 <div style={modalStyles.fotosGrid}>
-                  {fotos.map((foto) => (
+                  {fotosEvidencia.map((foto) => (
                     <a
                       key={foto.id}
                       href={foto.url}
@@ -339,6 +359,41 @@ function EvidenciasModal({ despacho, evidencias, loading, error, onClose }) {
                       />
                       <div style={modalStyles.fotoMeta}>
                         {foto.etapa || "—"}
+                        {foto.timestamp
+                          ? " · " + formatFecha(foto.timestamp)
+                          : ""}
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={modalStyles.section}>
+              <div style={modalStyles.sectionTitle}>📑 Ficha de despacho</div>
+              {fichasDespacho.length === 0 ? (
+                <p style={modalStyles.emptyText}>
+                  Sin ficha registrada desde la app u otros canales.
+                </p>
+              ) : (
+                <div style={modalStyles.fotosGrid}>
+                  {fichasDespacho.map((foto) => (
+                    <a
+                      key={foto.id}
+                      href={foto.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={modalStyles.fotoItem}
+                      title={foto.etapa || "Ficha"}
+                    >
+                      <img
+                        src={foto.url}
+                        alt={foto.etapa || "ficha"}
+                        style={modalStyles.fotoImg}
+                        loading="lazy"
+                      />
+                      <div style={modalStyles.fotoMeta}>
+                        {foto.etapa || "Ficha"}
                         {foto.timestamp
                           ? " · " + formatFecha(foto.timestamp)
                           : ""}

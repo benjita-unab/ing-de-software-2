@@ -24,6 +24,8 @@ export class TrazabilidadController {
       ruta_id?: string | null;
       /** Alias camelCase desde algunos clientes */
       rutaId?: string | null;
+      /** EVIDENCIA | FICHA_DESPACHO (app móvil) */
+      tipo?: string | null;
     },
   ) {
     console.log('BODY TRAZABILIDAD:', body);
@@ -37,6 +39,7 @@ export class TrazabilidadController {
       timestamp_evento,
       ruta_id: rutaSnake,
       rutaId: rutaCamel,
+      tipo,
     } = body;
 
     const ruta_id =
@@ -66,6 +69,9 @@ export class TrazabilidadController {
       throw new BadRequestException('latitud y longitud deben ser números válidos');
     }
 
+    const tipoNorm =
+      typeof tipo === 'string' && tipo.trim() ? tipo.trim() : null;
+
     return this.trazabilidadService.createEvent({
       id,
       etapa,
@@ -74,6 +80,7 @@ export class TrazabilidadController {
       longitud,
       timestamp_evento,
       ruta_id,
+      tipo: tipoNorm,
     });
   }
 }

@@ -1,26 +1,37 @@
 import { bffFetch } from "./bffService";
 
+export type TraceabilityTipo = "EVIDENCIA" | "FICHA_DESPACHO";
+
 export type TraceabilityRecord = {
   id: string;
-  stage: string;
+  /** Carpeta en storage / etapa en API (sin tilde: Transito) */
+  etapa: string;
+  /** Compatibilidad registros antiguos que usaban `stage` */
+  stage?: string;
+  tipo?: TraceabilityTipo;
   photoUri: string;
   latitude: number;
   longitude: number;
   timestamp: string;
 };
 
+function folderFromRecord(r: TraceabilityRecord): string {
+  const raw = (r.etapa || r.stage || "Extra").trim();
+  return raw || "Extra";
+}
+
 export async function syncTraceabilityRecords(
   records: TraceabilityRecord[],
-  /** UUID de la ruta activa; se envía como `ruta_id` para vincular evidencias en BD */
   rutaIdOpcional?: string,
 ): Promise<string[]> {
   const rutaTrim = rutaIdOpcional?.trim();
   const syncedIds: string[] = [];
 
   for (const record of records) {
+    const folder = folderFromRecord(record);
     const ext = record.photoUri?.split(".").pop()?.split("?")[0]?.toLowerCase() || "jpg";
     const fileExtension = ["jpg", "jpeg", "png", "webp"].includes(ext) ? ext : "jpg";
-    const filePath = `${record.stage}/${record.id}.${fileExtension}`;
+    const filePath = `${folder}/${record.id}.${fileExtension}`;
 
     const formData = new FormData();
     const contentType = `image/${fileExtension === "jpg" ? "jpeg" : fileExtension}`;
@@ -29,15 +40,15 @@ export async function syncTraceabilityRecords(
       {
         uri: record.photoUri,
         name: `${record.id}.${fileExtension}`,
-        type: contentType
-      } as unknown as Blob
+        type: contentType,
+      } as unknown as Blob,
     );
     formData.append("bucket", "fotos_trazabilidad");
-    formData.append("folder", record.stage);
+    formData.append("folder", folder);
 
     const uploadResponse = await bffFetch("/api/storage/upload", {
       method: "POST",
-      body: formData
+      body: formData,
     });
     const uploadPayload = await uploadResponse.json().catch(() => ({}));
     if (!uploadResponse.ok) {
@@ -46,7 +57,7 @@ export async function syncTraceabilityRecords(
 
     const eventBody: Record<string, unknown> = {
       id: record.id,
-      etapa: record.stage,
+      etapa: folder,
       foto_uri: uploadPayload.filePath,
       latitud: record.latitude,
       longitud: record.longitude,
@@ -54,6 +65,11 @@ export async function syncTraceabilityRecords(
     };
     if (rutaTrim) {
       eventBody.ruta_id = rutaTrim;
+    }
+
+    const tipoVal = record.tipo?.trim();
+    if (tipoVal) {
+      eventBody.tipo = tipoVal;
     }
 
     const eventResponse = await bffFetch("/api/trazabilidad", {

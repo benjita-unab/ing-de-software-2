@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -9,165 +9,146 @@ import {
   Image,
   ActivityIndicator,
   ScrollView,
+  Dimensions,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
 import * as FileSystem from 'expo-file-system/legacy';
-import { syncTraceabilityRecords } from '../src/services/syncEngine';
+import { useAutoSyncScheduler } from '../src/hooks/useAutoSyncScheduler';
 
-const ETAPAS = ['Carga', 'Salida', 'Transito', 'Entrega'];
+/** Claves internas (coinciden con backend etapa) */
+const CATEGORIAS = ['Carga', 'Salida', 'Transito', 'Entrega', 'Ficha', 'Extra'];
 
-/** AsyncStorage SIEMPRE por ruta — no compartir cache entre rutas */
+const LABEL_CATEGORIA = {
+  Carga: 'Carga',
+  Salida: 'Salida',
+  Transito: 'Tránsito',
+  Entrega: 'Entrega',
+  Ficha: 'Ficha',
+  Extra: 'Extra',
+};
+
+/** Mínimo 1 evidencia **sincronizada** por categoría para cerrar despacho */
+const CATEGORIAS_OBLIGATORIAS = ['Carga', 'Salida', 'Transito', 'Entrega', 'Ficha'];
+
 function storageKeyFromRutaId(rutaId) {
   const id = String(rutaId ?? '').trim();
   return id ? `hu1_traceability_records_${id}` : 'hu1_traceability_records_sin_ruta';
 }
 
-/** Primera etapa sin evidencia local; si todas tienen foto → última etapa (para Confirmar/Finalizar) */
-function etapaInicialDesdeRegistros(records) {
-  if (!records?.length) return 0;
-  for (let i = 0; i < ETAPAS.length; i++) {
-    const tiene = records.some((r) => r.stage === ETAPAS[i]);
-    if (!tiene) return i;
-  }
-  return ETAPAS.length - 1;
+function normalizarEtapa(v) {
+  if (!v) return 'Carga';
+  const s = String(v).trim();
+  const map = {
+    tránsito: 'Transito',
+    transito: 'Transito',
+    Tránsito: 'Transito',
+  };
+  if (map[s]) return map[s];
+  if (CATEGORIAS.includes(s)) return s;
+  if (s === 'Tránsito') return 'Transito';
+  return s;
 }
 
-function ProgressSteps({ etapaActual }) {
-  return (
-    <View style={styles.progressContainer}>
-      {ETAPAS.map((etapa, index) => (
-        <View key={etapa} style={styles.stepWrapper}>
-          <View
-            style={[
-              styles.stepCircle,
-              index < etapaActual && styles.stepCompleted,
-              index === etapaActual && styles.stepActive,
-              index > etapaActual && styles.stepInactive,
-            ]}
-          >
-            <Text style={styles.stepText}>{index + 1}</Text>
-          </View>
-          <Text style={styles.stepLabel}>{etapa}</Text>
-        </View>
-      ))}
-    </View>
-  );
+function inferirTipo(etapa) {
+  return String(etapa).trim() === 'Ficha' ? 'FICHA_DESPACHO' : 'EVIDENCIA';
 }
 
-function StageCard({
-  etapaActual,
-  fotoActual,
-  pendingCount,
-  onOpenCamera,
-  onSyncNow,
-  isCapturing,
-  isSyncing,
-}) {
-  return (
-    <View style={styles.actionContainer}>
-      <Text style={styles.instructionText}>Fase actual: {ETAPAS[etapaActual]}</Text>
+function migrarRegistro(raw, rutaId) {
+  const etapa = normalizarEtapa(raw.etapa ?? raw.stage);
+  const tipo = raw.tipo || inferirTipo(etapa);
+  return {
+    id: raw.id,
+    ruta_id: String(raw.ruta_id ?? rutaId ?? '').trim() || String(rutaId),
+    etapa,
+    tipo,
+    photoUri: raw.photoUri,
+    latitude: typeof raw.latitude === 'number' ? raw.latitude : Number(raw.latitud) || 0,
+    longitude: typeof raw.longitude === 'number' ? raw.longitude : Number(raw.longitud) || 0,
+    timestamp: raw.timestamp,
+    synced: !!raw.synced,
+  };
+}
 
-      {fotoActual ? (
-        <View style={styles.thumbnailContainer}>
-          <Image source={{ uri: fotoActual.photoUri }} style={styles.thumbnail} />
-          <View style={styles.thumbMeta}>
-            <Text style={styles.thumbTitle}>Foto registrada</Text>
-            <Text style={styles.thumbText}>
-              GPS: {fotoActual.latitude.toFixed(5)}, {fotoActual.longitude.toFixed(5)}
-            </Text>
-            <Text style={styles.thumbText}>{new Date(fotoActual.timestamp).toLocaleString()}</Text>
-            <Text style={styles.thumbText}>
-              Estado: {fotoActual.synced ? 'Sincronizado' : 'Pendiente'}
-            </Text>
-          </View>
-        </View>
-      ) : (
-        <Text style={styles.missingPhotoText}>Aun no hay foto de esta etapa.</Text>
-      )}
+function contarPorCategoria(registros, cat) {
+  return registros.filter((r) => r.etapa === cat).length;
+}
 
-      <TouchableOpacity style={styles.btnCamara} onPress={onOpenCamera} disabled={isCapturing || isSyncing}>
-        {isCapturing ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.btnText}>{fotoActual ? 'Tomar nueva fotografia' : 'Tomar fotografia'}</Text>
-        )}
-      </TouchableOpacity>
+function tieneSyncEnCategoria(registros, cat) {
+  return registros.some((r) => r.etapa === cat && r.synced);
+}
 
-      <TouchableOpacity
-        style={[styles.btnSync, (pendingCount === 0 || isSyncing) && styles.btnDisabled]}
-        onPress={onSyncNow}
-        disabled={pendingCount === 0 || isSyncing}
-      >
-        {isSyncing ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Sincronizar ahora</Text>}
-      </TouchableOpacity>
+function categoriasObligatoriasFaltantes(registros) {
+  return CATEGORIAS_OBLIGATORIAS.filter((c) => !tieneSyncEnCategoria(registros, c));
+}
 
-      <View style={styles.syncPill}>
-        <Text style={styles.syncPillText}>
-          {pendingCount > 0
-            ? `Pendiente de Sincronizacion (${pendingCount})`
-            : 'Todos los registros sincronizados'}
-        </Text>
-      </View>
-    </View>
-  );
+function puedeCerrarDespacho(registros) {
+  const pend = registros.filter((r) => !r.synced).length;
+  if (pend > 0) return false;
+  return categoriasObligatoriasFaltantes(registros).length === 0;
 }
 
 export default function RegistroViaje({ onSyncComplete, rutaId }) {
   const STORAGE_KEY = storageKeyFromRutaId(rutaId);
-
-  const [etapaActual, setEtapaActual] = useState(0);
+  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('Carga');
   const [registros, setRegistros] = useState([]);
-  const [viajeFinalizado, setViajeFinalizado] = useState(false);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const cameraRef = useRef(null);
+  const registrosRef = useRef(registros);
+  registrosRef.current = registros;
+
+  const recordsRevision = useMemo(
+    () => registros.map((r) => `${r.id}:${r.synced ? 1 : 0}:${r.etapa}`).join(';'),
+    [registros],
+  );
+
+  const applySyncedIds = useCallback(
+    async (syncedIds) => {
+      const current = registrosRef.current;
+      const next = current.map((record) =>
+        syncedIds.includes(record.id) ? { ...record, synced: true } : record,
+      );
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      setRegistros(next);
+    },
+    [STORAGE_KEY],
+  );
+
+  useAutoSyncScheduler({
+    rutaId,
+    registrosRef,
+    applySyncedIds,
+    setIsSyncing,
+    recordsRevision,
+  });
 
   useEffect(() => {
-    console.log('RUTA CAMBIÓ EN REGISTRO:', rutaId);
-
-    setViajeFinalizado(false);
+    let cancelled = false;
+    setCategoriaSeleccionada('Carga');
+    setRegistros([]);
     setIsCameraOpen(false);
     setIsCapturing(false);
     setIsSyncing(false);
-    setEtapaActual(0);
-    setRegistros([]);
 
-    if (rutaId) {
-      console.log('INICIANDO VIAJE AUTOMÁTICO');
-    }
-
-    let cancelled = false;
-
-    async function cargarDatosDeRuta(idActual) {
+    async function cargar(idActual) {
       const key = storageKeyFromRutaId(idActual);
       try {
         const raw = await AsyncStorage.getItem(key);
         const parsed = raw ? JSON.parse(raw) : [];
-        if (!cancelled) {
-          setRegistros(parsed);
-          const etapaIni = etapaInicialDesdeRegistros(parsed);
-          setEtapaActual(etapaIni);
-          setViajeFinalizado(false);
-          setIsCameraOpen(false);
-          console.log(
-            'INICIANDO VIAJE AUTOMÁTICO — etapa inicial:',
-            etapaIni,
-            ETAPAS[etapaIni],
-          );
-        }
-      } catch (error) {
-        if (!cancelled) {
-          Alert.alert('Error', 'No se pudieron cargar registros locales.');
-        }
+        const migrados = Array.isArray(parsed)
+          ? parsed.map((row) => migrarRegistro(row, idActual))
+          : [];
+        if (!cancelled) setRegistros(migrados);
+      } catch {
+        if (!cancelled) Alert.alert('Error', 'No se pudieron cargar registros locales.');
       }
     }
 
-    void cargarDatosDeRuta(rutaId);
-
+    void cargar(rutaId);
     return () => {
       cancelled = true;
     };
@@ -177,6 +158,15 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(nextRecords));
     setRegistros(nextRecords);
   };
+
+  const pendingCount = registros.filter((r) => !r.synced).length;
+  const totalEvidencias = registros.length;
+  const faltanObl = categoriasObligatoriasFaltantes(registros);
+  const listoCierre = puedeCerrarDespacho(registros);
+
+  useEffect(() => {
+    onSyncComplete?.(listoCierre);
+  }, [listoCierre, onSyncComplete]);
 
   const ensurePermissions = async () => {
     let hasCameraPermission = cameraPermission?.granted;
@@ -198,8 +188,7 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
     return true;
   };
 
-  const openCamera = async () => {
-    if (viajeFinalizado) return;
+  const abrirCamara = async () => {
     const granted = await ensurePermissions();
     if (!granted) return;
     setIsCameraOpen(true);
@@ -211,181 +200,166 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
       setIsCapturing(true);
       const captureTimestamp = new Date().toISOString();
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.7 });
-      
       const position = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
       });
 
-      // Guardar permanentemente en el documentDirectory para que no se borre
       const fileExt = photo.uri.split('.').pop() || 'jpg';
-      const recordId = `${ETAPAS[etapaActual]}-${Date.now()}`;
+      const etapa = categoriaSeleccionada;
+      const recordId = `${etapa}-${Date.now()}`;
       const newPath = `${FileSystem.documentDirectory}${recordId}.${fileExt}`;
       await FileSystem.copyAsync({
         from: photo.uri,
-        to: newPath
+        to: newPath,
       });
 
       const newRecord = {
         id: recordId,
-        stage: ETAPAS[etapaActual],
-        photoUri: newPath, // Usar la nueva ruta local segura
+        ruta_id: String(rutaId).trim(),
+        etapa,
+        tipo: inferirTipo(etapa),
+        photoUri: newPath,
         latitude: position.coords.latitude,
         longitude: position.coords.longitude,
         timestamp: captureTimestamp,
         synced: false,
       };
 
-      const nextRecords = [...registros, newRecord];
-      await persistRecords(nextRecords);
+      await persistRecords([...registros, newRecord]);
       setIsCameraOpen(false);
-      Alert.alert('Exito', `Foto de ${newRecord.stage} guardada en modo offline.`);
-    } catch (error) {
+      Alert.alert('Guardado', `Evidencia (${LABEL_CATEGORIA[etapa] ?? etapa}) en cola de sincronizacion.`);
+    } catch {
       Alert.alert('Error', 'No se pudo capturar foto y ubicacion.');
     } finally {
       setIsCapturing(false);
     }
   };
 
-  const handleSyncNow = async () => {
-    try {
-      const unsyncedRecords = registros.filter((record) => !record.synced);
-      if (unsyncedRecords.length === 0) {
-        Alert.alert('Sin pendientes', 'No hay registros pendientes por sincronizar.');
-        return;
-      }
+  const sortedRegistros = useMemo(() => {
+    return [...registros].sort(
+      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+    );
+  }, [registros]);
 
-      setIsSyncing(true);
-      const syncedIds = await syncTraceabilityRecords(unsyncedRecords, rutaId);
-      const nextRecords = registros.map((record) =>
-        syncedIds.includes(record.id) ? { ...record, synced: true } : record
-      );
-      await persistRecords(nextRecords);
-      Alert.alert('Sincronizacion completa', `${syncedIds.length} registro(s) sincronizado(s).`);
-    } catch (error) {
-      console.log(error);
-      Alert.alert('Error de Sincronización', error?.message || 'No fue posible sincronizar en este momento.');
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const avanzarEtapa = () => {
-    const etapa = ETAPAS[etapaActual];
-    const hasPhotoInCurrentStage = registros.some((record) => record.stage === etapa);
-    if (!hasPhotoInCurrentStage) {
-      Alert.alert('Bloqueo', 'Debes capturar al menos una fotografia para avanzar.');
-      return;
-    }
-
-    if (etapaActual < ETAPAS.length - 1) {
-      setEtapaActual((prev) => prev + 1);
-    } else {
-      setViajeFinalizado(true);
-      setIsCameraOpen(false);
-    }
-  };
-
-  const iniciarNuevoViaje = async () => {
-    try {
-      await AsyncStorage.removeItem(STORAGE_KEY);
-      setEtapaActual(0);
-      setViajeFinalizado(false);
-      setRegistros([]);
-      setIsCameraOpen(false);
-      setIsCapturing(false);
-      setIsSyncing(false);
-    } catch (error) {
-      Alert.alert('Error', 'No se pudo reiniciar el viaje.');
-    }
-  };
-
-  const etapa = ETAPAS[etapaActual];
-  const registrosEtapaActual = registros.filter((record) => record.stage === etapa);
-  const fotoActual = registrosEtapaActual[registrosEtapaActual.length - 1] || null;
-  const pendingCount = registros.filter((record) => !record.synced).length;
-  const pendientes = registros.filter((record) => !record.synced).length;
-
-  useEffect(() => {
-    if (onSyncComplete) {
-      const isTodoListo = viajeFinalizado && pendientes === 0;
-      onSyncComplete(isTodoListo);
-    }
-  }, [viajeFinalizado, pendientes, onSyncComplete]);
+  const chipAncho = Math.min((Dimensions.get('window').width - 48) / 3, 120);
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {viajeFinalizado ? (
-          <View style={styles.finalContainer}>
-            <View style={styles.finalIconCircle}>
-              <Text style={styles.finalIcon}>✓</Text>
-            </View>
-            <Text style={styles.finalTitle}>¡Viaje Finalizado con Éxito!</Text>
-            <Text style={styles.finalDescription}>
-              La evidencia final ha sido asegurada y no puede modificarse en esta ruta.
-            </Text>
-            {pendientes > 0 ? (
-              <>
-                <Text style={styles.pendingWarning}>Faltan {pendientes} evidencias por subir</Text>
-                <TouchableOpacity
-                  style={[styles.btnNuevoViaje, styles.btnSyncTodo, isSyncing && styles.btnDisabled]}
-                  onPress={handleSyncNow}
-                  disabled={isSyncing}
-                >
-                  {isSyncing ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.btnText}>Sincronizar Todo</Text>
-                  )}
-                </TouchableOpacity>
-              </>
-            ) : (
-              <TouchableOpacity style={styles.btnNuevoViaje} onPress={iniciarNuevoViaje}>
-                <Text style={styles.btnText}>Iniciar Nuevo Viaje</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        ) : isCameraOpen ? (
+        {isCameraOpen ? (
           <View style={styles.cameraContainer}>
             <CameraView style={styles.camera} facing="back" ref={cameraRef} />
             <View style={styles.cameraActions}>
               <TouchableOpacity style={styles.btnSecondary} onPress={() => setIsCameraOpen(false)}>
-                <Text style={styles.btnText}>Cancelar</Text>
+                <Text style={styles.btnLightText}>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.btnCapture} onPress={manejarCapturaFoto} disabled={isCapturing}>
-                {isCapturing ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Capturar</Text>}
+                {isCapturing ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnLightText}>Capturar</Text>}
               </TouchableOpacity>
             </View>
           </View>
         ) : (
           <>
             <View style={styles.header}>
-              <Text style={styles.title}>Trazabilidad de Carga Valiosa</Text>
-              <Text style={styles.subtitle}>Etapa {etapaActual + 1} de 4</Text>
-              <Text style={styles.etapaActualLabel}>
-                Etapa actual: {ETAPAS[etapaActual]}
+              <Text style={styles.title}>Evidencias del viaje</Text>
+              <Text style={styles.subtitle}>Ruta activa · selecciona categoría y añade fotos</Text>
+            </View>
+
+            <Text style={styles.sectionLabel}>Categorías</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.catRow}
+            >
+              {CATEGORIAS.map((cat) => {
+                const n = contarPorCategoria(registros, cat);
+                const oblig = CATEGORIAS_OBLIGATORIAS.includes(cat);
+                const cumpleSync = tieneSyncEnCategoria(registros, cat);
+                const soloPendiente =
+                  oblig &&
+                  registros.some((r) => r.etapa === cat && !r.synced) &&
+                  !cumpleSync;
+                const sinFotos = n === 0 && oblig;
+
+                let chipStyle = styles.catChip;
+                if (categoriaSeleccionada === cat) chipStyle = { ...chipStyle, ...styles.catChipSelected };
+                if (!oblig) {
+                  chipStyle = { ...chipStyle, ...styles.catChipExtra };
+                } else if (cumpleSync) {
+                  chipStyle = { ...chipStyle, ...styles.catChipOk };
+                } else if (soloPendiente || sinFotos) {
+                  chipStyle = { ...chipStyle, ...styles.catChipWarn };
+                }
+
+                return (
+                  <TouchableOpacity
+                    key={cat}
+                    style={[chipStyle, { minWidth: chipAncho }]}
+                    onPress={() => setCategoriaSeleccionada(cat)}
+                  >
+                    <Text style={styles.catChipText} numberOfLines={2}>
+                      {LABEL_CATEGORIA[cat] ?? cat}
+                    </Text>
+                    <Text style={styles.catChipCount}>({n})</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={[styles.btnAdd, (isCapturing || isSyncing) && styles.btnDisabled]}
+              onPress={abrirCamara}
+              disabled={isCapturing || isSyncing}
+            >
+              <Text style={styles.btnAddText}>+ Añadir Evidencia</Text>
+            </TouchableOpacity>
+
+            <View style={styles.resumenCard}>
+              <Text style={styles.resumenLine}>
+                Total evidencias: <Text style={styles.resumenStrong}>{totalEvidencias}</Text>
               </Text>
-            </View>
-
-            <ProgressSteps etapaActual={etapaActual} />
-
-            <StageCard
-              etapaActual={etapaActual}
-              fotoActual={fotoActual}
-              pendingCount={pendingCount}
-              onOpenCamera={openCamera}
-              onSyncNow={handleSyncNow}
-              isCapturing={isCapturing}
-              isSyncing={isSyncing}
-            />
-
-            <View style={styles.footer}>
-              <TouchableOpacity style={styles.btnAvanzar} onPress={avanzarEtapa}>
-                <Text style={styles.btnText}>
-                  {etapaActual === ETAPAS.length - 1 ? 'Finalizar Viaje' : 'Confirmar y Avanzar'}
+              <Text style={styles.resumenLine}>
+                Pendientes por subir: <Text style={styles.resumenStrong}>{pendingCount}</Text>
+              </Text>
+              {isSyncing ? (
+                <View style={styles.syncRow}>
+                  <ActivityIndicator size="small" color="#6D28D9" />
+                  <Text style={styles.syncText}> Sincronizando…</Text>
+                </View>
+              ) : null}
+              {faltanObl.length > 0 ? (
+                <Text style={styles.alertReq}>
+                  Faltan evidencias obligatorias sincronizadas: {faltanObl.map((c) => LABEL_CATEGORIA[c] ?? c).join(', ')}
                 </Text>
-              </TouchableOpacity>
+              ) : null}
+              {pendingCount > 0 ? (
+                <Text style={styles.alertPend}>Hay evidencias pendientes de sincronización</Text>
+              ) : null}
+              {listoCierre ? (
+                <Text style={styles.okCierre}>Listo para cerrar despacho (requisitos cumplidos)</Text>
+              ) : null}
             </View>
+
+            <Text style={styles.sectionLabel}>Registro del viaje</Text>
+            {sortedRegistros.length === 0 ? (
+              <Text style={styles.emptyText}>Aún no hay evidencias. Usa el botón superior para añadir.</Text>
+            ) : (
+              sortedRegistros.map((r) => (
+                <View key={r.id} style={styles.thumbRow}>
+                  <Image source={{ uri: r.photoUri }} style={styles.thumbSmall} />
+                  <View style={styles.thumbMeta}>
+                    <Text style={styles.thumbTitle}>{LABEL_CATEGORIA[r.etapa] ?? r.etapa}</Text>
+                    <Text style={styles.thumbSub}>{new Date(r.timestamp).toLocaleString()}</Text>
+                    <Text style={styles.thumbSub}>
+                      GPS: {Number(r.latitude).toFixed(5)}, {Number(r.longitude).toFixed(5)}
+                    </Text>
+                    <Text style={[styles.thumbSub, r.synced ? styles.syncOk : styles.syncNo]}>
+                      {r.synced ? 'Sincronizado' : 'Pendiente'}
+                    </Text>
+                  </View>
+                </View>
+              ))
+            )}
           </>
         )}
       </ScrollView>
@@ -395,179 +369,125 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F3F6FB' },
-  scrollContent: { flexGrow: 1, paddingBottom: 20 },
+  scrollContent: { flexGrow: 1, paddingBottom: 28 },
   header: {
-    padding: 20,
+    padding: 18,
     backgroundColor: '#fff',
-    alignItems: 'center',
     borderBottomWidth: 1,
     borderColor: '#E5EAF2',
   },
   title: { fontSize: 22, fontWeight: '700', color: '#1D2A3A' },
-  subtitle: { fontSize: 15, color: '#667085', marginTop: 6 },
-  etapaActualLabel: {
-    fontSize: 17,
+  subtitle: { fontSize: 14, color: '#64748b', marginTop: 6 },
+  sectionLabel: {
+    fontSize: 13,
     fontWeight: '700',
-    color: '#1D4ED8',
-    marginTop: 10,
-    textAlign: 'center',
+    color: '#475467',
+    marginHorizontal: 16,
+    marginTop: 14,
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
   },
-  progressContainer: {
+  catRow: {
+    paddingHorizontal: 12,
+    gap: 8,
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 18,
-    paddingVertical: 18,
+    alignItems: 'stretch',
   },
-  stepWrapper: { alignItems: 'center', flex: 1 },
-  stepCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+  catChip: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
+    marginRight: 8,
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 7,
   },
-  stepCompleted: { backgroundColor: '#16A34A' },
-  stepActive: { backgroundColor: '#2563EB' },
-  stepInactive: { backgroundColor: '#C7D2E0' },
-  stepText: { color: '#fff', fontWeight: '700', fontSize: 14 },
-  stepLabel: { fontSize: 12, color: '#475467', textAlign: 'center' },
-  actionContainer: { flex: 1, paddingHorizontal: 20, paddingVertical: 10 },
-  instructionText: {
-    fontSize: 18,
-    marginBottom: 14,
-    fontWeight: '600',
-    color: '#101828',
-    textAlign: 'center',
+  catChipSelected: {
+    borderColor: '#2563EB',
+    backgroundColor: '#EFF6FF',
   },
-  missingPhotoText: {
-    textAlign: 'center',
-    color: '#98A2B3',
-    marginBottom: 16,
+  catChipOk: {
+    borderColor: '#16A34A',
+    backgroundColor: '#F0FDF4',
   },
-  thumbnailContainer: {
+  catChipWarn: {
+    borderColor: '#EA580C',
+    backgroundColor: '#FFF7ED',
+  },
+  catChipExtra: {
+    borderColor: '#94A3B8',
+    backgroundColor: '#F8FAFC',
+  },
+  catChipText: { fontSize: 13, fontWeight: '700', color: '#0f172a', textAlign: 'center' },
+  catChipCount: { fontSize: 12, color: '#64748b', marginTop: 4, fontWeight: '600' },
+  btnAdd: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    backgroundColor: '#2563EB',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  btnAddText: { color: '#fff', fontSize: 17, fontWeight: '800' },
+  btnDisabled: { opacity: 0.55 },
+  resumenCard: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    padding: 14,
     backgroundColor: '#fff',
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#E4E7EC',
-    padding: 12,
-    marginBottom: 16,
+    gap: 6,
   },
-  thumbnail: { width: '100%', height: 190, borderRadius: 10, marginBottom: 10 },
-  thumbMeta: { gap: 4 },
-  thumbTitle: { fontSize: 15, fontWeight: '700', color: '#1D2939' },
-  thumbText: { fontSize: 13, color: '#475467' },
-  syncPill: {
-    marginTop: 14,
-    alignSelf: 'center',
-    backgroundColor: '#FFF4ED',
+  resumenLine: { fontSize: 14, color: '#334155' },
+  resumenStrong: { fontWeight: '800', color: '#0f172a' },
+  syncRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
+  syncText: { fontSize: 13, color: '#6D28D9', fontWeight: '600' },
+  alertReq: { fontSize: 13, color: '#C2410C', fontWeight: '600', marginTop: 6 },
+  alertPend: { fontSize: 13, color: '#B45309', fontWeight: '600' },
+  okCierre: { fontSize: 13, color: '#15803D', fontWeight: '700', marginTop: 4 },
+  emptyText: { marginHorizontal: 16, color: '#94A3B8', fontSize: 14 },
+  thumbRow: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginBottom: 12,
+    backgroundColor: '#fff',
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#FED7AA',
-    borderRadius: 50,
-    paddingVertical: 7,
-    paddingHorizontal: 14,
+    borderColor: '#E4E7EC',
+    overflow: 'hidden',
   },
-  syncPillText: { color: '#C2410C', fontWeight: '600', fontSize: 12 },
-  footer: { padding: 20, paddingBottom: 34, backgroundColor: '#fff' },
-  btnCamara: {
-    backgroundColor: '#2563EB',
-    borderRadius: 12,
-    paddingVertical: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  btnSync: {
-    marginTop: 10,
-    backgroundColor: '#6D28D9',
-    borderRadius: 12,
-    paddingVertical: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  btnAvanzar: {
-    backgroundColor: '#16A34A',
-    borderRadius: 12,
-    paddingVertical: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  btnDisabled: { opacity: 0.6 },
-  btnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  finalContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-  },
-  finalIconCircle: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: '#DCFCE7',
-    borderWidth: 2,
-    borderColor: '#16A34A',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-  },
-  finalIcon: { fontSize: 42, color: '#16A34A', fontWeight: '700' },
-  finalTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#14532D',
-    textAlign: 'center',
-    marginBottom: 10,
-  },
-  finalDescription: {
-    fontSize: 16,
-    color: '#166534',
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  btnNuevoViaje: {
-    backgroundColor: '#16A34A',
-    borderRadius: 12,
-    paddingVertical: 15,
-    paddingHorizontal: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  btnSyncTodo: {
-    width: '100%',
-    maxWidth: 360,
-    backgroundColor: '#6D28D9',
-  },
-  pendingWarning: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#B45309',
-    textAlign: 'center',
-    marginBottom: 14,
-  },
-  cameraContainer: { flex: 1, backgroundColor: '#000' },
+  thumbSmall: { width: 96, height: 96, backgroundColor: '#E5E7EB' },
+  thumbMeta: { flex: 1, padding: 10, justifyContent: 'center' },
+  thumbTitle: { fontSize: 15, fontWeight: '700', color: '#1D2939' },
+  thumbSub: { fontSize: 12, color: '#475467', marginTop: 2 },
+  syncOk: { color: '#15803D', fontWeight: '700' },
+  syncNo: { color: '#C2410C', fontWeight: '700' },
+  cameraContainer: { flex: 1, minHeight: 420, backgroundColor: '#000' },
   camera: { flex: 1 },
   cameraActions: {
-    position: 'absolute',
-    bottom: 28,
-    width: '100%',
     flexDirection: 'row',
     justifyContent: 'space-around',
-    paddingHorizontal: 20,
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    backgroundColor: '#000',
   },
   btnSecondary: {
-    backgroundColor: 'rgba(17,24,39,0.8)',
+    backgroundColor: 'rgba(17,24,39,0.85)',
     paddingVertical: 14,
-    paddingHorizontal: 28,
+    paddingHorizontal: 24,
     borderRadius: 12,
-    minWidth: 130,
-    alignItems: 'center',
   },
   btnCapture: {
     backgroundColor: '#2563EB',
     paddingVertical: 14,
-    paddingHorizontal: 28,
+    paddingHorizontal: 24,
     borderRadius: 12,
     minWidth: 130,
     alignItems: 'center',
   },
+  btnLightText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 });
