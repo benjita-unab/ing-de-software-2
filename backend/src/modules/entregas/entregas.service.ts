@@ -305,7 +305,7 @@ export class EntregasService {
    * **Dónde debería existir la fila `entregas`:** lo ideal es crearla cuando la
    * operación de negocio abre la entrega (p. ej. al asignar ruta o al iniciar
    * despacho en web). Si no existe, aquí aplicamos **opción B** (fix mínimo):
-   * intentar `insert` usando `ruta_id` + `cliente_id` de `rutas`.
+   * insertar solo columnas que existen en `entregas` (sin `cliente_id`).
    *
    * - Opción A: crear al enviar QR (`email`) — acopla envío de correo a BD.
    * - Opción C: crear al asignar ruta — requiere cambios en `rutas`/frontend web.
@@ -427,7 +427,11 @@ export class EntregasService {
         );
       }
 
-      console.log('Firma actualizada en BD, filas:', updatedRows.length);
+      console.log(
+        'Firma actualizada en BD',
+        'filas:',
+        updatedRows.length,
+      );
 
       return {
         success: true,
@@ -552,15 +556,28 @@ export class EntregasService {
 
   /**
    * Opción B: crea una fila mínima en `entregas` si la ruta existe.
-   * Falla silenciosamente (retorna false) si RLS/NOT NULL/schema impiden insert.
+   * No usa `cliente_id` (no existe en todas las tablas `entregas`).
+   * Falla silenciosamente (retorna false) si RLS/NOT NULL impiden insert.
    */
+  private isPostgrestUnknownColumnError(err: {
+    code?: string;
+    message?: string;
+  }): boolean {
+    if (err.code === 'PGRST204') return true;
+    const m = err.message ?? '';
+    return (
+      /Could not find the .* column of 'entregas'/i.test(m) ||
+      /schema cache/i.test(m)
+    );
+  }
+
   private async tryEnsureEntregaRowForSignature(
     supabase: ReturnType<SupabaseConfigService['getClient']>,
     rutaId: string,
   ): Promise<boolean> {
     const { data: ruta, error: rutaErr } = await supabase
       .from('rutas')
-      .select('id, cliente_id')
+      .select('id')
       .eq('id', rutaId)
       .maybeSingle();
 
@@ -572,19 +589,33 @@ export class EntregasService {
       return false;
     }
 
-    const insertPayload: Record<string, unknown> = {
+    const insertWithOptionals: Record<string, unknown> = {
       ruta_id: rutaId,
       validado: false,
+      firma_url: null,
+      comprobante_url: null,
+      fecha_entrega_real: null,
     };
-    if (ruta.cliente_id != null) {
-      insertPayload.cliente_id = ruta.cliente_id;
-    }
 
-    const { data: inserted, error: insErr } = await supabase
+    let { data: inserted, error: insErr } = await supabase
       .from('entregas')
-      .insert(insertPayload)
+      .insert(insertWithOptionals)
       .select('id')
       .maybeSingle();
+
+    if (insErr && this.isPostgrestUnknownColumnError(insErr)) {
+      console.warn(
+        'SIGNATURE ensure -> insert con columnas opcionales falló (columna/schema); reintentando solo ruta_id:',
+        insErr.message,
+      );
+      const retry = await supabase
+        .from('entregas')
+        .insert({ ruta_id: rutaId })
+        .select('id')
+        .maybeSingle();
+      inserted = retry.data;
+      insErr = retry.error;
+    }
 
     if (insErr) {
       console.error('SIGNATURE ensure -> insert entregas failed:', {
@@ -596,10 +627,7 @@ export class EntregasService {
       return false;
     }
 
-    console.log(
-      'SIGNATURE ensure -> fila entregas creada (opción B), id:',
-      inserted?.id,
-    );
+    console.log('SIGNATURE ensure -> fila entregas creada', 'id:', inserted?.id);
     return true;
   }
 
