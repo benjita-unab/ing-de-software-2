@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
 import * as FileSystem from 'expo-file-system/legacy';
-import { syncTraceabilityRecords } from '../src/services/syncEngine';
+import { useAutoSyncScheduler } from '../src/hooks/useAutoSyncScheduler';
 
 const ETAPAS = ['Carga', 'Salida', 'Transito', 'Entrega'];
 
@@ -61,7 +61,6 @@ function StageCard({
   fotoActual,
   pendingCount,
   onOpenCamera,
-  onSyncNow,
   isCapturing,
   isSyncing,
 }) {
@@ -95,19 +94,13 @@ function StageCard({
         )}
       </TouchableOpacity>
 
-      <TouchableOpacity
-        style={[styles.btnSync, (pendingCount === 0 || isSyncing) && styles.btnDisabled]}
-        onPress={onSyncNow}
-        disabled={pendingCount === 0 || isSyncing}
-      >
-        {isSyncing ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Sincronizar ahora</Text>}
-      </TouchableOpacity>
-
       <View style={styles.syncPill}>
         <Text style={styles.syncPillText}>
-          {pendingCount > 0
-            ? `Pendiente de Sincronizacion (${pendingCount})`
-            : 'Todos los registros sincronizados'}
+          {isSyncing
+            ? 'Sincronizando evidencias…'
+            : pendingCount > 0
+              ? `Pendiente de sincronizacion (${pendingCount}) — reintento automatico`
+              : 'Todos los registros sincronizados'}
         </Text>
       </View>
     </View>
@@ -125,6 +118,33 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
   const [isSyncing, setIsSyncing] = useState(false);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const cameraRef = useRef(null);
+  const registrosRef = useRef(registros);
+  registrosRef.current = registros;
+
+  const recordsRevision = useMemo(
+    () => registros.map((r) => `${r.id}:${r.synced ? 1 : 0}`).join(';'),
+    [registros],
+  );
+
+  const applySyncedIds = useCallback(
+    async (syncedIds) => {
+      const current = registrosRef.current;
+      const next = current.map((record) =>
+        syncedIds.includes(record.id) ? { ...record, synced: true } : record,
+      );
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      setRegistros(next);
+    },
+    [STORAGE_KEY],
+  );
+
+  useAutoSyncScheduler({
+    rutaId,
+    registrosRef,
+    applySyncedIds,
+    setIsSyncing,
+    recordsRevision,
+  });
 
   useEffect(() => {
     console.log('RUTA CAMBIÓ EN REGISTRO:', rutaId);
@@ -246,29 +266,6 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
     }
   };
 
-  const handleSyncNow = async () => {
-    try {
-      const unsyncedRecords = registros.filter((record) => !record.synced);
-      if (unsyncedRecords.length === 0) {
-        Alert.alert('Sin pendientes', 'No hay registros pendientes por sincronizar.');
-        return;
-      }
-
-      setIsSyncing(true);
-      const syncedIds = await syncTraceabilityRecords(unsyncedRecords, rutaId);
-      const nextRecords = registros.map((record) =>
-        syncedIds.includes(record.id) ? { ...record, synced: true } : record
-      );
-      await persistRecords(nextRecords);
-      Alert.alert('Sincronizacion completa', `${syncedIds.length} registro(s) sincronizado(s).`);
-    } catch (error) {
-      console.log(error);
-      Alert.alert('Error de Sincronización', error?.message || 'No fue posible sincronizar en este momento.');
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
   const avanzarEtapa = () => {
     const etapa = ETAPAS[etapaActual];
     const hasPhotoInCurrentStage = registros.some((record) => record.stage === etapa);
@@ -325,20 +322,19 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
               La evidencia final ha sido asegurada y no puede modificarse en esta ruta.
             </Text>
             {pendientes > 0 ? (
-              <>
-                <Text style={styles.pendingWarning}>Faltan {pendientes} evidencias por subir</Text>
-                <TouchableOpacity
-                  style={[styles.btnNuevoViaje, styles.btnSyncTodo, isSyncing && styles.btnDisabled]}
-                  onPress={handleSyncNow}
-                  disabled={isSyncing}
-                >
-                  {isSyncing ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.btnText}>Sincronizar Todo</Text>
-                  )}
-                </TouchableOpacity>
-              </>
+              <View style={styles.finalPendingBox}>
+                <Text style={styles.pendingWarning}>
+                  Faltan {pendientes} evidencia(s) por subir
+                </Text>
+                <Text style={styles.autoSyncHint}>
+                  {isSyncing
+                    ? 'Sincronizando en segundo plano…'
+                    : 'Se reintentara automaticamente (sin accion manual).'}
+                </Text>
+                {isSyncing ? (
+                  <ActivityIndicator style={styles.finalSpinner} color="#6D28D9" size="large" />
+                ) : null}
+              </View>
             ) : (
               <TouchableOpacity style={styles.btnNuevoViaje} onPress={iniciarNuevoViaje}>
                 <Text style={styles.btnText}>Iniciar Nuevo Viaje</Text>
@@ -374,7 +370,6 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
               fotoActual={fotoActual}
               pendingCount={pendingCount}
               onOpenCamera={openCamera}
-              onSyncNow={handleSyncNow}
               isCapturing={isCapturing}
               isSyncing={isSyncing}
             />
@@ -476,14 +471,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  btnSync: {
-    marginTop: 10,
-    backgroundColor: '#6D28D9',
-    borderRadius: 12,
-    paddingVertical: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   btnAvanzar: {
     backgroundColor: '#16A34A',
     borderRadius: 12,
@@ -532,10 +519,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  btnSyncTodo: {
-    width: '100%',
-    maxWidth: 360,
-    backgroundColor: '#6D28D9',
+  finalPendingBox: { alignItems: 'center', width: '100%', maxWidth: 360 },
+  finalSpinner: { marginTop: 12 },
+  autoSyncHint: {
+    fontSize: 14,
+    color: '#475467',
+    textAlign: 'center',
+    marginTop: 8,
   },
   pendingWarning: {
     fontSize: 16,
