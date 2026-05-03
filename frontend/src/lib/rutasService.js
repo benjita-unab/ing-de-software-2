@@ -10,6 +10,34 @@
 import { apiFetch } from "./apiClient";
 
 /**
+ * Crea una ruta (POST /api/rutas).
+ * @param {object} payload — cliente_id, origen, destino obligatorios; conductor_id, camion_id, fecha_inicio, eta opcionales (ISO string).
+ * @returns {Promise<{ success: boolean, data?: object, error?: string }>}
+ */
+export async function crearRuta(payload) {
+  if (!payload?.cliente_id || !payload?.origen || !payload?.destino) {
+    return {
+      success: false,
+      error: "cliente_id, origen y destino son obligatorios",
+    };
+  }
+
+  const res = await apiFetch("/api/rutas", {
+    method: "POST",
+    json: payload,
+  });
+
+  if (!res.ok) {
+    return {
+      success: false,
+      error: res.error || "No se pudo crear la ruta",
+    };
+  }
+
+  return { success: true, data: res.data };
+}
+
+/**
  * Valida que un conductor tenga licencia vigente.
  * @param {string} conductorId - ID del conductor
  * @returns {Promise<{isValid: boolean, errorMessage?: string, conductor?: object}>}

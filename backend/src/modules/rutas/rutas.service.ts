@@ -7,12 +7,167 @@ import {
 import { SupabaseConfigService } from '../../config/supabase.config';
 import { ConductoresService } from '../conductores/conductores.service';
 
+/** Cuerpo esperado por POST /api/rutas (validación en createRoute). */
+export type CreateRutaDto = {
+  cliente_id: string;
+  conductor_id?: string | null;
+  camion_id?: string | null;
+  origen: string;
+  destino: string;
+  estado?: string | null;
+  fecha_inicio?: string | null;
+  eta?: string | null;
+};
+
 @Injectable()
 export class RutasService {
+  /** Coincide con el enum `estado_ruta` en Supabase (ver también updateRouteStatus). */
+  static readonly ESTADOS_RUTA = [
+    'PENDIENTE',
+    'ASIGNADO',
+    'EN_CAMINO_ORIGEN',
+    'EN_CARGA',
+    'EN_TRANSITO',
+    'EN_DESTINO',
+    'ENTREGADO',
+    'CANCELADO',
+  ] as const;
+
   constructor(
     private supabaseConfig: SupabaseConfigService,
     private conductoresService: ConductoresService,
   ) {}
+
+  /**
+   * Crea una ruta en Supabase.
+   * Estado inicial: si vienen conductor_id y camion_id → ASIGNADO; si no → PENDIENTE.
+   * Si el cliente envía `estado` explícito, debe ser uno del enum.
+   */
+  async createRoute(body: CreateRutaDto) {
+    const cliente_id = String(body?.cliente_id ?? '').trim();
+    const origen = String(body?.origen ?? '').trim();
+    const destino = String(body?.destino ?? '').trim();
+
+    if (!cliente_id) {
+      throw new BadRequestException('cliente_id es obligatorio');
+    }
+    if (!origen) {
+      throw new BadRequestException('origen es obligatorio');
+    }
+    if (!destino) {
+      throw new BadRequestException('destino es obligatorio');
+    }
+
+    const conductorRaw = body?.conductor_id;
+    const camionRaw = body?.camion_id;
+    const conductor_id =
+      conductorRaw != null && String(conductorRaw).trim() !== ''
+        ? String(conductorRaw).trim()
+        : null;
+    const camion_id =
+      camionRaw != null && String(camionRaw).trim() !== ''
+        ? String(camionRaw).trim()
+        : null;
+
+    const estadosValidos = [...RutasService.ESTADOS_RUTA];
+
+    let estadoInicial: string;
+    const estadoExplicito =
+      body.estado != null && String(body.estado).trim() !== ''
+        ? String(body.estado).trim().toUpperCase()
+        : '';
+
+    if (estadoExplicito) {
+      if (!estadosValidos.includes(estadoExplicito as any)) {
+        throw new BadRequestException(
+          `Estado inválido. Valores permitidos (enum estado_ruta): ${estadosValidos.join(', ')}`,
+        );
+      }
+      estadoInicial = estadoExplicito;
+    } else if (conductor_id && camion_id) {
+      estadoInicial = 'ASIGNADO';
+    } else {
+      estadoInicial = 'PENDIENTE';
+    }
+
+    const insert: Record<string, unknown> = {
+      cliente_id,
+      origen,
+      destino,
+      estado: estadoInicial,
+    };
+
+    if (conductor_id) {
+      insert.conductor_id = conductor_id;
+    }
+    if (camion_id) {
+      insert.camion_id = camion_id;
+    }
+
+    if (body.fecha_inicio != null && String(body.fecha_inicio).trim() !== '') {
+      insert.fecha_inicio = String(body.fecha_inicio).trim();
+    }
+    if (body.eta != null && String(body.eta).trim() !== '') {
+      insert.eta = String(body.eta).trim();
+    }
+
+    if (estadoInicial === 'ASIGNADO' && insert.fecha_inicio === undefined) {
+      insert.fecha_inicio = new Date().toISOString();
+    }
+
+    const supabase = this.supabaseConfig.getClient();
+
+    const { data: created, error } = await supabase
+      .from('rutas')
+      .insert(insert)
+      .select(
+        `
+        id,
+        cliente_id,
+        conductor_id,
+        camion_id,
+        origen,
+        destino,
+        estado,
+        fecha_inicio,
+        fecha_fin,
+        eta,
+        created_at,
+        ficha_despacho_url,
+        clientes(id, nombre),
+        conductores(id, rut),
+        camiones(id, patente)
+      `,
+      )
+      .single();
+
+    if (error) {
+      console.error('createRoute Supabase:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      throw new BadRequestException(
+        `No se pudo crear la ruta: ${error.message}${error.hint ? ` (${error.hint})` : ''}`,
+      );
+    }
+
+    try {
+      await supabase.from('historial_estados').insert([
+        {
+          ruta_id: created.id,
+          estado: estadoInicial,
+          created_at: new Date().toISOString(),
+        },
+      ]);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn('createRoute historial_estados omitido:', msg);
+    }
+
+    return created;
+  }
 
   /**
    * Asigna un conductor a una ruta después de validar su licencia
@@ -198,19 +353,9 @@ export class RutasService {
 
     const supabase = this.supabaseConfig.getClient();
 
-    // Enum real `estado_ruta` en Supabase.
-    const estadosValidos = [
-      'PENDIENTE',
-      'ASIGNADO',
-      'EN_CAMINO_ORIGEN',
-      'EN_CARGA',
-      'EN_TRANSITO',
-      'EN_DESTINO',
-      'ENTREGADO',
-      'CANCELADO',
-    ];
+    const estadosValidos = [...RutasService.ESTADOS_RUTA];
 
-    if (!estadosValidos.includes(nuevoEstado)) {
+    if (!estadosValidos.includes(nuevoEstado as any)) {
       throw new BadRequestException(`Estado inválido. Acepta: ${estadosValidos.join(', ')}`);
     }
 
@@ -277,6 +422,7 @@ export class RutasService {
       estado,
       fecha_inicio,
       fecha_fin,
+      eta,
       created_at,
       cliente_id,
       conductor_id,
