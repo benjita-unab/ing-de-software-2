@@ -17,8 +17,10 @@ import * as Location from 'expo-location';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useAutoSyncScheduler } from '../src/hooks/useAutoSyncScheduler';
 
-/** Claves internas (coinciden con backend etapa) */
-const CATEGORIAS = ['Carga', 'Salida', 'Transito', 'Entrega', 'Ficha', 'Extra'];
+/** Claves internas (coinciden con backend etapa). HU-21: evidencia libre usa EVIDENCIA_ADICIONAL */
+const EVIDENCIA_ADICIONAL = 'EVIDENCIA_ADICIONAL';
+
+const CATEGORIAS = ['Carga', 'Salida', 'Transito', 'Entrega', 'Ficha', EVIDENCIA_ADICIONAL];
 
 const LABEL_CATEGORIA = {
   Carga: 'Carga',
@@ -26,7 +28,7 @@ const LABEL_CATEGORIA = {
   Transito: 'Tránsito',
   Entrega: 'Entrega',
   Ficha: 'Ficha',
-  Extra: 'Extra',
+  [EVIDENCIA_ADICIONAL]: 'Evid. adicional',
 };
 
 /** Mínimo 1 evidencia **sincronizada** por categoría para cerrar despacho */
@@ -40,6 +42,7 @@ function storageKeyFromRutaId(rutaId) {
 function normalizarEtapa(v) {
   if (!v) return 'Carga';
   const s = String(v).trim();
+  if (s === 'Extra') return EVIDENCIA_ADICIONAL;
   const map = {
     tránsito: 'Transito',
     transito: 'Transito',
