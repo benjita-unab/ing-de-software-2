@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Location from 'expo-location';
 import { bffFetch } from './bffService';
 
 export type ConductorMessageQueueItem = {
@@ -32,6 +33,63 @@ export async function loadMensajeQueue(rutaId: string) {
 
 export async function saveMensajeQueue(rutaId: string, queue: ConductorMessageQueueItem[]) {
   await AsyncStorage.setItem(buildMensajeStorageKey(rutaId), JSON.stringify(queue));
+}
+
+/**
+ * Captura las coordenadas GPS actuales del conductor.
+ * Retorna [latitud, longitud] o [null, null] si falla.
+ */
+async function captureGpsLocation(): Promise<[number | null, number | null]> {
+  try {
+    const permission = await Location.requestForegroundPermissionsAsync();
+    if (permission.status !== 'granted') {
+      return [null, null];
+    }
+
+    const position = await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.Balanced,
+    });
+
+    return [position.coords.latitude, position.coords.longitude];
+  } catch {
+    return [null, null];
+  }
+}
+
+/**
+ * Crea un nuevo mensaje con ID único, captura GPS, y lo agrega a la cola local.
+ * Retorna el mensaje creado.
+ */
+export async function enqueueConductorMessage(
+  rutaId: string,
+  label: string,
+  tipo: 'ESTADO' | 'EMERGENCIA',
+  prioridad: 'NORMAL' | 'ALTA',
+): Promise<ConductorMessageQueueItem> {
+  const [latitud, longitud] = await captureGpsLocation();
+
+  const newMessage: ConductorMessageQueueItem = {
+    id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    ruta_id: rutaId,
+    mensaje: label,
+    tipo,
+    prioridad,
+    latitud,
+    longitud,
+    timestamp: new Date().toISOString(),
+    synced: false,
+  };
+
+  // Cargar cola actual
+  const currentQueue = await loadMensajeQueue(rutaId);
+
+  // Agregar nuevo mensaje
+  const updatedQueue = [...currentQueue, newMessage];
+
+  // Guardar en AsyncStorage
+  await saveMensajeQueue(rutaId, updatedQueue);
+
+  return newMessage;
 }
 
 export async function sendConductorMessage(message: ConductorMessageQueueItem) {

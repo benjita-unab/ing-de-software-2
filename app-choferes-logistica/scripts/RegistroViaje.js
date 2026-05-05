@@ -18,6 +18,7 @@ import { useAutoSyncScheduler } from '../src/hooks/useAutoSyncScheduler';
 import {
   loadMensajeQueue,
   saveMensajeQueue,
+  enqueueConductorMessage,
 } from '../src/services/mensajesConductorService';
 import { useMensajesQueueScheduler } from '../src/hooks/useMensajesQueueScheduler';
 import { MENSAJES_CATALOGO } from '../src/constants/mensajesCatalog';
@@ -312,8 +313,33 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
     }
   };
 
-  const reportarEstado = (option) => {
-    console.log(`Mensaje seleccionado: ${option.label}`);
+  const reportarEstado = async (option) => {
+    if (!rutaId || !String(rutaId).trim()) {
+      Alert.alert('Ruta no disponible', 'Debes seleccionar una ruta activa para enviar un mensaje.');
+      return;
+    }
+
+    try {
+      const message = await enqueueConductorMessage(
+        rutaId,
+        option.label,
+        option.tipo,
+        option.prioridad,
+      );
+
+      // Actualizar estado local de la cola
+      const updatedQueue = [...mensajesQueueRef.current, message];
+      setMensajesQueue(updatedQueue);
+
+      Alert.alert(
+        'Mensaje guardado',
+        option.prioridad === 'ALTA'
+          ? 'La emergencia se encolará y se enviará automáticamente cuando sea posible.'
+          : 'El estado se ha guardado localmente y se sincronizará automáticamente.',
+      );
+    } catch (error) {
+      Alert.alert('Error', 'No se pudo guardar el mensaje. Intenta de nuevo.');
+    }
   };
 
   const avanzarEtapa = () => {
