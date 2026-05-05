@@ -15,8 +15,18 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useAutoSyncScheduler } from '../src/hooks/useAutoSyncScheduler';
+import {
+  loadMensajeQueue,
+  saveMensajeQueue,
+} from '../src/services/mensajesConductorService';
+import { useMensajesQueueScheduler } from '../src/hooks/useMensajesQueueScheduler';
+import { MENSAJES_CATALOGO } from '../src/constants/mensajesCatalog';
 
 const ETAPAS = ['Carga', 'Salida', 'Transito', 'Entrega'];
+
+function buildMessageId() {
+  return `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
 
 /** AsyncStorage SIEMPRE por ruta — no compartir cache entre rutas */
 function storageKeyFromRutaId(rutaId) {
@@ -116,14 +126,23 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isMessagesSyncing, setIsMessagesSyncing] = useState(false);
+  const [mensajesQueue, setMensajesQueue] = useState([]);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const cameraRef = useRef(null);
   const registrosRef = useRef(registros);
   registrosRef.current = registros;
+  const mensajesQueueRef = useRef(mensajesQueue);
+  mensajesQueueRef.current = mensajesQueue;
 
   const recordsRevision = useMemo(
     () => registros.map((r) => `${r.id}:${r.synced ? 1 : 0}`).join(';'),
     [registros],
+  );
+
+  const mensajesRevision = useMemo(
+    () => mensajesQueue.map((item) => `${item.id}:${item.synced ? 1 : 0}`).join(';'),
+    [mensajesQueue],
   );
 
   const applySyncedIds = useCallback(
@@ -138,12 +157,32 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
     [STORAGE_KEY],
   );
 
+  const applySyncedMessageIds = useCallback(
+    async (syncedIds) => {
+      const current = mensajesQueueRef.current;
+      const next = current.map((message) =>
+        syncedIds.includes(message.id) ? { ...message, synced: true } : message,
+      );
+      await saveMensajeQueue(rutaId, next);
+      setMensajesQueue(next);
+    },
+    [rutaId],
+  );
+
   useAutoSyncScheduler({
     rutaId,
     registrosRef,
     applySyncedIds,
     setIsSyncing,
     recordsRevision,
+  });
+
+  useMensajesQueueScheduler({
+    rutaId,
+    queueRef: mensajesQueueRef,
+    applySyncedIds: applySyncedMessageIds,
+    setIsSyncing: setIsMessagesSyncing,
+    queueRevision: mensajesRevision,
   });
 
   useEffect(() => {
@@ -167,8 +206,10 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
       try {
         const raw = await AsyncStorage.getItem(key);
         const parsed = raw ? JSON.parse(raw) : [];
+        const mensajes = await loadMensajeQueue(idActual);
         if (!cancelled) {
           setRegistros(parsed);
+          setMensajesQueue(Array.isArray(mensajes) ? mensajes : []);
           const etapaIni = etapaInicialDesdeRegistros(parsed);
           setEtapaActual(etapaIni);
           setViajeFinalizado(false);
@@ -196,6 +237,11 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
   const persistRecords = async (nextRecords) => {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(nextRecords));
     setRegistros(nextRecords);
+  };
+
+  const persistMessages = async (nextMessages) => {
+    await saveMensajeQueue(rutaId, nextMessages);
+    setMensajesQueue(nextMessages);
   };
 
   const ensurePermissions = async () => {
@@ -264,6 +310,10 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
     } finally {
       setIsCapturing(false);
     }
+  };
+
+  const reportarEstado = (option) => {
+    console.log(`Mensaje seleccionado: ${option.label}`);
   };
 
   const avanzarEtapa = () => {
@@ -374,6 +424,35 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
               isSyncing={isSyncing}
             />
 
+            <View style={styles.messageSection}>
+              <Text style={styles.sectionTitle}>Reportar Estado</Text>
+              <Text style={styles.sectionSubtitle}>
+                Selecciona un mensaje para reportar estado.
+              </Text>
+              <View style={styles.messageGrid}>
+                {MENSAJES_CATALOGO.map((option) => (
+                  <TouchableOpacity
+                    key={option.id}
+                    onPress={() => reportarEstado(option)}
+                    style={[
+                      styles.messageButton,
+                      option.prioridad === 'ALTA' && styles.messageButtonHigh,
+                    ]}
+                    accessibilityRole="button"
+                  >
+                    <Text
+                      style={[
+                        styles.messageButtonText,
+                        option.prioridad === 'ALTA' && styles.messageButtonTextHigh,
+                      ]}
+                    >
+                      {option.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
             <View style={styles.footer}>
               <TouchableOpacity style={styles.btnAvanzar} onPress={avanzarEtapa}>
                 <Text style={styles.btnText}>
@@ -480,6 +559,88 @@ const styles = StyleSheet.create({
   },
   btnDisabled: { opacity: 0.6 },
   btnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  messageSection: {
+    marginTop: 18,
+    padding: 18,
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#cbd5e1',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginBottom: 6,
+  },
+  sectionSubtitle: {
+    fontSize: 13,
+    color: '#475569',
+    marginBottom: 14,
+  },
+  messageGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  messageButton: {
+    backgroundColor: '#e2e8f0',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    minWidth: '47%',
+    flexBasis: '47%',
+  },
+  messageButtonHigh: {
+    backgroundColor: '#fee2e2',
+    borderWidth: 1,
+    borderColor: '#ef4444',
+  },
+  messageButtonText: {
+    color: '#0f172a',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  messageButtonTextHigh: {
+    color: '#991b1b',
+  },
+  queueSummary: {
+    marginTop: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+  },
+  queueSummaryText: {
+    color: '#475569',
+    fontSize: 13,
+  },
+  queueList: {
+    marginTop: 12,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#cbd5e1',
+    backgroundColor: '#f8fafc',
+    overflow: 'hidden',
+  },
+  queueItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#e2e8f0',
+  },
+  queueItemLabel: {
+    color: '#0f172a',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  queueItemMeta: {
+    marginTop: 4,
+    color: '#475569',
+    fontSize: 12,
+  },
   finalContainer: {
     flex: 1,
     justifyContent: 'center',

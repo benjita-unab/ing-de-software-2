@@ -7,6 +7,7 @@
 import React, { useState } from "react";
 import AlertQueue from "./AlertQueue";
 import AlertDetailPanel from "./AlertDetailPanel";
+import MensajesConductor from "./MensajesConductor";
 import MonitoreoLicencias from "./MonitoreoLicencias";
 import AsignacionRutas from "./AsignacionRutas";
 import RutasActivas from "./RutasActivas";
@@ -115,6 +116,12 @@ export default function OperatorDashboard({ operator, onSignOut }) {
                 currentOperatorId={operator?.id}
               />
             </div>
+          </div>
+        )}
+
+        {activeSection === "mensajes" && (
+          <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }} className="premium-card">
+            <MensajesConductor operatorId={operator?.id} />
           </div>
         )}
 
