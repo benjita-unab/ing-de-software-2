@@ -106,70 +106,52 @@ export class MensajesConductorService {
       .single();
 
     if (error) {
-      console.error('Error al crear/actualizar mensaje de conductor:', error);
       throw new InternalServerErrorException(
-        `No se pudo guardar el mensaje: ${error.message}`,
+        `Error al guardar mensaje: ${error.message}`,
       );
     }
 
-    return { success: true, data };
+    return data;
   }
 
-  async listMensajes(query: {
+  async listMensajes(filters: {
     ruta_id?: string;
     prioridad?: string;
     acknowledged?: string;
   }) {
     const supabase = this.supabaseConfig.getClient();
-    const builder = supabase
+    let query = supabase
       .from('mensajes_conductor')
-      .select(
-        `
-        *,
-        rutas (
-          id,
-          origen,
-          destino,
-          estado,
-          camion_id,
-          camiones ( id, patente )
-        )
-      `,
-      )
-      .order('timestamp_evento', { ascending: false });
+      .select('*')
+      .order('created_at', { ascending: false });
 
-    if (query.ruta_id) {
-      builder.eq('ruta_id', String(query.ruta_id).trim());
-    }
-    if (query.prioridad) {
-      const prioridad = String(query.prioridad).trim().toUpperCase();
-      if (VALID_PRIORIDADES.includes(prioridad as any)) {
-        builder.eq('prioridad', prioridad);
-      }
-    }
-    if (query.acknowledged !== undefined) {
-      const acknowledgedRaw = String(query.acknowledged).trim().toLowerCase();
-      if (acknowledgedRaw === 'true' || acknowledgedRaw === 'false') {
-        builder.eq('acknowledged', acknowledgedRaw === 'true');
-      }
+    if (filters.ruta_id) {
+      query = query.eq('ruta_id', filters.ruta_id);
     }
 
-    const { data, error } = await builder;
+    if (filters.prioridad) {
+      query = query.eq('prioridad', filters.prioridad);
+    }
+
+    if (filters.acknowledged !== undefined) {
+      const acknowledged = filters.acknowledged === 'true';
+      query = query.eq('acknowledged', acknowledged);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
-      console.error('Error al listar mensajes de conductor:', error);
       throw new InternalServerErrorException(
-        `Error al listar mensajes de conductor: ${error.message}`,
+        `Error al listar mensajes: ${error.message}`,
       );
     }
 
-    return { success: true, data };
+    return data;
   }
 
-  async acknowledgeMensaje(id: string, operatorId?: string) {
-    const mensajeId = this.validateString(id, 'id');
-
+  async acknowledgeMensaje(mensajeId: string, operatorId?: string) {
     const supabase = this.supabaseConfig.getClient();
+
     const { data, error } = await supabase
       .from('mensajes_conductor')
       .update({
@@ -181,16 +163,15 @@ export class MensajesConductorService {
       .single();
 
     if (error) {
-      console.error('Error al acusar mensaje de conductor:', error);
       throw new InternalServerErrorException(
-        `No se pudo acusar el mensaje: ${error.message}`,
+        `Error al reconocer mensaje: ${error.message}`,
       );
     }
 
     if (!data) {
-      throw new NotFoundException('Mensaje de conductor no encontrado');
+      throw new NotFoundException(`Mensaje no encontrado: ${mensajeId}`);
     }
 
-    return { success: true, data };
+    return data;
   }
 }
