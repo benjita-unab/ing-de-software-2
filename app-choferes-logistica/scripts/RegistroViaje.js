@@ -283,16 +283,23 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
                   registros.some((r) => r.etapa === cat && !r.synced) &&
                   !cumpleSync;
                 const sinFotos = n === 0 && oblig;
+                const seleccionada = categoriaSeleccionada === cat;
 
                 let chipStyle = styles.catChip;
-                if (categoriaSeleccionada === cat) chipStyle = { ...chipStyle, ...styles.catChipSelected };
-                if (!oblig) {
-                  chipStyle = { ...chipStyle, ...styles.catChipExtra };
-                } else if (cumpleSync) {
-                  chipStyle = { ...chipStyle, ...styles.catChipOk };
-                } else if (soloPendiente || sinFotos) {
-                  chipStyle = { ...chipStyle, ...styles.catChipWarn };
+                if (!seleccionada) {
+                  if (!oblig) {
+                    chipStyle = { ...chipStyle, ...styles.catChipExtra };
+                  } else if (cumpleSync) {
+                    chipStyle = { ...chipStyle, ...styles.catChipOk };
+                  } else if (soloPendiente || sinFotos) {
+                    chipStyle = { ...chipStyle, ...styles.catChipWarn };
+                  }
+                } else {
+                  chipStyle = { ...chipStyle, ...styles.catChipSelectedLila };
                 }
+
+                const textChip = seleccionada ? styles.catChipTextSelected : styles.catChipText;
+                const textCount = seleccionada ? styles.catChipCountSelected : styles.catChipCount;
 
                 return (
                   <TouchableOpacity
@@ -300,10 +307,10 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
                     style={[chipStyle, { minWidth: chipAncho }]}
                     onPress={() => setCategoriaSeleccionada(cat)}
                   >
-                    <Text style={styles.catChipText} numberOfLines={2}>
+                    <Text style={textChip} numberOfLines={2}>
                       {LABEL_CATEGORIA[cat] ?? cat}
                     </Text>
-                    <Text style={styles.catChipCount}>({n})</Text>
+                    <Text style={textCount}>({n})</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -407,9 +414,11 @@ const styles = StyleSheet.create({
     marginRight: 8,
     alignItems: 'center',
   },
-  catChipSelected: {
-    borderColor: '#2563EB',
-    backgroundColor: '#EFF6FF',
+  /** Categoría activa: prioridad visual (lila claro) frente a ok/warn/extra */
+  catChipSelectedLila: {
+    borderColor: '#8B5CF6',
+    backgroundColor: '#F5F3FF',
+    borderWidth: 2,
   },
   catChipOk: {
     borderColor: '#16A34A',
@@ -424,7 +433,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   catChipText: { fontSize: 13, fontWeight: '700', color: '#0f172a', textAlign: 'center' },
+  catChipTextSelected: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#5B21B6',
+    textAlign: 'center',
+  },
   catChipCount: { fontSize: 12, color: '#64748b', marginTop: 4, fontWeight: '600' },
+  catChipCountSelected: {
+    fontSize: 12,
+    color: '#6D28D9',
+    marginTop: 4,
+    fontWeight: '700',
+  },
   btnAdd: {
     marginHorizontal: 16,
     marginTop: 12,

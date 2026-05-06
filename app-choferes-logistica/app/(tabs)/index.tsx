@@ -3,10 +3,12 @@ import {
   ActivityIndicator,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import RegistroViaje from '../../scripts/RegistroViaje';
 import { BotonCerrarDespacho } from '../../src/components/BotonCerrarDespacho';
@@ -47,6 +49,7 @@ function etiquetaRutaDesdeApi(r: RutaApi): string {
 }
 
 export default function HomeScreen() {
+  const insets = useSafeAreaInsets();
   const [todoSincronizado, setTodoSincronizado] = useState(false);
   const [rutaActivaId, setRutaActivaId] = useState<string | null>(null);
   const [rutasOperativas, setRutasOperativas] = useState<RutaApi[]>([]);
@@ -178,6 +181,7 @@ export default function HomeScreen() {
     rutasMemo.length > 1 && rutaActivaId === null;
 
   if (debeElegirRuta) {
+    const selectorPadBottom = insets.bottom + 72;
     return (
       <View style={styles.screenRoot} collapsable={false}>
         {errorRutas ? (
@@ -187,28 +191,39 @@ export default function HomeScreen() {
             </Text>
           </View>
         ) : null}
-        <View style={styles.selectorStrip} collapsable={false}>
-          <Text style={styles.selectorTitle}>Ruta activa — elige una para continuar</Text>
-          {rutasMemo.map((ruta) => {
-            const idStr = String(ruta.id);
-            return (
-              <Pressable
-                key={idStr}
-                style={({ pressed }) => [
-                  styles.card,
-                  pressed && styles.cardPressed,
-                ]}
-                onPress={onPressPorRutaId.get(idStr)!}
-                accessibilityRole="button"
-                accessibilityLabel={`Seleccionar ruta ${etiquetaRutaDesdeApi(ruta)}`}
-                android_ripple={{ color: '#bbdefb' }}
-              >
-                <Text style={styles.selectorMain}>{etiquetaRutaDesdeApi(ruta)}</Text>
-                <Text style={styles.selectorMeta}>{ruta.estado ?? ''}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
+        <ScrollView
+          style={styles.selectorScroll}
+          contentContainerStyle={[
+            styles.selectorScrollContent,
+            { paddingBottom: selectorPadBottom },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator
+          nestedScrollEnabled
+        >
+          <View style={styles.selectorStripInner} collapsable={false}>
+            <Text style={styles.selectorTitle}>Ruta activa — elige una para continuar</Text>
+            {rutasMemo.map((ruta) => {
+              const idStr = String(ruta.id);
+              return (
+                <Pressable
+                  key={idStr}
+                  style={({ pressed }) => [
+                    styles.card,
+                    pressed && styles.cardPressed,
+                  ]}
+                  onPress={onPressPorRutaId.get(idStr)!}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Seleccionar ruta ${etiquetaRutaDesdeApi(ruta)}`}
+                  android_ripple={{ color: '#bbdefb' }}
+                >
+                  <Text style={styles.selectorMain}>{etiquetaRutaDesdeApi(ruta)}</Text>
+                  <Text style={styles.selectorMeta}>{ruta.estado ?? ''}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </ScrollView>
       </View>
     );
   }
@@ -232,7 +247,16 @@ export default function HomeScreen() {
       ) : null}
 
       {rutasMemo.length > 1 ? (
-        <View style={styles.cambiarRutaBar}>
+        <View
+          style={[
+            styles.cambiarRutaBar,
+            {
+              paddingTop: insets.top + 14,
+              paddingBottom: 14,
+            },
+          ]}
+          collapsable={false}
+        >
           <Pressable
             style={({ pressed }) => [
               styles.btnCambiarRuta,
@@ -241,7 +265,7 @@ export default function HomeScreen() {
             onPress={() => void cambiarRuta()}
             accessibilityRole="button"
             accessibilityLabel="Cambiar de ruta"
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            hitSlop={{ top: 18, bottom: 18, left: 24, right: 24 }}
           >
             <Text style={styles.btnCambiarRutaText}>Cambiar ruta</Text>
           </Pressable>
@@ -301,15 +325,22 @@ const styles = StyleSheet.create({
     elevation: Platform.OS === 'android' ? 12 : 0,
   },
   bannerText: { color: '#92400e', fontSize: 13 },
-  /** Por encima del ScrollView de RegistroViaje para que el toque no lo robe */
-  selectorStrip: {
+  selectorScroll: {
+    flex: 1,
+    minHeight: 0,
+    backgroundColor: '#f8fafc',
+  },
+  selectorScrollContent: {
+    flexGrow: 1,
+  },
+  /** Contenido del selector dentro del ScrollView */
+  selectorStripInner: {
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingTop: 10,
+    paddingBottom: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#e2e8f0',
     backgroundColor: '#f8fafc',
-    zIndex: 10,
-    elevation: Platform.OS === 'android' ? 10 : 0,
   },
   selectorTitle: {
     fontSize: 14,
@@ -350,20 +381,23 @@ const styles = StyleSheet.create({
   },
   selectorSingleText: { fontSize: 13, color: '#334155' },
   cambiarRutaBar: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#e8f4fc',
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#bfdbfe',
-    zIndex: 24,
-    elevation: Platform.OS === 'android' ? 24 : 0,
+    zIndex: 50,
+    elevation: Platform.OS === 'android' ? 50 : 0,
   },
   btnCambiarRuta: {
-    alignSelf: 'flex-start',
+    alignSelf: 'center',
     backgroundColor: '#1976d2',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 22,
+    minHeight: 48,
+    justifyContent: 'center',
+    borderRadius: 10,
   },
   btnCambiarRutaText: {
     color: '#fff',
