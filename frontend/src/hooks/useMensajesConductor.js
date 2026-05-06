@@ -8,21 +8,11 @@ function mapMensaje(row) {
     mensaje: row.mensaje,
     tipo: row.tipo || 'ESTADO',
     prioridad: row.prioridad || 'NORMAL',
-    latitud: row.latitud ?? row.lat ?? null,
-    longitud: row.longitud ?? row.lng ?? null,
+    latitud: row.latitud ?? null,
+    longitud: row.longitud ?? null,
     timestamp_evento: row.timestamp_evento || row.created_at || new Date().toISOString(),
     acknowledged: row.acknowledged ?? false,
-    acknowledged_at: row.acknowledged_at ?? null,
-    created_at: row.created_at ?? row.fecha_creacion ?? new Date().toISOString(),
-    ruta: row.rutas
-      ? {
-          id: row.rutas.id,
-          origen: row.rutas.origen,
-          destino: row.rutas.destino,
-          estado: row.rutas.estado,
-          camion: row.rutas.camiones?.patente,
-        }
-      : null,
+    created_at: row.created_at || new Date().toISOString(),
   };
 }
 
@@ -38,10 +28,11 @@ function sortMensajes(mensajes) {
 export function useMensajesConductor() {
   const [mensajes, setMensajes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const fetchMensajes = useCallback(async () => {
-    setLoading(true);
     try {
+      setError(null);
       const res = await apiFetch('/api/mensajes-conductor');
       if (!res.ok) {
         throw new Error(res.error || `HTTP ${res.status}`);
@@ -50,15 +41,18 @@ export function useMensajesConductor() {
       setMensajes(sortMensajes(data.map(mapMensaje)));
     } catch (error) {
       console.error('Error cargando mensajes de conductor:', error?.message || error);
+      setError(error?.message || 'Error al cargar mensajes');
     } finally {
       setLoading(false);
     }
   }, []);
 
+  // Fetch inicial
   useEffect(() => {
     void fetchMensajes();
   }, [fetchMensajes]);
 
+  // Polling cada 10 segundos
   useEffect(() => {
     const interval = setInterval(() => {
       void fetchMensajes();
@@ -66,23 +60,5 @@ export function useMensajesConductor() {
     return () => clearInterval(interval);
   }, [fetchMensajes]);
 
-  const acknowledgeMensaje = useCallback(async (mensajeId, operatorId) => {
-    try {
-      const res = await apiFetch(`/api/mensajes-conductor/${mensajeId}/acknowledge`, {
-        method: 'PATCH',
-        json: { operatorId },
-      });
-      if (!res.ok) {
-        return { ok: false, message: res.error || `HTTP ${res.status}` };
-      }
-      await fetchMensajes();
-      return { ok: true };
-    } catch (error) {
-      const msg = error?.message || 'No se pudo acusar el mensaje.';
-      console.error('Error acknowledge mensaje conductor:', msg);
-      return { ok: false, message: msg };
-    }
-  }, [fetchMensajes]);
-
-  return { mensajes, loading, acknowledgeMensaje };
+  return { mensajes, loading, error };
 }
