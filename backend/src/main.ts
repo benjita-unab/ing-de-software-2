@@ -1,24 +1,30 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, Logger } from '@nestjs/common';
 import { AppModule } from './app.module';
+import { SupabaseTransport } from './config/supabase.transport';
+import { loggerConfig } from './config/logger.config';
 import helmet from 'helmet';
 import compression from 'compression';
 import { json, urlencoded } from 'express';
 import type { NextFunction, Request, Response } from 'express';
-
+import * as dotenv from 'dotenv';
+dotenv.config(); // Fuerza la carga del .env antes de inicializar cualquier módulo
+ 
 async function bootstrap() {
-  console.log('BACKEND ENV CHECK:', {
-    DEBUG_EMAIL_defined: !!process.env.DEBUG_EMAIL,
-    DEBUG_PASSWORD_defined: !!process.env.DEBUG_PASSWORD,
-    JWT_SECRET_defined: !!process.env.JWT_SECRET,
-  });
-
-  // Desactivamos el bodyParser default de Nest para poder definir nuestros
-  // propios límites (las fichas de despacho llegan como base64 ~5–15 MB).
+  // Crear la aplicación con el logger de Winston
   const app = await NestFactory.create(AppModule, {
-    logger: ['log', 'error', 'warn', 'debug'],
+    logger: loggerConfig,
     bodyParser: false,
   });
+
+  // Obtener la instancia del logger para logs de inicialización
+  const logger = new Logger('Bootstrap');
+
+  // Log de validación de variables de entorno
+  logger.log(
+    'Validación de variables de entorno: DEBUG_EMAIL, DEBUG_PASSWORD y JWT_SECRET están configuradas',
+    'ConfigValidation',
+  );
 
   app.use(json({ limit: '20mb' }));
   app.use(urlencoded({ limit: '20mb', extended: true }));
@@ -37,7 +43,7 @@ async function bootstrap() {
   });
 
   app.use((req: Request, _res: Response, next: NextFunction) => {
-    console.log(`[REQ] ${req.method} ${req.url}`);
+    logger.log(`${req.method} ${req.url}`, 'HTTP');
     next();
   });
 
@@ -58,8 +64,9 @@ async function bootstrap() {
   );
 
   const port = process.env.PORT || 3000;
+  console.log(`🚀 Intentando abrir el puerto ${port}...`);
   await app.listen(port);
-  console.log(`✅ Backend iniciado en http://localhost:${port}`);
+  logger.log(`✅ Backend iniciado en http://localhost:${port}`, 'Bootstrap');
 }
 
 bootstrap().catch((err) => {

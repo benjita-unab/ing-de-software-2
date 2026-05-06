@@ -33,11 +33,13 @@
     "compression": "^1.7.4",
     "helmet": "^7.1.0",
     "joi": "^17.11.0",
+    "nest-winston": "^1.10.2",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "pdfkit": "^0.13.0",
     "resend": "^3.0.0",
-    "uuid": "^14.0.0"
+    "uuid": "^14.0.0",
+    "winston": "^3.19.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.4.9",
@@ -50,6 +52,7 @@
     "@types/node": "^20.10.6",
     "@types/passport-jwt": "^3.0.13",
     "@types/pdfkit": "^0.17.6",
+    "@types/winston": "^2.4.4",
     "@typescript-eslint/eslint-plugin": "^8.59.1",
     "@typescript-eslint/parser": "^8.59.1",
     "eslint": "^8.56.0",
