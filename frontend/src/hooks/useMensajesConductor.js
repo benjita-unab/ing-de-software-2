@@ -18,9 +18,15 @@ function mapMensaje(row) {
 
 function sortMensajes(mensajes) {
   return [...mensajes].sort((a, b) => {
-    if (a.prioridad !== b.prioridad) {
-      return a.prioridad === 'ALTA' ? -1 : 1;
+    // Emergencias no acusadas flotan hacia arriba
+    const aIsUrgent = a.prioridad === 'ALTA' && !a.acknowledged;
+    const bIsUrgent = b.prioridad === 'ALTA' && !b.acknowledged;
+    
+    if (aIsUrgent !== bIsUrgent) {
+      return aIsUrgent ? -1 : 1;
     }
+    
+    // Dentro del mismo grupo, ordenar por timestamp descendente
     return new Date(b.timestamp_evento) - new Date(a.timestamp_evento);
   });
 }
@@ -60,5 +66,24 @@ export function useMensajesConductor() {
     return () => clearInterval(interval);
   }, [fetchMensajes]);
 
-  return { mensajes, loading, error };
+  const acknowledgeMensaje = useCallback(async (mensajeId) => {
+    try {
+      const res = await apiFetch(`/api/mensajes-conductor/${mensajeId}/acknowledge`, {
+        method: 'PATCH',
+        json: {},
+      });
+      if (!res.ok) {
+        return { ok: false, message: res.error || `HTTP ${res.status}` };
+      }
+      // Refrescar lista tras acknowledge
+      await fetchMensajes();
+      return { ok: true };
+    } catch (error) {
+      const msg = error?.message || 'No se pudo confirmar recepción.';
+      console.error('Error acknowledge mensaje:', msg);
+      return { ok: false, message: msg };
+    }
+  }, [fetchMensajes]);
+
+  return { mensajes, loading, error, acknowledgeMensaje };
 }

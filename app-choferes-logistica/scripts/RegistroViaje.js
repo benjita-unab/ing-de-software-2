@@ -19,6 +19,7 @@ import {
   loadMensajeQueue,
   saveMensajeQueue,
   enqueueConductorMessage,
+  sendEmergencyMessageInmediately,
 } from '../src/services/mensajesConductorService';
 import { useMensajesQueueScheduler } from '../src/hooks/useMensajesQueueScheduler';
 import { MENSAJES_CATALOGO } from '../src/constants/mensajesCatalog';
@@ -320,23 +321,41 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
     }
 
     try {
-      const message = await enqueueConductorMessage(
-        rutaId,
-        option.label,
-        option.tipo,
-        option.prioridad,
-      );
+      let message;
+      let synced = false;
+
+      // Para emergencias, intentar envío inmediato
+      if (option.prioridad === 'ALTA' && option.tipo === 'EMERGENCIA') {
+        const result = await sendEmergencyMessageInmediately(rutaId, option.label);
+        message = result.message;
+        synced = result.synced;
+      } else {
+        // Para estados normales, guardar en cola
+        message = await enqueueConductorMessage(
+          rutaId,
+          option.label,
+          option.tipo,
+          option.prioridad,
+        );
+      }
 
       // Actualizar estado local de la cola
       const updatedQueue = [...mensajesQueueRef.current, message];
       setMensajesQueue(updatedQueue);
 
-      Alert.alert(
-        'Mensaje guardado',
-        option.prioridad === 'ALTA'
-          ? 'La emergencia se encolará y se enviará automáticamente cuando sea posible.'
-          : 'El estado se ha guardado localmente y se sincronizará automáticamente.',
-      );
+      if (option.prioridad === 'ALTA') {
+        Alert.alert(
+          'Emergencia reportada',
+          synced
+            ? 'La emergencia se envió inmediatamente al servidor.'
+            : 'La emergencia se envió a la cola y se sincronizará en segundos cuando hay conexión.',
+        );
+      } else {
+        Alert.alert(
+          'Mensaje guardado',
+          'El estado se ha guardado localmente y se sincronizará automáticamente.',
+        );
+      }
     } catch (error) {
       Alert.alert('Error', 'No se pudo guardar el mensaje. Intenta de nuevo.');
     }

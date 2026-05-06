@@ -123,6 +123,46 @@ export async function sendConductorMessage(message: ConductorMessageQueueItem) {
   return false;
 }
 
+/**
+ * Intenta enviar una emergencia inmediatamente (sin esperar el scheduler Fibonacci).
+ * Si falla por red, la guarda en la cola para reintentos automáticos.
+ */
+export async function sendEmergencyMessageInmediately(
+  rutaId: string,
+  label: string,
+): Promise<{ synced: boolean; message: ConductorMessageQueueItem }> {
+  const [latitud, longitud] = await captureGpsLocation();
+
+  const newMessage: ConductorMessageQueueItem = {
+    id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    ruta_id: rutaId,
+    mensaje: label,
+    tipo: 'EMERGENCIA',
+    prioridad: 'ALTA',
+    latitud,
+    longitud,
+    timestamp: new Date().toISOString(),
+    synced: false,
+  };
+
+  try {
+    const ok = await sendConductorMessage(newMessage);
+    if (ok) {
+      newMessage.synced = true;
+      return { synced: true, message: newMessage };
+    }
+  } catch {
+    // Fallo: guardar en cola
+  }
+
+  // Guardar en cola si falla envío inmediato
+  const currentQueue = await loadMensajeQueue(rutaId);
+  const updatedQueue = [...currentQueue, newMessage];
+  await saveMensajeQueue(rutaId, updatedQueue);
+
+  return { synced: false, message: newMessage };
+}
+
 export async function syncPendingConductorMessages(
   queue: ConductorMessageQueueItem[],
 ) {

@@ -15,9 +15,11 @@ import GuiasDespacho from "./GuiasDespacho";
 import FormularioCliente from "./FormularioCliente";
 import HistorialDespachos from "./HistorialDespachos";
 import { useAlerts } from "../hooks/useAlerts";
+import { useMensajesConductor } from "../hooks/useMensajesConductor";
 
 export default function OperatorDashboard({ operator, onSignOut }) {
   const { alerts, loading, acknowledgeAlert, resolveAlert: rawResolveAlert } = useAlerts();
+  const { mensajes, loading: mensajesLoading, error: mensajesError, acknowledgeMensaje } = useMensajesConductor();
   const [activeSection, setActiveSection] = useState("alertas");
   const [selectedAlert, setSelectedAlert] = useState(null);
   const [isLightMode, setIsLightMode] = useState(false);
@@ -38,6 +40,10 @@ export default function OperatorDashboard({ operator, onSignOut }) {
   const urgentCount = alerts.filter(
     (a) => ["CRITICA", "ALTA"].includes(a.priority) && a.status === "PENDIENTE"
   ).length;
+
+  const hasUnreadEmergencies = mensajes.some(
+    (m) => m.prioridad === 'ALTA' && !m.acknowledged,
+  );
 
   // Cuando la alerta seleccionada es actualizada en Supabase (ej: acuse de recibo),
   // sincronizar el estado local del panel de detalle.
@@ -73,6 +79,7 @@ export default function OperatorDashboard({ operator, onSignOut }) {
         {/* Topbar */}
         <TopBar
           urgentCount={urgentCount}
+          hasUnreadEmergencies={hasUnreadEmergencies}
           section={activeSection}
           operator={operator}
           onNavigate={setActiveSection}
@@ -120,13 +127,18 @@ export default function OperatorDashboard({ operator, onSignOut }) {
         )}
 
         {activeSection === "mensajes" && (
-          <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }} className="premium-card">
-            <MensajesConductor operatorId={operator?.id} />
+          <div style={{ flex: 1, minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column", height: "100%" }} className="premium-card">
+            <MensajesConductor
+              mensajes={mensajes}
+              loading={mensajesLoading}
+              error={mensajesError}
+              acknowledgeMensaje={acknowledgeMensaje}
+            />
           </div>
         )}
 
         {/* Sección de RRHH y placeholders para el resto */}
-        {activeSection !== "alertas" && (
+        {activeSection !== "alertas" && activeSection !== "mensajes" && (
           <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
             {activeSection === "rrhh" ? (
               <MonitoreoLicencias />
@@ -144,7 +156,7 @@ export default function OperatorDashboard({ operator, onSignOut }) {
               <HistorialDespachos />
             ) : activeSection === "despachos" ? (
               <GuiasDespacho />
-            ) : (
+            ) : activeSection === "mensajes" ? null : (
               <PlaceholderSection section={activeSection} />
             )}
           </div>
@@ -174,13 +186,19 @@ export default function OperatorDashboard({ operator, onSignOut }) {
 
         button:hover { filter: brightness(1.15); }
         button:active { filter: brightness(0.9); }
+        .urgent-nav-link {
+          animation: pulse-red 1.2s infinite;
+          background: #dc2626 !important;
+          color: #fff !important;
+          box-shadow: 0 0 18px rgba(220, 38, 38, 0.45);
+        }
       `}</style>
     </div>
   );
 }
 
 // ─── TopBar ─────────────────────────────────────────────────────────────────
-function TopBar({ urgentCount, section, operator, onNavigate, onSignOut, isLightMode, onToggleTheme }) {
+function TopBar({ urgentCount, hasUnreadEmergencies, section, operator, onNavigate, onSignOut, isLightMode, onToggleTheme }) {
   const SECTION_LABELS = {
     alertas: "Alertas",
     asignacion: "Asignar",
@@ -236,15 +254,19 @@ function TopBar({ urgentCount, section, operator, onNavigate, onSignOut, isLight
           justifyContent: "flex-start",
         }}
       >
-          {TOP_LINKS.map((key) => (
-            <button
-              key={key}
-              className={`premium-nav-link ${section === key ? "active" : ""}`}
-              onClick={() => onNavigate?.(key)}
-            >
-              {SECTION_LABELS[key] ?? key}
-            </button>
-          ))}
+          {TOP_LINKS.map((key) => {
+            const isMessagesTab = key === 'mensajes';
+            const urgentClass = isMessagesTab && hasUnreadEmergencies ? 'urgent-nav-link' : '';
+            return (
+              <button
+                key={key}
+                className={`premium-nav-link ${section === key ? "active" : ""} ${urgentClass}`}
+                onClick={() => onNavigate?.(key)}
+              >
+                {SECTION_LABELS[key] ?? key}
+              </button>
+            );
+          })}
         </nav>
 
       {urgentCount > 0 && (
