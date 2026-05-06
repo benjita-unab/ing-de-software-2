@@ -4,6 +4,7 @@ import {
   type TraceabilityRecord,
 } from "../services/syncEngine";
 
+/** Segundos: primer intento inmediato (0), luego 1, 1, 2, 3, 5, 8, 13, 21, 34 (máx.) */
 const FIB_SECONDS = [0, 1, 1, 2, 3, 5, 8, 13, 21, 34];
 
 function delayMsForFailureIndex(failureIndex: number): number {
@@ -14,17 +15,17 @@ function delayMsForFailureIndex(failureIndex: number): number {
   return FIB_SECONDS[idx] * 1000;
 }
 
-export type LocalTraceRecord = TraceabilityRecord & {
-  synced?: boolean;
-  etapa?: string;
-  tipo?: string;
-};
+export type LocalTraceRecord = TraceabilityRecord & { synced?: boolean };
 
 export type UseAutoSyncSchedulerParams = {
   rutaId: string | null | undefined;
   registrosRef: React.MutableRefObject<LocalTraceRecord[]>;
   applySyncedIds: (syncedIds: string[]) => Promise<void>;
   setIsSyncing: (v: boolean) => void;
+  /**
+   * Cambia cuando cambia cualquier registro (p. ej. map de id:synced).
+   * Necesario para detectar fotos nuevas o estado synced sin depender de ref en deps.
+   */
   recordsRevision: string;
 };
 
@@ -36,6 +37,10 @@ function buildPendingKey(records: LocalTraceRecord[]): string {
     .join("|");
 }
 
+/**
+ * Sincronización automática con reintentos en escala Fibonacci (segundos).
+ * Un solo timer; sin syncs concurrentes (isSyncingRef).
+ */
 export function useAutoSyncScheduler({
   rutaId,
   registrosRef,

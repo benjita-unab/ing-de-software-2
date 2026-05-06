@@ -8,13 +8,23 @@ import {
   Param,
   Query,
 } from '@nestjs/common';
-import { RutasService } from './rutas.service';
+import { RutasService, CreateRutaDto } from './rutas.service';
 import { JwtGuard } from '../../common/guards/jwt.guard';
 import { CurrentUser } from '../../common/decorators/user.decorator';
 
 @Controller('api/rutas')
 export class RutasController {
   constructor(private rutasService: RutasService) {}
+
+  /**
+   * POST /api/rutas
+   * Crea una nueva ruta (cliente, origen/destino obligatorios; conductor/camión opcionales).
+   */
+  @Post()
+  @UseGuards(JwtGuard)
+  async createRoute(@Body() body: CreateRutaDto) {
+    return await this.rutasService.createRoute(body);
+  }
 
   /**
    * POST /api/rutas/assign

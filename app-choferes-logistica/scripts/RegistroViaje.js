@@ -339,7 +339,8 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
               ) : null}
               {faltanObl.length > 0 ? (
                 <Text style={styles.alertReq}>
-                  Faltan evidencias obligatorias sincronizadas: {faltanObl.map((c) => LABEL_CATEGORIA[c] ?? c).join(', ')}
+                  Faltan evidencias obligatorias sincronizadas:{' '}
+                  {faltanObl.map((c) => LABEL_CATEGORIA[c] ?? c).join(', ')}
                 </Text>
               ) : null}
               {pendingCount > 0 ? (
@@ -414,7 +415,6 @@ const styles = StyleSheet.create({
     marginRight: 8,
     alignItems: 'center',
   },
-  /** Categoría activa: prioridad visual (lila claro) frente a ok/warn/extra */
   catChipSelectedLila: {
     borderColor: '#8B5CF6',
     backgroundColor: '#F5F3FF',

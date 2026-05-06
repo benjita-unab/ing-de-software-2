@@ -9,6 +9,7 @@ import AlertQueue from "./AlertQueue";
 import AlertDetailPanel from "./AlertDetailPanel";
 import MonitoreoLicencias from "./MonitoreoLicencias";
 import AsignacionRutas from "./AsignacionRutas";
+import RutasActivas from "./RutasActivas";
 import GuiasDespacho from "./GuiasDespacho";
 import FormularioCliente from "./FormularioCliente";
 import HistorialDespachos from "./HistorialDespachos";
@@ -123,12 +124,9 @@ export default function OperatorDashboard({ operator, onSignOut }) {
             {activeSection === "rrhh" ? (
               <MonitoreoLicencias />
             ) : activeSection === "rutas" ? (
-              <SectionComingSoon
-                title="Sincronización con Waze en progreso"
-                description="Estamos trabajando esta pestaña para integrar datos y funciones en tiempo real con Waze."
-                note="Por ahora no hay funcionalidades ni datos disponibles para mostrar."
-                icon="🛣️"
-              />
+              <div style={{ padding: "10px", height: "100%", overflow: "auto" }} className="premium-scroll operator-section">
+                <RutasActivas />
+              </div>
             ) : activeSection === "asignacion" ? (
               <AsignacionRutas />
             ) : activeSection === "clientes" ? (
@@ -369,45 +367,3 @@ function PlaceholderSection({ section }) {
   );
 }
 
-function SectionComingSoon({ title, description, note, icon = "🚧" }) {
-  return (
-    <div
-      style={{
-        height: "100%",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "20px",
-      }}
-    >
-      <div
-        className="premium-card"
-        style={{
-          width: "min(760px, 100%)",
-          textAlign: "center",
-          padding: "38px 28px",
-          borderRadius: "18px",
-        }}
-      >
-        <div style={{ fontSize: "42px", marginBottom: "14px" }}>{icon}</div>
-        <h2
-          style={{
-            margin: "0 0 12px",
-            fontSize: "18px",
-            fontWeight: 800,
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-          }}
-        >
-          {title}
-        </h2>
-        <p style={{ margin: "0 0 8px", color: "rgba(255,255,255,0.78)", fontSize: "14px" }}>
-          {description}
-        </p>
-        <p style={{ margin: 0, color: "rgba(255,255,255,0.62)", fontSize: "12px", letterSpacing: "0.04em" }}>
-          {note}
-        </p>
-      </div>
-    </div>
-  );
-}
