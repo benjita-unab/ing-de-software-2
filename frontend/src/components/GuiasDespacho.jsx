@@ -183,7 +183,7 @@ export default function GuiasDespacho() {
       <div style={base.card} className="operator-glass-card">
         <div style={base.title}>📑 Gestión de Guías de Despacho (Rutas en curso)</div>
         <p style={{ color: "#94A3B8", fontSize: "13px", marginBottom: "12px", lineHeight: 1.5 }}>
-          La ficha de despacho también puede cargarse desde la app móvil (categoría «Ficha»); aparecerá en Historial bajo «Ficha de despacho».
+          La ficha de despacho también puede cargarse desde la app móvil («Hoja de despacho»); aparecerá en Historial bajo «Ficha de despacho».
         </p>
 
         {loading ? (

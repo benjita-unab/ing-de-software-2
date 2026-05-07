@@ -539,7 +539,11 @@ export class RutasService {
       if (String(f.tipo || '').toUpperCase() === 'FICHA_DESPACHO') {
         return true;
       }
-      return String(f.etapa || '').trim().toLowerCase() === 'ficha';
+      const etapaNorm = String(f.etapa || '').trim();
+      const etapaLower = etapaNorm.toLowerCase();
+      if (etapaLower === 'ficha') return true;
+      if (etapaNorm.toUpperCase() === 'HOJA_DESPACHO') return true;
+      return false;
     };
 
     // 2a) Tabla `fotos` (prioridad por vínculo directo ruta_id)
