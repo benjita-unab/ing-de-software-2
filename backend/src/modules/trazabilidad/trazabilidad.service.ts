@@ -9,6 +9,8 @@ export type TraceabilityEventInput = {
   longitud: number;
   timestamp_evento: string;
   ruta_id?: string | null;
+  /** EVIDENCIA | FICHA_DESPACHO — opcional si la columna no existe en BD */
+  tipo?: string | null;
 };
 
 // Códigos de error de PostgREST cuando una columna no existe en la tabla.
@@ -20,6 +22,7 @@ export class TrazabilidadService {
   // Cache para no reintentar incluir `ruta_id` después de saber que la
   // columna no existe en la BD. Se reinicia al reiniciar el backend.
   private rutaIdColumnAvailable = true;
+  private tipoColumnAvailable = true;
 
   constructor(private readonly supabaseConfig: SupabaseConfigService) {}
 
@@ -39,6 +42,14 @@ export class TrazabilidadService {
     // no descubrimos que la columna no existe en esta instancia.
     if (data.ruta_id && this.rutaIdColumnAvailable) {
       baseRow.ruta_id = data.ruta_id;
+    }
+
+    if (
+      data.tipo != null &&
+      String(data.tipo).trim() &&
+      this.tipoColumnAvailable
+    ) {
+      baseRow.tipo = String(data.tipo).trim();
     }
 
     let { data: row, error } = await supabase
@@ -69,6 +80,26 @@ export class TrazabilidadService {
         .single();
       row = retry.data;
       error = retry.error;
+    }
+
+    if (
+      error &&
+      'tipo' in baseRow &&
+      COLUMN_NOT_FOUND_CODES.has((error as { code?: string }).code || '')
+    ) {
+      console.warn(
+        'traceability_events.tipo no existe: omitiendo tipo y reintentando.',
+      );
+      this.tipoColumnAvailable = false;
+      delete baseRow.tipo;
+
+      const retryTipo = await supabase
+        .from('traceability_events')
+        .upsert(baseRow, { onConflict: 'id' })
+        .select()
+        .single();
+      row = retryTipo.data;
+      error = retryTipo.error;
     }
 
     if (error) {
