@@ -9,7 +9,6 @@ import {
   Image,
   ActivityIndicator,
   ScrollView,
-  Dimensions,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -17,50 +16,83 @@ import * as Location from 'expo-location';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useAutoSyncScheduler } from '../src/hooks/useAutoSyncScheduler';
 
-/** Claves internas (coinciden con backend etapa). HU-21: evidencia libre usa EVIDENCIA_ADICIONAL */
+/** Claves canónicas (etapa en API / carpeta en storage) */
+const HOJA_DESPACHO = 'HOJA_DESPACHO';
+const RECEPCION = 'RECEPCION';
+const ENTREGADO = 'ENTREGADO';
+
 const EVIDENCIA_ADICIONAL = 'EVIDENCIA_ADICIONAL';
 
-const CATEGORIAS = ['Carga', 'Salida', 'Transito', 'Entrega', 'Ficha', EVIDENCIA_ADICIONAL];
+const ETAPAS_CANONICAS = [RECEPCION, ENTREGADO, HOJA_DESPACHO, EVIDENCIA_ADICIONAL];
 
 const LABEL_CATEGORIA = {
+  [RECEPCION]: 'Recepción de carga',
+  [ENTREGADO]: 'Entrega final',
+  [HOJA_DESPACHO]: 'Hoja de despacho',
+  [EVIDENCIA_ADICIONAL]: 'Evidencia extra',
+  // Etiquetas legibles para datos antiguos no migrados en memoria
   Carga: 'Carga',
   Salida: 'Salida',
   Transito: 'Tránsito',
   Entrega: 'Entrega',
   Ficha: 'Ficha',
-  [EVIDENCIA_ADICIONAL]: 'Evid. adicional',
 };
 
-/** Mínimo 1 evidencia **sincronizada** por categoría para cerrar despacho */
-const CATEGORIAS_OBLIGATORIAS = ['Carga', 'Salida', 'Transito', 'Entrega', 'Ficha'];
+/**
+ * Mínimo 1 evidencia sincronizada por categoría principal para cerrar despacho.
+ * Orden del mensaje de faltantes: recepción → entrega final → hoja de despacho.
+ */
+const CATEGORIAS_OBLIGATORIAS = [RECEPCION, ENTREGADO, HOJA_DESPACHO];
 
 function storageKeyFromRutaId(rutaId) {
   const id = String(rutaId ?? '').trim();
   return id ? `hu1_traceability_records_${id}` : 'hu1_traceability_records_sin_ruta';
 }
 
-function normalizarEtapa(v) {
-  if (!v) return 'Carga';
-  const s = String(v).trim();
-  if (s === 'Extra') return EVIDENCIA_ADICIONAL;
-  const map = {
-    tránsito: 'Transito',
-    transito: 'Transito',
-    Tránsito: 'Transito',
-  };
-  if (map[s]) return map[s];
-  if (CATEGORIAS.includes(s)) return s;
-  if (s === 'Tránsito') return 'Transito';
-  return s;
+function sinTildesUpper(s) {
+  return String(s)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase();
+}
+
+/**
+ * Convierte cualquier etapa almacenada (nueva o legacy) a una categoría canónica.
+ * Compatibilidad: Ficha→HOJA_DESPACHO; Carga/Salida/Transito→RECEPCION; Entrega→ENTREGADO;
+ * Extra/EVIDENCIA_ADICIONAL→EVIDENCIA_ADICIONAL.
+ */
+function aEtapaCanonico(v) {
+  if (v == null || v === '') return RECEPCION;
+  let s = String(v).trim();
+  const lower = s.toLowerCase();
+
+  if (lower === 'tránsito' || lower === 'transito') s = 'Transito';
+
+  const upper = sinTildesUpper(s);
+  if (upper === 'HOJA_DESPACHO') return HOJA_DESPACHO;
+  if (upper === 'RECEPCION') return RECEPCION;
+  if (upper === 'ENTREGADO') return ENTREGADO;
+  if (upper === 'EVIDENCIA_ADICIONAL') return EVIDENCIA_ADICIONAL;
+
+  if (s === 'Ficha' || upper === 'FICHA_DESPACHO') return HOJA_DESPACHO;
+  if (s === 'Entrega') return ENTREGADO;
+  if (s === 'Carga' || s === 'Salida' || s === 'Transito' || s === 'Tránsito') return RECEPCION;
+  if (s === EVIDENCIA_ADICIONAL || lower === 'extra') return EVIDENCIA_ADICIONAL;
+
+  if (ETAPAS_CANONICAS.includes(s)) return s;
+
+  return RECEPCION;
 }
 
 function inferirTipo(etapa) {
-  return String(etapa).trim() === 'Ficha' ? 'FICHA_DESPACHO' : 'EVIDENCIA';
+  const e = String(etapa).trim().toUpperCase();
+  if (e === HOJA_DESPACHO) return 'FICHA_DESPACHO';
+  return 'EVIDENCIA';
 }
 
 function migrarRegistro(raw, rutaId) {
-  const etapa = normalizarEtapa(raw.etapa ?? raw.stage);
-  const tipo = raw.tipo || inferirTipo(etapa);
+  const etapa = aEtapaCanonico(raw.etapa ?? raw.stage);
+  const tipo = inferirTipo(etapa);
   return {
     id: raw.id,
     ruta_id: String(raw.ruta_id ?? rutaId ?? '').trim() || String(rutaId),
@@ -72,6 +104,14 @@ function migrarRegistro(raw, rutaId) {
     timestamp: raw.timestamp,
     synced: !!raw.synced,
   };
+}
+
+function registroNecesitaPersistenciaMigracion(raw, migrado) {
+  if (!raw || typeof raw !== 'object') return false;
+  const rawEtapa = raw.etapa ?? raw.stage;
+  const etapaDistinta = String(rawEtapa ?? '').trim() !== migrado.etapa;
+  const tipoDistinto = String(raw.tipo ?? '') !== String(migrado.tipo ?? '');
+  return etapaDistinta || tipoDistinto;
 }
 
 function contarPorCategoria(registros, cat) {
@@ -92,15 +132,20 @@ function puedeCerrarDespacho(registros) {
   return categoriasObligatoriasFaltantes(registros).length === 0;
 }
 
+function etiquetaParaRegistro(r) {
+  return LABEL_CATEGORIA[r.etapa] ?? r.etapa;
+}
+
 export default function RegistroViaje({ onSyncComplete, rutaId }) {
   const STORAGE_KEY = storageKeyFromRutaId(rutaId);
-  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('Carga');
   const [registros, setRegistros] = useState([]);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const cameraRef = useRef(null);
+  /** Si no es null, la próxima foto usa esta etapa (extra) sin cambiar el chip seleccionado */
+  const etapaCapturaRef = useRef(null);
   const registrosRef = useRef(registros);
   registrosRef.current = registros;
 
@@ -131,7 +176,6 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
 
   useEffect(() => {
     let cancelled = false;
-    setCategoriaSeleccionada('Carga');
     setRegistros([]);
     setIsCameraOpen(false);
     setIsCapturing(false);
@@ -145,6 +189,14 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
         const migrados = Array.isArray(parsed)
           ? parsed.map((row) => migrarRegistro(row, idActual))
           : [];
+
+        if (Array.isArray(parsed) && migrados.length === parsed.length) {
+          const algunoCambio = migrados.some((m, i) => registroNecesitaPersistenciaMigracion(parsed[i], m));
+          if (algunoCambio) {
+            await AsyncStorage.setItem(key, JSON.stringify(migrados));
+          }
+        }
+
         if (!cancelled) setRegistros(migrados);
       } catch {
         if (!cancelled) Alert.alert('Error', 'No se pudieron cargar registros locales.');
@@ -191,9 +243,19 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
     return true;
   };
 
-  const abrirCamara = async () => {
+  const cerrarCamara = () => {
+    etapaCapturaRef.current = null;
+    setIsCameraOpen(false);
+  };
+
+  /** Abre la cámara para una etapa específica */
+  const abrirCamaraParaEtapa = async (etapa) => {
+    etapaCapturaRef.current = etapa;
     const granted = await ensurePermissions();
-    if (!granted) return;
+    if (!granted) {
+      etapaCapturaRef.current = null;
+      return;
+    }
     setIsCameraOpen(true);
   };
 
@@ -202,19 +264,22 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
     try {
       setIsCapturing(true);
       const captureTimestamp = new Date().toISOString();
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.7 });
-      const position = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.55 });
 
       const fileExt = photo.uri.split('.').pop() || 'jpg';
-      const etapa = categoriaSeleccionada;
+      const etapa = etapaCapturaRef.current ?? RECEPCION;
       const recordId = `${etapa}-${Date.now()}`;
       const newPath = `${FileSystem.documentDirectory}${recordId}.${fileExt}`;
-      await FileSystem.copyAsync({
-        from: photo.uri,
-        to: newPath,
-      });
+
+      const [, position] = await Promise.all([
+        FileSystem.copyAsync({
+          from: photo.uri,
+          to: newPath,
+        }),
+        Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Low,
+        }),
+      ]);
 
       const newRecord = {
         id: recordId,
@@ -229,8 +294,7 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
       };
 
       await persistRecords([...registros, newRecord]);
-      setIsCameraOpen(false);
-      Alert.alert('Guardado', `Evidencia (${LABEL_CATEGORIA[etapa] ?? etapa}) en cola de sincronizacion.`);
+      cerrarCamara();
     } catch {
       Alert.alert('Error', 'No se pudo capturar foto y ubicacion.');
     } finally {
@@ -244,8 +308,6 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
     );
   }, [registros]);
 
-  const chipAncho = Math.min((Dimensions.get('window').width - 48) / 3, 120);
-
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -253,7 +315,7 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
           <View style={styles.cameraContainer}>
             <CameraView style={styles.camera} facing="back" ref={cameraRef} />
             <View style={styles.cameraActions}>
-              <TouchableOpacity style={styles.btnSecondary} onPress={() => setIsCameraOpen(false)}>
+              <TouchableOpacity style={styles.btnSecondary} onPress={cerrarCamara}>
                 <Text style={styles.btnLightText}>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.btnCapture} onPress={manejarCapturaFoto} disabled={isCapturing}>
@@ -265,64 +327,49 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
           <>
             <View style={styles.header}>
               <Text style={styles.title}>Evidencias del viaje</Text>
-              <Text style={styles.subtitle}>Ruta activa · selecciona categoría y añade fotos</Text>
+              <Text style={styles.subtitle}>
+                Captura directa por tipo de evidencia
+              </Text>
             </View>
 
-            <Text style={styles.sectionLabel}>Categorías</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.catRow}
-            >
-              {CATEGORIAS.map((cat) => {
-                const n = contarPorCategoria(registros, cat);
-                const oblig = CATEGORIAS_OBLIGATORIAS.includes(cat);
-                const cumpleSync = tieneSyncEnCategoria(registros, cat);
-                const soloPendiente =
-                  oblig &&
-                  registros.some((r) => r.etapa === cat && !r.synced) &&
-                  !cumpleSync;
-                const sinFotos = n === 0 && oblig;
-                const seleccionada = categoriaSeleccionada === cat;
+            <Text style={styles.sectionLabel}>Captura rápida</Text>
+            <View style={styles.directButtonsGrid}>
+              <TouchableOpacity
+                style={[styles.btnDirect, isCapturing && styles.btnDisabled]}
+                onPress={() => abrirCamaraParaEtapa(RECEPCION)}
+                disabled={isCapturing}
+              >
+                <Text style={styles.btnDirectText}>Recepción de carga</Text>
+                <Text style={styles.btnDirectCount}>({contarPorCategoria(registros, RECEPCION)})</Text>
+              </TouchableOpacity>
 
-                let chipStyle = styles.catChip;
-                if (!seleccionada) {
-                  if (!oblig) {
-                    chipStyle = { ...chipStyle, ...styles.catChipExtra };
-                  } else if (cumpleSync) {
-                    chipStyle = { ...chipStyle, ...styles.catChipOk };
-                  } else if (soloPendiente || sinFotos) {
-                    chipStyle = { ...chipStyle, ...styles.catChipWarn };
-                  }
-                } else {
-                  chipStyle = { ...chipStyle, ...styles.catChipSelectedLila };
-                }
+              <TouchableOpacity
+                style={[styles.btnDirect, isCapturing && styles.btnDisabled]}
+                onPress={() => abrirCamaraParaEtapa(ENTREGADO)}
+                disabled={isCapturing}
+              >
+                <Text style={styles.btnDirectText}>Entrega final</Text>
+                <Text style={styles.btnDirectCount}>({contarPorCategoria(registros, ENTREGADO)})</Text>
+              </TouchableOpacity>
 
-                const textChip = seleccionada ? styles.catChipTextSelected : styles.catChipText;
-                const textCount = seleccionada ? styles.catChipCountSelected : styles.catChipCount;
+              <TouchableOpacity
+                style={[styles.btnDirect, isCapturing && styles.btnDisabled]}
+                onPress={() => abrirCamaraParaEtapa(HOJA_DESPACHO)}
+                disabled={isCapturing}
+              >
+                <Text style={styles.btnDirectText}>Hoja de despacho</Text>
+                <Text style={styles.btnDirectCount}>({contarPorCategoria(registros, HOJA_DESPACHO)})</Text>
+              </TouchableOpacity>
 
-                return (
-                  <TouchableOpacity
-                    key={cat}
-                    style={[chipStyle, { minWidth: chipAncho }]}
-                    onPress={() => setCategoriaSeleccionada(cat)}
-                  >
-                    <Text style={textChip} numberOfLines={2}>
-                      {LABEL_CATEGORIA[cat] ?? cat}
-                    </Text>
-                    <Text style={textCount}>({n})</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-
-            <TouchableOpacity
-              style={[styles.btnAdd, (isCapturing || isSyncing) && styles.btnDisabled]}
-              onPress={abrirCamara}
-              disabled={isCapturing || isSyncing}
-            >
-              <Text style={styles.btnAddText}>+ Añadir Evidencia</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.btnDirect, isCapturing && styles.btnDisabled]}
+                onPress={() => abrirCamaraParaEtapa(EVIDENCIA_ADICIONAL)}
+                disabled={isCapturing}
+              >
+                <Text style={styles.btnDirectText}>Evidencia extra</Text>
+                <Text style={styles.btnDirectCount}>({contarPorCategoria(registros, EVIDENCIA_ADICIONAL)})</Text>
+              </TouchableOpacity>
+            </View>
 
             <View style={styles.resumenCard}>
               <Text style={styles.resumenLine}>
@@ -353,13 +400,15 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
 
             <Text style={styles.sectionLabel}>Registro del viaje</Text>
             {sortedRegistros.length === 0 ? (
-              <Text style={styles.emptyText}>Aún no hay evidencias. Usa el botón superior para añadir.</Text>
+              <Text style={styles.emptyText}>
+                Aún no hay evidencias. Usa los botones de captura rápida.
+              </Text>
             ) : (
               sortedRegistros.map((r) => (
                 <View key={r.id} style={styles.thumbRow}>
                   <Image source={{ uri: r.photoUri }} style={styles.thumbSmall} />
                   <View style={styles.thumbMeta}>
-                    <Text style={styles.thumbTitle}>{LABEL_CATEGORIA[r.etapa] ?? r.etapa}</Text>
+                    <Text style={styles.thumbTitle}>{etiquetaParaRegistro(r)}</Text>
                     <Text style={styles.thumbSub}>{new Date(r.timestamp).toLocaleString()}</Text>
                     <Text style={styles.thumbSub}>
                       GPS: {Number(r.latitude).toFixed(5)}, {Number(r.longitude).toFixed(5)}
@@ -399,62 +448,22 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.6,
   },
-  catRow: {
-    paddingHorizontal: 12,
-    gap: 8,
-    flexDirection: 'row',
-    alignItems: 'stretch',
+  directButtonsGrid: {
+    paddingHorizontal: 16,
+    gap: 10,
   },
-  catChip: {
+  btnDirect: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
     borderWidth: 2,
-    borderColor: '#E2E8F0',
-    marginRight: 8,
+    borderColor: '#C4B5FD',
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  catChipSelectedLila: {
-    borderColor: '#8B5CF6',
-    backgroundColor: '#F5F3FF',
-    borderWidth: 2,
-  },
-  catChipOk: {
-    borderColor: '#16A34A',
-    backgroundColor: '#F0FDF4',
-  },
-  catChipWarn: {
-    borderColor: '#EA580C',
-    backgroundColor: '#FFF7ED',
-  },
-  catChipExtra: {
-    borderColor: '#94A3B8',
-    backgroundColor: '#F8FAFC',
-  },
-  catChipText: { fontSize: 13, fontWeight: '700', color: '#0f172a', textAlign: 'center' },
-  catChipTextSelected: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#5B21B6',
-    textAlign: 'center',
-  },
-  catChipCount: { fontSize: 12, color: '#64748b', marginTop: 4, fontWeight: '600' },
-  catChipCountSelected: {
-    fontSize: 12,
-    color: '#6D28D9',
-    marginTop: 4,
-    fontWeight: '700',
-  },
-  btnAdd: {
-    marginHorizontal: 16,
-    marginTop: 12,
-    backgroundColor: '#2563EB',
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  btnAddText: { color: '#fff', fontSize: 17, fontWeight: '800' },
+  btnDirectText: { color: '#5B21B6', fontSize: 16, fontWeight: '700', textAlign: 'center' },
+  btnDirectCount: { fontSize: 12, color: '#6D28D9', marginTop: 4, fontWeight: '700' },
   btnDisabled: { opacity: 0.55 },
   resumenCard: {
     marginHorizontal: 16,

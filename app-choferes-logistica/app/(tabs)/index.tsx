@@ -181,7 +181,8 @@ export default function HomeScreen() {
     rutasMemo.length > 1 && rutaActivaId === null;
 
   if (debeElegirRuta) {
-    const selectorPadBottom = insets.bottom + 72;
+    const selectorPadBottom = insets.bottom + 96;
+    const selectorPadTop = insets.top + 16;
     return (
       <View style={styles.screenRoot} collapsable={false}>
         {errorRutas ? (
@@ -195,7 +196,10 @@ export default function HomeScreen() {
           style={styles.selectorScroll}
           contentContainerStyle={[
             styles.selectorScrollContent,
-            { paddingBottom: selectorPadBottom },
+            {
+              paddingTop: selectorPadTop,
+              paddingBottom: selectorPadBottom,
+            },
           ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator
@@ -336,8 +340,8 @@ const styles = StyleSheet.create({
   /** Contenido del selector dentro del ScrollView */
   selectorStripInner: {
     paddingHorizontal: 12,
-    paddingTop: 10,
-    paddingBottom: 8,
+    paddingTop: 4,
+    paddingBottom: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#e2e8f0',
     backgroundColor: '#f8fafc',
