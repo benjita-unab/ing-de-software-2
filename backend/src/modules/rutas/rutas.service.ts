@@ -320,6 +320,9 @@ export class RutasService {
         fecha_inicio,
         fecha_fin,
         eta,
+        tiempo_espera_minutos,
+        hora_llegada_destino,
+        hora_inspeccion_aprobada,
         created_at,
         cliente_id,
         conductor_id,
@@ -405,6 +408,50 @@ export class RutasService {
     };
   }
 
+  async updateTiemposInspeccion(rutaId: string, params: { hora_llegada_destino?: string; hora_inspeccion_aprobada?: string }) {
+    const supabase = this.supabaseConfig.getClient();
+
+    const { data: ruta, error: fetchError } = await supabase
+      .from('rutas')
+      .select('hora_llegada_destino, hora_inspeccion_aprobada')
+      .eq('id', rutaId)
+      .single();
+
+    if (fetchError || !ruta) {
+      throw new BadRequestException('Ruta no encontrada');
+    }
+
+    const patch: any = {};
+    if (params.hora_llegada_destino) {
+      patch.hora_llegada_destino = params.hora_llegada_destino;
+    }
+    if (params.hora_inspeccion_aprobada) {
+      patch.hora_inspeccion_aprobada = params.hora_inspeccion_aprobada;
+    }
+
+    // Calcular tiempo en minutos
+    const llegada = patch.hora_llegada_destino || ruta.hora_llegada_destino;
+    const aprobacion = patch.hora_inspeccion_aprobada || ruta.hora_inspeccion_aprobada;
+
+    if (llegada && aprobacion) {
+      const msDifference = new Date(aprobacion).getTime() - new Date(llegada).getTime();
+      const mins = Math.max(0, Math.floor(msDifference / 60000));
+      patch.tiempo_espera_minutos = mins;
+    }
+
+    const { data, error } = await supabase
+      .from('rutas')
+      .update(patch)
+      .eq('id', rutaId)
+      .select();
+
+    if (error) {
+      throw new BadRequestException(`Error al actualizar tiempos: ${error.message}`);
+    }
+
+    return { message: 'Tiempos actualizados correctamente', ruta: data[0] };
+  }
+
   /**
    * Lista todas las rutas con filtros opcionales
    */
@@ -424,6 +471,9 @@ export class RutasService {
       fecha_fin,
       eta,
       created_at,
+      tiempo_espera_minutos,
+      hora_llegada_destino,
+      hora_inspeccion_aprobada,
       cliente_id,
       conductor_id,
       camion_id,

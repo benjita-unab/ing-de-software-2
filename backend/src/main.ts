@@ -24,13 +24,7 @@ async function bootstrap() {
   app.use(urlencoded({ limit: '20mb', extended: true }));
 
   app.enableCors({
-    origin: [
-      'http://localhost:3001',
-      'http://localhost:3000',
-      'http://192.168.0.3:3000',
-      'http://192.168.0.4:3000',
-      /https:\/\/.*\.trycloudflare\.com$/,
-    ],
+    origin: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
     allowedHeaders: ['Content-Type', 'Authorization'],
@@ -58,8 +52,8 @@ async function bootstrap() {
   );
 
   const port = process.env.PORT || 3000;
-  await app.listen(port);
-  console.log(`✅ Backend iniciado en http://localhost:${port}`);
+  await app.listen(port, '0.0.0.0');
+  console.log(`✅ Backend iniciado en http://0.0.0.0:${port}`);
 }
 
 bootstrap().catch((err) => {

@@ -561,6 +561,7 @@ export default function HistorialDespachos() {
                   <th style={base.th}>Cliente</th>
                   <th style={base.th}>Conductor / Vehículo</th>
                   <th style={base.th}>Destino</th>
+                  <th style={base.th}>Espera</th>
                   <th style={base.th}>Finalizado</th>
                   <th style={base.th}>Estado</th>
                   <th style={base.th}>Evidencias</th>
@@ -582,6 +583,18 @@ export default function HistorialDespachos() {
                       </div>
                     </td>
                     <td style={base.td}>{despacho.destino}</td>
+                    <td style={base.td}>
+                      {despacho.tiempo_espera_minutos !== null && despacho.tiempo_espera_minutos !== undefined ? (
+                        <span style={{
+                          color: despacho.tiempo_espera_minutos > 30 ? "#ef4444" : "#e2e8f0",
+                          fontWeight: 600
+                        }}>
+                          {despacho.tiempo_espera_minutos} min
+                        </span>
+                      ) : (
+                        <span style={{ color: "#94A3B8" }}>-</span>
+                      )}
+                    </td>
                     <td style={base.td}>{formatFecha(
                       despacho.fecha_fin || despacho.fecha_inicio || despacho.created_at
                     )}</td>

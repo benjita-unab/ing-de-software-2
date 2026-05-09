@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { bffFetch } from "./bffService";
 
 export type TraceabilityTipo = "EVIDENCIA" | "FICHA_DESPACHO";
@@ -15,6 +16,7 @@ export type TraceabilityRecord = {
   timestamp: string;
 };
 
+<<<<<<< Updated upstream
 function sinTildesUpper(s: string): string {
   return s
     .normalize("NFD")
@@ -75,6 +77,64 @@ function logicalEtapaForApi(r: TraceabilityRecord): string {
 
 function storageFolderFromRecord(r: TraceabilityRecord): string {
   return storageFolderFromEtapa(r.etapa || r.stage || "");
+=======
+export type TiemposInspeccionRecord = {
+  id: string; // Para identificar encolado único (ej: uuid o timestamp)
+  rutaId: string;
+  hora_llegada_destino?: string;
+  hora_inspeccion_aprobada?: string;
+};
+
+const STORAGE_TIEMPOS_QUEUE = 'logitrack_tiempos_queue';
+
+export async function encolarTiempoInspeccion(record: TiemposInspeccionRecord) {
+  try {
+    const arrStr = await AsyncStorage.getItem(STORAGE_TIEMPOS_QUEUE);
+    const arr: TiemposInspeccionRecord[] = arrStr ? JSON.parse(arrStr) : [];
+    arr.push(record);
+    await AsyncStorage.setItem(STORAGE_TIEMPOS_QUEUE, JSON.stringify(arr));
+  } catch (err) {
+    console.error('Error encolando tiempo de inspección', err);
+  }
+}
+
+export async function syncTiemposInspeccion(): Promise<void> {
+  try {
+    const arrStr = await AsyncStorage.getItem(STORAGE_TIEMPOS_QUEUE);
+    if (!arrStr) return;
+    const arr: TiemposInspeccionRecord[] = JSON.parse(arrStr);
+    
+    const failed: TiemposInspeccionRecord[] = [];
+    
+    for (const record of arr) {
+      try {
+        const payload: any = {};
+        if (record.hora_llegada_destino) payload.hora_llegada_destino = record.hora_llegada_destino;
+        if (record.hora_inspeccion_aprobada) payload.hora_inspeccion_aprobada = record.hora_inspeccion_aprobada;
+        
+        const res = await bffFetch(`/api/rutas/${record.rutaId}/tiempos`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        
+        if (!res.ok) {
+          throw new Error('Error HTTP ' + res.status);
+        }
+      } catch (e) {
+        failed.push(record);
+      }
+    }
+    
+    if (failed.length > 0) {
+      await AsyncStorage.setItem(STORAGE_TIEMPOS_QUEUE, JSON.stringify(failed));
+    } else {
+      await AsyncStorage.removeItem(STORAGE_TIEMPOS_QUEUE);
+    }
+  } catch (err) {
+    console.error('Error sincronizando tiempos de inspección', err);
+  }
+>>>>>>> Stashed changes
 }
 
 export async function syncTraceabilityRecords(

@@ -13,6 +13,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import RegistroViaje from '../../scripts/RegistroViaje';
 import { BotonCerrarDespacho } from '../../src/components/BotonCerrarDespacho';
 import { bffFetch } from '../../src/services/bffService';
+import { TiemposInspeccionBotones } from '../../src/components/TiemposInspeccionBotones';
 
 /** Persistencia local del UUID de ruta elegido por el chofer */
 const STORAGE_RUTA_ACTIVA_ID = 'logitrack_ruta_activa_id';
@@ -297,10 +298,13 @@ export default function HomeScreen() {
               rutaId={rutaActivaId}
             />
             {todoSincronizado && (
-              <BotonCerrarDespacho
-                rutaId={rutaActivaId}
-                onDespachoFinalizado={alFinalizarDespachoExitoso}
-              />
+              <>
+                <TiemposInspeccionBotones rutaId={rutaActivaId} />
+                <BotonCerrarDespacho
+                  rutaId={rutaActivaId}
+                  onDespachoFinalizado={alFinalizarDespachoExitoso}
+                />
+              </>
             )}
           </>
         ) : null}
