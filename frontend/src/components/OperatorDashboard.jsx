@@ -4,7 +4,7 @@
 // Estructura: Topbar horizontal | Cola de Alertas | Panel de Detalle
 // ─────────────────────────────────────────────────────────────────────────────
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import AlertQueue from "./AlertQueue";
 import AlertDetailPanel from "./AlertDetailPanel";
 import MensajesConductor from "./MensajesConductor";
@@ -17,12 +17,46 @@ import HistorialDespachos from "./HistorialDespachos";
 import { useAlerts } from "../hooks/useAlerts";
 import { useMensajesConductor } from "../hooks/useMensajesConductor";
 
+function playAlarmSound() {
+  if (typeof window === 'undefined') return;
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContext) return;
+  try {
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 800;
+    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.5);
+  } catch (e) {
+    console.warn('Audio context failed:', e);
+  }
+}
+
 export default function OperatorDashboard({ operator, onSignOut }) {
   const { alerts, loading, acknowledgeAlert, resolveAlert: rawResolveAlert } = useAlerts();
-  const { mensajes, loading: mensajesLoading, error: mensajesError, acknowledgeMensaje } = useMensajesConductor();
+  const { mensajes, rutasMap, loading: mensajesLoading, error: mensajesError, acknowledgeMensaje } = useMensajesConductor();
   const [activeSection, setActiveSection] = useState("alertas");
   const [selectedAlert, setSelectedAlert] = useState(null);
   const [isLightMode, setIsLightMode] = useState(false);
+  const playedUrgentIdsRef = useRef(new Set());
+
+  // Alarma global para emergencias
+  useEffect(() => {
+    const urgentMessages = mensajes.filter(
+      (m) => m.prioridad === 'ALTA' && !m.acknowledged,
+    );
+    const newUrgent = urgentMessages.filter((m) => !playedUrgentIdsRef.current.has(m.id));
+    if (newUrgent.length > 0) {
+      playAlarmSound();
+      newUrgent.forEach((m) => playedUrgentIdsRef.current.add(m.id));
+    }
+  }, [mensajes]);
 
   const handleResolveAlert = async (alertId) => {
     const res = await rawResolveAlert(alertId);
@@ -130,6 +164,7 @@ export default function OperatorDashboard({ operator, onSignOut }) {
           <div style={{ flex: 1, minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column", height: "100%" }} className="premium-card">
             <MensajesConductor
               mensajes={mensajes}
+              rutasMap={rutasMap}
               loading={mensajesLoading}
               error={mensajesError}
               acknowledgeMensaje={acknowledgeMensaje}

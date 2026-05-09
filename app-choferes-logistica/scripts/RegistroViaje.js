@@ -9,6 +9,7 @@ import {
   Image,
   ActivityIndicator,
   ScrollView,
+  Modal,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -130,6 +131,7 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isMessagesSyncing, setIsMessagesSyncing] = useState(false);
   const [mensajesQueue, setMensajesQueue] = useState([]);
+  const [isModalVisible, setIsModalVisible] = useState(false);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const cameraRef = useRef(null);
   const registrosRef = useRef(registros);
@@ -470,32 +472,13 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
             />
 
             <View style={styles.messageSection}>
-              <Text style={styles.sectionTitle}>Reportar Estado</Text>
-              <Text style={styles.sectionSubtitle}>
-                Selecciona un mensaje para reportar estado.
-              </Text>
-              <View style={styles.messageGrid}>
-                {MENSAJES_CATALOGO.map((option) => (
-                  <TouchableOpacity
-                    key={option.id}
-                    onPress={() => reportarEstado(option)}
-                    style={[
-                      styles.messageButton,
-                      option.prioridad === 'ALTA' && styles.messageButtonHigh,
-                    ]}
-                    accessibilityRole="button"
-                  >
-                    <Text
-                      style={[
-                        styles.messageButtonText,
-                        option.prioridad === 'ALTA' && styles.messageButtonTextHigh,
-                      ]}
-                    >
-                      {option.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              <TouchableOpacity
+                style={styles.btnGestionEstado}
+                onPress={() => setIsModalVisible(true)}
+                accessibilityRole="button"
+              >
+                <Text style={styles.btnGestionEstadoText}>Notificar Estado</Text>
+              </TouchableOpacity>
             </View>
 
             <View style={styles.footer}>
@@ -508,6 +491,85 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
           </>
         )}
       </ScrollView>
+
+      <Modal
+        visible={isModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Gestión de Estado / Reportes</Text>
+              <TouchableOpacity
+                onPress={() => setIsModalVisible(false)}
+                style={styles.modalCloseButton}
+              >
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalScroll}>
+              <View style={styles.modalSection}>
+                <Text style={styles.sectionTitle}>Estado actual</Text>
+                <Text style={styles.sectionSubtitle}>
+                  Reporta el estado de tu viaje
+                </Text>
+                <View style={styles.messageGrid}>
+                  {MENSAJES_CATALOGO.filter(option => option.tipo === 'ESTADO').map((option) => (
+                    <TouchableOpacity
+                      key={option.id}
+                      onPress={() => {
+                        reportarEstado(option);
+                        setIsModalVisible(false);
+                      }}
+                      style={styles.messageButton}
+                      accessibilityRole="button"
+                    >
+                      <Text style={styles.messageButtonText}>
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.modalSection}>
+                <Text style={styles.sectionTitle}>Reportar</Text>
+                <Text style={styles.sectionSubtitle}>
+                  Reporta incidencias o emergencias
+                </Text>
+                <View style={styles.messageGrid}>
+                  {MENSAJES_CATALOGO.filter(option => option.tipo !== 'ESTADO').map((option) => (
+                    <TouchableOpacity
+                      key={option.id}
+                      onPress={() => {
+                        reportarEstado(option);
+                        setIsModalVisible(false);
+                      }}
+                      style={[
+                        styles.messageButton,
+                        option.prioridad === 'ALTA' && styles.messageButtonHigh,
+                      ]}
+                      accessibilityRole="button"
+                    >
+                      <Text
+                        style={[
+                          styles.messageButtonText,
+                          option.prioridad === 'ALTA' && styles.messageButtonTextHigh,
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -765,5 +827,62 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     minWidth: 130,
     alignItems: 'center',
+  },
+  btnGestionEstado: {
+    backgroundColor: '#f97316',
+    borderRadius: 12,
+    paddingVertical: 15,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  btnGestionEstadoText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    width: '90%',
+    maxWidth: 400,
+    height: '80%',
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5EAF2',
+    flex: 0,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1D2A3A',
+  },
+  modalCloseButton: {
+    padding: 8,
+  },
+  modalCloseText: {
+    fontSize: 18,
+    color: '#64748B',
+    fontWeight: '700',
+  },
+  modalScroll: {
+    flex: 1,
+  },
+  modalSection: {
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F6FB',
   },
 });

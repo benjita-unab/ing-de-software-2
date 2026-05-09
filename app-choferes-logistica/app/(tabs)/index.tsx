@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -21,13 +22,6 @@ type RutaApi = {
   origen?: string | null;
   destino?: string | null;
 };
-
-function esRutaOperativa(estado?: string | null): boolean {
-  const e = String(estado ?? '')
-    .trim()
-    .toUpperCase();
-  return e !== 'ENTREGADO' && e !== 'CANCELADO';
-}
 
 /** UUID pueden llegar con distinta capitalización desde API vs estado local */
 function mismoId(
@@ -73,9 +67,12 @@ export default function HomeScreen() {
             : `Error HTTP ${res.status}`;
         throw new Error(msg || `Error HTTP ${res.status}`);
       }
-      const lista: RutaApi[] = Array.isArray(raw) ? raw : [];
-      const activas = lista.filter((r) => esRutaOperativa(r.estado));
-      setRutasOperativas(activas);
+      const lista: RutaApi[] = Array.isArray(raw)
+        ? raw
+        : raw && typeof raw === 'object' && Array.isArray((raw as any).data)
+        ? (raw as any).data
+        : [];
+      setRutasOperativas(lista);
 
       const persisted = await AsyncStorage.getItem(STORAGE_RUTA_ACTIVA_ID);
       const persistedTrim = persisted?.trim() ?? '';
@@ -187,7 +184,7 @@ export default function HomeScreen() {
             </Text>
           </View>
         ) : null}
-        <View style={styles.selectorStrip} collapsable={false}>
+        <ScrollView style={styles.selectorStrip} contentContainerStyle={styles.selectorStripContent} collapsable={false}>
           <Text style={styles.selectorTitle}>Ruta activa — elige una para continuar</Text>
           {rutasMemo.map((ruta) => {
             const idStr = String(ruta.id);
@@ -208,7 +205,7 @@ export default function HomeScreen() {
               </Pressable>
             );
           })}
-        </View>
+        </ScrollView>
       </View>
     );
   }
