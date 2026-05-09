@@ -16,7 +16,6 @@ export type TraceabilityRecord = {
   timestamp: string;
 };
 
-<<<<<<< Updated upstream
 function sinTildesUpper(s: string): string {
   return s
     .normalize("NFD")
@@ -77,7 +76,8 @@ function logicalEtapaForApi(r: TraceabilityRecord): string {
 
 function storageFolderFromRecord(r: TraceabilityRecord): string {
   return storageFolderFromEtapa(r.etapa || r.stage || "");
-=======
+}
+
 export type TiemposInspeccionRecord = {
   id: string; // Para identificar encolado único (ej: uuid o timestamp)
   rutaId: string;
@@ -134,7 +134,6 @@ export async function syncTiemposInspeccion(): Promise<void> {
   } catch (err) {
     console.error('Error sincronizando tiempos de inspección', err);
   }
->>>>>>> Stashed changes
 }
 
 export async function syncTraceabilityRecords(
