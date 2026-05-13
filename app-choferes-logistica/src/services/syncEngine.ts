@@ -98,13 +98,19 @@ export async function encolarTiempoInspeccion(record: TiemposInspeccionRecord) {
   }
 }
 
+let isSyncingTiempos = false;
+
 export async function syncTiemposInspeccion(): Promise<void> {
+  if (isSyncingTiempos) return;
+  isSyncingTiempos = true;
+
   try {
     const arrStr = await AsyncStorage.getItem(STORAGE_TIEMPOS_QUEUE);
     if (!arrStr) return;
     const arr: TiemposInspeccionRecord[] = JSON.parse(arrStr);
+    if (arr.length === 0) return;
     
-    const failed: TiemposInspeccionRecord[] = [];
+    const successfulIds = new Set<string>();
     
     for (const record of arr) {
       try {
@@ -121,18 +127,28 @@ export async function syncTiemposInspeccion(): Promise<void> {
         if (!res.ok) {
           throw new Error('Error HTTP ' + res.status);
         }
+        successfulIds.add(record.id);
       } catch (e) {
-        failed.push(record);
+        // Falló este registro, se mantendrá encolado
       }
     }
     
-    if (failed.length > 0) {
-      await AsyncStorage.setItem(STORAGE_TIEMPOS_QUEUE, JSON.stringify(failed));
-    } else {
-      await AsyncStorage.removeItem(STORAGE_TIEMPOS_QUEUE);
+    // Obtenemos la versión más reciente de la cola y quitamos solo los procesados exitosamente
+    const latestStr = await AsyncStorage.getItem(STORAGE_TIEMPOS_QUEUE);
+    if (latestStr) {
+      const latestArr: TiemposInspeccionRecord[] = JSON.parse(latestStr);
+      const remaining = latestArr.filter(r => !successfulIds.has(r.id));
+      
+      if (remaining.length > 0) {
+        await AsyncStorage.setItem(STORAGE_TIEMPOS_QUEUE, JSON.stringify(remaining));
+      } else {
+        await AsyncStorage.removeItem(STORAGE_TIEMPOS_QUEUE);
+      }
     }
   } catch (err) {
     console.error('Error sincronizando tiempos de inspección', err);
+  } finally {
+    isSyncingTiempos = false;
   }
 }
 

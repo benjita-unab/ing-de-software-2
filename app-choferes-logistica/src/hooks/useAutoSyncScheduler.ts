@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import {
   syncTraceabilityRecords,
+  syncTiemposInspeccion,
   type TraceabilityRecord,
 } from "../services/syncEngine";
 
@@ -145,6 +146,9 @@ export function useAutoSyncScheduler({
     setIsSyncingRef.current(true);
 
     try {
+      // También intentar sincronizar tiempos de inspección de manera automática
+      await syncTiemposInspeccion().catch(e => console.error("Error bg sync tiempos", e));
+
       const syncedIds = await syncTraceabilityRecords(pending, route);
       await applySyncedIdsRef.current(syncedIds);
       failureIndexRef.current = 0;
