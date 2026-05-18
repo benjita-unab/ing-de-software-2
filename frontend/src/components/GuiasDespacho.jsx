@@ -79,6 +79,17 @@ function readFileAsDataUrl(file) {
   });
 }
 
+// HU-20: una ruta tiene ficha si la URL directa existe o si llegó como
+// `fichasDespacho` desde traceability_events (vinculada vía app móvil).
+function obtenerFichaUrl(ruta) {
+  const directa = String(ruta?.ficha_despacho_url || "").trim();
+  if (directa && directa.toLowerCase() !== "null") return directa;
+  const fallback = Array.isArray(ruta?.fichasDespacho)
+    ? ruta.fichasDespacho[0]?.url
+    : null;
+  return fallback ? String(fallback).trim() : "";
+}
+
 export default function GuiasDespacho() {
   const [rutas, setRutas] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -150,7 +161,7 @@ export default function GuiasDespacho() {
   };
 
   const handleFinalizarDespacho = async (ruta) => {
-    if (!ruta.ficha_despacho_url) {
+    if (!obtenerFichaUrl(ruta)) {
       alert(
         "Acción bloqueada: No se puede finalizar el despacho. Debes adjuntar al menos una Ficha de Despacho física."
       );
@@ -201,7 +212,8 @@ export default function GuiasDespacho() {
                     <th style={base.th}>Vehículo / Conductor</th>
                     <th style={base.th}>Inicio</th>
                     <th style={base.th}>Estado</th>
-                    <th style={base.th}>Acciones / Ficha</th>
+                    <th style={base.th}>📑 Ficha de Despacho</th>
+                    <th style={base.th}>Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -239,41 +251,75 @@ export default function GuiasDespacho() {
                         </span>
                       </td>
                       <td style={base.td}>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                          {ruta.ficha_despacho_url ? (
-                            <a href={ruta.ficha_despacho_url} target="_blank" rel="noopener noreferrer" style={{ color: "#3B82F6", fontSize: "14px", textDecoration: "none", fontWeight: 600 }}>
-                              📄 Ver Ficha Adjunta
-                            </a>
-                          ) : (
-                            <label style={{ fontSize: "14px", color: "#10B981", cursor: "pointer", fontWeight: 600 }}>
-                              {uploadingId === ruta.id ? "⏳ Subiendo..." : "📸 Subir Ficha"}
-                              <input
-                                type="file"
-                                accept="image/*"
-                                style={{ display: "none" }}
-                                onChange={(e) => handleSubirFicha(ruta.id, e)}
-                                disabled={uploadingId === ruta.id}
-                              />
-                            </label>
-                          )}
-
-                          <button
-                            onClick={() => handleFinalizarDespacho(ruta)}
-                            style={{
-                              background: ruta.ficha_despacho_url ? "#10B981" : "#4B5563",
-                              color: "#fff",
-                              border: "none",
-                              padding: "8px 14px",
-                              borderRadius: "8px",
-                              fontSize: "14px",
-                              cursor: "pointer",
-                              fontWeight: 600,
-                            }}
-                            title={!ruta.ficha_despacho_url ? "Debe subir la ficha para finalizar" : "Finalizar Despacho"}
-                          >
-                            ✅ Finalizar Despacho
-                          </button>
-                        </div>
+                        {(() => {
+                          const fichaUrl = obtenerFichaUrl(ruta);
+                          if (fichaUrl) {
+                            return (
+                              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                                <a
+                                  href={fichaUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{
+                                    color: "#3B82F6",
+                                    fontSize: "14px",
+                                    textDecoration: "none",
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  📄 Ver Ficha Adjunta
+                                </a>
+                                <span style={{ fontSize: "11px", color: "#94A3B8" }}>
+                                  Ficha registrada
+                                </span>
+                              </div>
+                            );
+                          }
+                          return (
+                            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                              <span style={{ fontSize: "13px", color: "#FBBF24", fontWeight: 600 }}>
+                                Sin ficha de despacho registrada
+                              </span>
+                              <label style={{ fontSize: "13px", color: "#10B981", cursor: "pointer", fontWeight: 600 }}>
+                                {uploadingId === ruta.id ? "⏳ Subiendo..." : "📸 Subir Ficha"}
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  style={{ display: "none" }}
+                                  onChange={(e) => handleSubirFicha(ruta.id, e)}
+                                  disabled={uploadingId === ruta.id}
+                                />
+                              </label>
+                            </div>
+                          );
+                        })()}
+                      </td>
+                      <td style={base.td}>
+                        {(() => {
+                          const tieneFicha = !!obtenerFichaUrl(ruta);
+                          return (
+                            <button
+                              onClick={() => handleFinalizarDespacho(ruta)}
+                              style={{
+                                background: tieneFicha ? "#10B981" : "#4B5563",
+                                color: "#fff",
+                                border: "none",
+                                padding: "8px 14px",
+                                borderRadius: "8px",
+                                fontSize: "14px",
+                                cursor: tieneFicha ? "pointer" : "not-allowed",
+                                fontWeight: 600,
+                              }}
+                              title={
+                                !tieneFicha
+                                  ? "Debe adjuntar una ficha de despacho antes de finalizar"
+                                  : "Finalizar Despacho"
+                              }
+                            >
+                              ✅ Finalizar Despacho
+                            </button>
+                          );
+                        })()}
                       </td>
                     </tr>
                   ))}

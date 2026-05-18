@@ -324,6 +324,7 @@ export class RutasService {
         cliente_id,
         conductor_id,
         camion_id,
+        ficha_despacho_url,
         clientes(id, nombre),
         conductores(id, rut, licencia_vencimiento),
         camiones(id, patente, capacidad_kg)
@@ -335,12 +336,99 @@ export class RutasService {
       throw new NotFoundException(`Ruta no encontrada: ${error.message}`);
     }
 
+    // HU-20: separar ficha de despacho de evidencias normales en el detalle.
+    const { fichasDespacho, fotosEvidencia } =
+      await this.fetchFichasYEvidenciasParaRuta(rutaId);
+
     return {
       ...ruta,
+      fichasDespacho,
+      fotosEvidencia,
       licenseStatus: ruta.conductor_id
         ? await this.conductoresService.validateDriverLicense(ruta.conductor_id)
         : null,
     };
+  }
+
+  /**
+   * Devuelve fichas de despacho y evidencias normales de una ruta a partir
+   * de `traceability_events`, sin mezclar la ficha con el resto. Usado
+   * tanto por `getRouteInfo` como por `listRoutes` cuando se pide detalle.
+   *
+   * Tolerante a la ausencia de la columna `tipo` en BDs antiguas.
+   */
+  private async fetchFichasYEvidenciasParaRuta(rutaId: string) {
+    const supabase = this.supabaseConfig.getClient();
+
+    type FotoMin = {
+      id: string;
+      etapa: string | null;
+      url: string;
+      timestamp: string | null;
+      tipo: string | null;
+    };
+
+    const fichasDespacho: FotoMin[] = [];
+    const fotosEvidencia: FotoMin[] = [];
+
+    const traceConTipo = await supabase
+      .from('traceability_events')
+      .select('id, etapa, foto_uri, timestamp_evento, tipo')
+      .eq('ruta_id', rutaId)
+      .order('timestamp_evento', { ascending: true });
+
+    const errMsgTipo = (traceConTipo.error as { message?: string } | undefined)
+      ?.message;
+    const traceSinTipo =
+      traceConTipo.error && /tipo/i.test(errMsgTipo || '')
+        ? await supabase
+            .from('traceability_events')
+            .select('id, etapa, foto_uri, timestamp_evento')
+            .eq('ruta_id', rutaId)
+            .order('timestamp_evento', { ascending: true })
+        : null;
+
+    const traceRuta = traceSinTipo ?? traceConTipo;
+
+    if (traceRuta.error || !traceRuta.data) {
+      return { fichasDespacho, fotosEvidencia };
+    }
+
+    for (const ev of traceRuta.data) {
+      if (!ev?.foto_uri) continue;
+      const url = this.supabaseConfig.getPublicUrl(
+        'fotos_trazabilidad',
+        ev.foto_uri,
+      );
+      if (!url) continue;
+
+      const tipoEv =
+        'tipo' in (ev as object)
+          ? (ev as { tipo?: string | null }).tipo ?? null
+          : null;
+      const etapaNorm = String(ev.etapa || '').trim();
+      const etapaUpper = etapaNorm.toUpperCase();
+      const esFicha =
+        String(tipoEv || '').toUpperCase() === 'FICHA_DESPACHO' ||
+        etapaUpper === 'HOJA_DESPACHO' ||
+        etapaNorm.toLowerCase() === 'ficha';
+
+      const item: FotoMin = {
+        id: String(ev.id ?? `ev-${ev.foto_uri}`),
+        etapa: ev.etapa ?? null,
+        url,
+        timestamp: ev.timestamp_evento ?? null,
+        tipo: tipoEv,
+      };
+
+      if (esFicha) {
+        fichasDespacho.push(item);
+      } else {
+        fotosEvidencia.push(item);
+      }
+    }
+
+    return { fichasDespacho, fotosEvidencia };
   }
 
   /**
@@ -427,6 +515,7 @@ export class RutasService {
       cliente_id,
       conductor_id,
       camion_id,
+      ficha_despacho_url,
       clientes(id, nombre),
       conductores(id, rut),
       camiones(id, patente)
@@ -471,7 +560,7 @@ export class RutasService {
 
     const { data: ruta, error: rutaError } = await supabase
       .from('rutas')
-      .select('id, fecha_inicio, fecha_fin')
+      .select('id, fecha_inicio, fecha_fin, ficha_despacho_url')
       .eq('id', rutaId)
       .single();
 
@@ -681,12 +770,29 @@ export class RutasService {
     const fichasDespacho = fotos.filter((f) => esFichaDespacho(f));
     const fotosEvidencia = fotos.filter((f) => !esFichaDespacho(f));
 
+    // HU-20: si no detectamos ficha desde fotos/traceability pero la
+    // ruta sí tiene URL persistida (subida web vía entregas/photo o
+    // vinculada por el servicio de trazabilidad), exponemos esa URL
+    // como ficha para que el modal de evidencias pueda mostrarla.
+    const fichaUrlRuta = String(ruta.ficha_despacho_url || '').trim();
+    if (fichaUrlRuta && !urlsVistas.has(fichaUrlRuta)) {
+      fichasDespacho.push({
+        id: `ruta-${rutaId}`,
+        etapa: 'HOJA_DESPACHO',
+        url: fichaUrlRuta,
+        timestamp: null,
+        fuente: 'fotos_tabla',
+        tipo: 'FICHA_DESPACHO',
+      });
+    }
+
     return {
       rutaId,
       pdfs,
       fotos,
       fotosEvidencia,
       fichasDespacho,
+      fichaDespachoUrl: fichaUrlRuta || null,
       firmaUrl,
     };
   }
