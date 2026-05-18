@@ -145,6 +145,7 @@ export function useAutoSyncScheduler({
     setIsSyncingRef.current(true);
 
     try {
+      console.log("AUTO SYNC -> ruta activa:", route, "pendientes:", pending.length);
       const syncedIds = await syncTraceabilityRecords(pending, route);
       await applySyncedIdsRef.current(syncedIds);
       failureIndexRef.current = 0;

@@ -93,9 +93,11 @@ function inferirTipo(etapa) {
 function migrarRegistro(raw, rutaId) {
   const etapa = aEtapaCanonico(raw.etapa ?? raw.stage);
   const tipo = inferirTipo(etapa);
+  const ruta_id = String(raw.ruta_id ?? raw.rutaId ?? rutaId ?? '').trim() || String(rutaId ?? '').trim();
   return {
     id: raw.id,
-    ruta_id: String(raw.ruta_id ?? rutaId ?? '').trim() || String(rutaId),
+    ruta_id,
+    rutaId: ruta_id,
     etapa,
     tipo,
     photoUri: raw.photoUri,
@@ -111,7 +113,9 @@ function registroNecesitaPersistenciaMigracion(raw, migrado) {
   const rawEtapa = raw.etapa ?? raw.stage;
   const etapaDistinta = String(rawEtapa ?? '').trim() !== migrado.etapa;
   const tipoDistinto = String(raw.tipo ?? '') !== String(migrado.tipo ?? '');
-  return etapaDistinta || tipoDistinto;
+  const rutaDistinta =
+    String(raw.ruta_id ?? raw.rutaId ?? '').trim() !== String(migrado.ruta_id ?? '');
+  return etapaDistinta || tipoDistinto || rutaDistinta;
 }
 
 function contarPorCategoria(registros, cat) {
@@ -173,6 +177,10 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
     setIsSyncing,
     recordsRevision,
   });
+
+  useEffect(() => {
+    console.log('REGISTRO VIAJE -> ruta activa al entrar:', String(rutaId ?? '').trim() || '(vacía)');
+  }, [rutaId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -281,9 +289,11 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
         }),
       ]);
 
+      const ruta_id = String(rutaId ?? '').trim();
       const newRecord = {
         id: recordId,
-        ruta_id: String(rutaId).trim(),
+        ruta_id,
+        rutaId: ruta_id,
         etapa,
         tipo: inferirTipo(etapa),
         photoUri: newPath,
@@ -292,6 +302,15 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
         timestamp: captureTimestamp,
         synced: false,
       };
+
+      console.log('REGISTRO VIAJE -> evidencia local guardada:', {
+        id: newRecord.id,
+        ruta_id: newRecord.ruta_id,
+        etapa: newRecord.etapa,
+        tipo: newRecord.tipo,
+        photoUri: newRecord.photoUri,
+        timestamp: newRecord.timestamp,
+      });
 
       await persistRecords([...registros, newRecord]);
       cerrarCamara();

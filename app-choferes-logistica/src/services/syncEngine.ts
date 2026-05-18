@@ -9,6 +9,10 @@ export type TraceabilityRecord = {
   /** Compatibilidad registros antiguos que usaban `stage` */
   stage?: string;
   tipo?: TraceabilityTipo;
+  /** UUID de ruta en almacenamiento local (snake_case) */
+  ruta_id?: string;
+  /** Alias camelCase en registros locales */
+  rutaId?: string;
   photoUri: string;
   latitude: number;
   longitude: number;
@@ -77,16 +81,37 @@ function storageFolderFromRecord(r: TraceabilityRecord): string {
   return storageFolderFromEtapa(r.etapa || r.stage || "");
 }
 
+function resolveRutaId(
+  record: TraceabilityRecord,
+  rutaIdOpcional?: string,
+): string {
+  const fromParam = rutaIdOpcional?.trim();
+  if (fromParam) return fromParam;
+  const fromRecord =
+    record.ruta_id?.trim() || record.rutaId?.trim() || "";
+  return fromRecord;
+}
+
+function resolveTipo(record: TraceabilityRecord, etapaLogica: string): TraceabilityTipo {
+  const explicit = record.tipo?.trim();
+  if (explicit === "FICHA_DESPACHO" || explicit === "EVIDENCIA") {
+    return explicit;
+  }
+  if (etapaLogica === "HOJA_DESPACHO") return "FICHA_DESPACHO";
+  return "EVIDENCIA";
+}
+
 export async function syncTraceabilityRecords(
   records: TraceabilityRecord[],
   rutaIdOpcional?: string,
 ): Promise<string[]> {
-  const rutaTrim = rutaIdOpcional?.trim();
   const syncedIds: string[] = [];
 
   for (const record of records) {
     const folder = storageFolderFromRecord(record);
     const etapaLogica = logicalEtapaForApi(record);
+    const rutaId = resolveRutaId(record, rutaIdOpcional);
+    const tipo = resolveTipo(record, etapaLogica);
     const ext =
       record.photoUri?.split(".").pop()?.split("?")[0]?.toLowerCase() || "jpg";
     const fileExtension = ["jpg", "jpeg", "png", "webp"].includes(ext)
@@ -117,27 +142,31 @@ export async function syncTraceabilityRecords(
       throw new Error(uploadPayload?.error ?? "Error subiendo evidencia");
     }
 
-    const eventBody: Record<string, unknown> = {
+    const payload: Record<string, unknown> = {
       id: record.id,
       etapa: etapaLogica,
+      tipo,
       foto_uri: uploadPayload.filePath,
       latitud: record.latitude,
       longitud: record.longitude,
       timestamp_evento: record.timestamp,
     };
-    if (rutaTrim) {
-      eventBody.ruta_id = rutaTrim;
+    if (rutaId) {
+      payload.ruta_id = rutaId;
+    } else {
+      console.warn(
+        "SYNC TRAZABILIDAD -> evidencia sin ruta_id (param ni registro local):",
+        record.id,
+        etapaLogica,
+      );
     }
 
-    const tipoVal = record.tipo?.trim();
-    if (tipoVal) {
-      eventBody.tipo = tipoVal;
-    }
+    console.log("BODY TRAZABILIDAD:", payload);
 
     const eventResponse = await bffFetch("/api/trazabilidad", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(eventBody),
+      body: JSON.stringify(payload),
     });
     const eventPayload = await eventResponse.json().catch(() => ({}));
     if (!eventResponse.ok && eventPayload?.code !== "23505") {
