@@ -26,15 +26,56 @@ function getPrioridadLabel(prioridad) {
   return prioridad === 'ALTA' ? 'ALTA' : 'NORMAL';
 }
 
+const PLACEHOLDER_GUION = '—';
+
+function esTextoVacio(valor) {
+  const t = String(valor ?? '').trim();
+  return !t || t === PLACEHOLDER_GUION;
+}
+
+/** Título legible del grupo; nunca devuelve "— → —". */
+function tituloGrupoRuta(rutaId, rutasMap = {}) {
+  const ruta = rutasMap[rutaId] || {};
+  const origen = String(ruta.origen ?? '').trim();
+  const destino = String(ruta.destino ?? '').trim();
+
+  if (!esTextoVacio(origen) && !esTextoVacio(destino)) {
+    return `${origen} → ${destino}`;
+  }
+
+  const cliente = String(
+    ruta.clientes?.nombre ?? ruta.cliente?.nombre ?? ruta.cliente_nombre ?? '',
+  ).trim();
+  if (!esTextoVacio(cliente) && !esTextoVacio(destino)) {
+    return `${cliente} → ${destino}`;
+  }
+  if (!esTextoVacio(cliente)) return cliente;
+  if (!esTextoVacio(destino)) return destino;
+  if (!esTextoVacio(origen)) return origen;
+
+  const nombre = String(ruta.nombre ?? '').trim();
+  if (!esTextoVacio(nombre)) return nombre;
+
+  const id = String(rutaId ?? '').trim();
+  if (id && id !== 'SIN_RUTA') {
+    return `Ruta ${id.substring(0, 8)}`;
+  }
+
+  return 'Ruta sin identificar';
+}
+
 export default function MensajesConductor({ mensajes, rutasMap = {}, loading, error, acknowledgeMensaje }) {
   const [searchRuta, setSearchRuta] = useState('');
   const [expandedRoutes, setExpandedRoutes] = useState(() => new Set());
 
   const mensajesOrdenados = useMemo(() => sortMensajes(mensajes), [mensajes]);
-  const routeGroups = useMemo(
-    () => groupMensajesByRuta(mensajesOrdenados, searchRuta, rutasMap),
-    [mensajesOrdenados, rutasMap, searchRuta],
-  );
+  const routeGroups = useMemo(() => {
+    const groups = groupMensajesByRuta(mensajesOrdenados, searchRuta, rutasMap);
+    return groups.map((route) => ({
+      ...route,
+      rutaLabel: tituloGrupoRuta(route.rutaId, rutasMap),
+    }));
+  }, [mensajesOrdenados, rutasMap, searchRuta]);
 
   const handleAcknowledge = async (mensajeId) => {
     const res = await acknowledgeMensaje(mensajeId);

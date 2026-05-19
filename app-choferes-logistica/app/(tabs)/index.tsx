@@ -41,6 +41,18 @@ function etiquetaRutaDesdeApi(r: RutaApi): string {
   return `${o} → ${d}`;
 }
 
+/** Solo rutas en las que el chofer puede operar (excluye entregadas/canceladas/finalizadas). */
+function esRutaOperativa(estado: string | null | undefined): boolean {
+  const e = String(estado ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, '_');
+  const operativos = new Set(['ASIGNADO', 'EN_CURSO', 'PENDIENTE']);
+  const excluidos = new Set(['ENTREGADO', 'CANCELADO', 'FINALIZADO']);
+  if (excluidos.has(e)) return false;
+  return operativos.has(e);
+}
+
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const [todoSincronizado, setTodoSincronizado] = useState(false);
@@ -74,13 +86,14 @@ export default function HomeScreen() {
         : raw && typeof raw === 'object' && Array.isArray((raw as any).data)
         ? (raw as any).data
         : [];
-      setRutasOperativas(lista);
+      const operativas = lista.filter((r) => esRutaOperativa(r.estado));
+      setRutasOperativas(operativas);
 
       const persisted = await AsyncStorage.getItem(STORAGE_RUTA_ACTIVA_ID);
       const persistedTrim = persisted?.trim() ?? '';
 
       if (persistedTrim) {
-        const encontrada = lista.find((r) => mismoId(r.id, persistedTrim));
+        const encontrada = operativas.find((r) => mismoId(r.id, persistedTrim));
         if (encontrada) {
           console.log('USANDO RUTA GUARDADA');
           setRutaActivaId(encontrada.id);
@@ -92,18 +105,18 @@ export default function HomeScreen() {
         await AsyncStorage.removeItem(STORAGE_RUTA_ACTIVA_ID);
       }
 
-      if (lista.length === 0) {
+      if (operativas.length === 0) {
         setRutaActivaId(null);
         return;
       }
 
-      if (lista.length > 1) {
+      if (operativas.length > 1) {
         console.log('MOSTRANDO SELECTOR DE RUTAS');
         setRutaActivaId(null);
         return;
       }
 
-      const solo = lista[0].id;
+      const solo = operativas[0].id;
       console.log('SET AUTO SOLO UNA RUTA');
       setRutaActivaId(solo);
       await AsyncStorage.setItem(STORAGE_RUTA_ACTIVA_ID, solo);
