@@ -10,7 +10,9 @@ import {
   ActivityIndicator,
   ScrollView,
   Modal,
+  Pressable,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
@@ -150,6 +152,7 @@ function etiquetaParaRegistro(r) {
 }
 
 export default function RegistroViaje({ onSyncComplete, rutaId }) {
+  const insets = useSafeAreaInsets();
   const STORAGE_KEY = storageKeyFromRutaId(rutaId);
   const [registros, setRegistros] = useState([]);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
@@ -376,14 +379,32 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
       return;
     }
 
+    const esEmergencia = option.prioridad === 'ALTA' && option.tipo === 'EMERGENCIA';
+
     try {
       let message;
       let synced = false;
 
-      if (option.prioridad === 'ALTA' && option.tipo === 'EMERGENCIA') {
-        const result = await sendEmergencyMessageInmediatamente(rutaId, option.label);
+      if (esEmergencia) {
+        const payload = {
+          ruta_id: String(rutaId).trim(),
+          mensaje: option.label,
+          tipo: option.tipo,
+          prioridad: option.prioridad,
+        };
+        console.log('EMERGENCIA payload:', payload);
+        const result = await sendEmergencyMessageInmediately(rutaId, option.label);
+        console.log('EMERGENCIA response:', result);
         message = result.message;
         synced = result.synced;
+
+        if (synced) {
+          const updatedQueue = [...mensajesQueueRef.current, message];
+          await persistMessages(updatedQueue);
+        } else {
+          const freshQueue = await loadMensajeQueue(rutaId);
+          setMensajesQueue(freshQueue);
+        }
       } else {
         message = await enqueueConductorMessage(
           rutaId,
@@ -391,17 +412,16 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
           option.tipo,
           option.prioridad,
         );
+        const updatedQueue = [...mensajesQueueRef.current, message];
+        await persistMessages(updatedQueue);
       }
 
-      const updatedQueue = [...mensajesQueueRef.current, message];
-      await persistMessages(updatedQueue);
-
-      if (option.prioridad === 'ALTA') {
+      if (esEmergencia) {
         Alert.alert(
           'Emergencia reportada',
           synced
             ? 'La emergencia se envió inmediatamente al servidor.'
-            : 'La emergencia se envió a la cola y se sincronizará en segundos cuando hay conexión.',
+            : 'La emergencia se guardó localmente y se sincronizará cuando haya conexión.',
         );
       } else {
         Alert.alert(
@@ -410,6 +430,9 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
         );
       }
     } catch (error) {
+      if (esEmergencia) {
+        console.error('EMERGENCIA error:', error);
+      }
       Alert.alert('Error', 'No se pudo guardar el mensaje. Intenta de nuevo.');
     }
   };
@@ -548,23 +571,44 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
 
       <Modal
         visible={isModalVisible}
-        animationType="slide"
-        transparent={true}
+        animationType="fade"
+        transparent
         onRequestClose={() => setIsModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <Pressable
+            style={styles.modalBackdrop}
+            onPress={() => setIsModalVisible(false)}
+            accessibilityRole="button"
+            accessibilityLabel="Cerrar modal"
+          />
+          <View
+            style={[
+              styles.modalCard,
+              {
+                marginTop: Math.max(insets.top, 12),
+                marginBottom: Math.max(insets.bottom, 12),
+              },
+            ]}
+          >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Gestión de Estado / Reportes</Text>
               <TouchableOpacity
                 onPress={() => setIsModalVisible(false)}
                 style={styles.modalCloseButton}
+                accessibilityRole="button"
+                accessibilityLabel="Cerrar"
               >
                 <Text style={styles.modalCloseText}>✕</Text>
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalScroll}>
+            <ScrollView
+              style={styles.modalScroll}
+              contentContainerStyle={styles.modalScrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator
+            >
               <View style={styles.modalSection}>
                 <Text style={styles.sectionTitle}>Estado actual</Text>
                 <Text style={styles.sectionSubtitle}>
@@ -820,4 +864,66 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   btnLightText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  modalCard: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 8,
+    maxHeight: '88%',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 16,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#e2e8f0',
+  },
+  modalTitle: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0f172a',
+    paddingRight: 12,
+  },
+  modalCloseButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCloseText: {
+    fontSize: 18,
+    color: '#475569',
+    fontWeight: '700',
+  },
+  modalScroll: {
+    flexGrow: 0,
+  },
+  modalScrollContent: {
+    paddingBottom: 20,
+  },
+  modalSection: {
+    marginBottom: 18,
+  },
 });
