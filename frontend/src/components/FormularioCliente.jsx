@@ -1,17 +1,21 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import { apiFetch } from "../lib/apiClient";
+import { formatRut } from "../lib/formatRut";
+import { useGooglePlacesAutocomplete } from "../hooks/useGooglePlacesAutocomplete";
+import { loadGoogleMaps } from "../lib/googleMapsLoader";
 import SelectorCoordenadas from "./SelectorCoordenadas";
 
 const base = {
   container: {
-    background: "#111827",
-    border: "1px solid #1e2a3a",
-    borderRadius: "12px",
+    background: "rgba(8,8,12,0.72)",
+    border: "1px solid rgba(255,255,255,0.12)",
+    borderRadius: "16px",
     padding: "20px",
     marginBottom: "20px",
     boxShadow: "0 10px 30px rgba(0,0,0,0.45)",
+    backdropFilter: "blur(8px)",
     color: "#fff",
-    fontFamily: "'Syne', 'DM Mono', sans-serif",
+    fontFamily: "'Inter', 'Poppins', sans-serif",
   },
   title: {
     fontSize: "16px",
@@ -29,9 +33,9 @@ const base = {
   input: {
     width: "100%",
     padding: "10px 12px",
-    borderRadius: "8px",
-    border: "1px solid #334155",
-    background: "#0F172A",
+    borderRadius: "10px",
+    border: "1px solid rgba(255,255,255,0.15)",
+    background: "rgba(15,23,42,0.65)",
     color: "#F8FAFC",
     marginBottom: "14px",
     outline: "none",
@@ -56,10 +60,7 @@ const base = {
 };
 
 export default function FormularioCliente({ onGuardado }) {
-  const MAPS_API_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
   const direccionInputRef = useRef(null);
-  const autocompleteRef = useRef(null);
-  const geocoderRef = useRef(null);
   const [formData, setFormData] = useState({
     nombre: "",
     rut: "",
@@ -69,74 +70,30 @@ export default function FormularioCliente({ onGuardado }) {
     longitud: -70.6693
   });
   const [loading, setLoading] = useState(false);
-  const [mapsError, setMapsError] = useState("");
 
-  useEffect(() => {
-    if (!MAPS_API_KEY) {
-      setMapsError("Configura REACT_APP_GOOGLE_MAPS_API_KEY para autocompletar direcciones.");
+  const { error: mapsError } = useGooglePlacesAutocomplete(direccionInputRef, {
+    onPlaceSelected: (address, place) => {
+      const lat = place.geometry?.location?.lat?.();
+      const lng = place.geometry?.location?.lng?.();
+      setFormData((prev) => ({
+        ...prev,
+        direccion: address || prev.direccion,
+        latitud: Number.isFinite(lat) ? lat : prev.latitud,
+        longitud: Number.isFinite(lng) ? lng : prev.longitud,
+      }));
+    },
+  });
+
+  const geocodeDireccion = async (direccion) => {
+    if (!direccion) return;
+    try {
+      await loadGoogleMaps({ libraries: ["geocoding"] });
+    } catch {
       return;
     }
-
-    const initAutocomplete = () => {
-      if (!direccionInputRef.current || !window.google?.maps) return;
-      if (!geocoderRef.current) {
-        geocoderRef.current = new window.google.maps.Geocoder();
-      }
-      if (!window.google.maps.places) {
-        setMapsError("Places bloqueado. Puedes escribir dirección y presionar Enter para ubicar en el mapa.");
-        return;
-      }
-      if (autocompleteRef.current) return;
-
-      autocompleteRef.current = new window.google.maps.places.Autocomplete(
-        direccionInputRef.current,
-        {
-          fields: ["formatted_address", "geometry", "name"],
-          componentRestrictions: { country: "cl" },
-          types: ["address"],
-        }
-      );
-
-      autocompleteRef.current.addListener("place_changed", () => {
-        const place = autocompleteRef.current.getPlace();
-        const direccionSeleccionada = place.formatted_address || place.name || "";
-        const lat = place.geometry?.location?.lat?.();
-        const lng = place.geometry?.location?.lng?.();
-
-        setFormData((prev) => ({
-          ...prev,
-          direccion: direccionSeleccionada || prev.direccion,
-          latitud: Number.isFinite(lat) ? lat : prev.latitud,
-          longitud: Number.isFinite(lng) ? lng : prev.longitud,
-        }));
-      });
-    };
-
-    if (window.google?.maps?.places) {
-      initAutocomplete();
-      return;
-    }
-
-    const scriptId = "google-maps-script";
-    const existingScript = document.getElementById(scriptId);
-    if (existingScript) {
-      existingScript.addEventListener("load", initAutocomplete);
-      return () => existingScript.removeEventListener("load", initAutocomplete);
-    }
-
-    const script = document.createElement("script");
-    script.id = scriptId;
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${MAPS_API_KEY}&libraries=places&v=weekly`;
-    script.async = true;
-    script.defer = true;
-    script.onload = initAutocomplete;
-    script.onerror = () => setMapsError("No se pudo cargar Google Places para autocompletado.");
-    document.head.appendChild(script);
-  }, [MAPS_API_KEY]);
-
-  const geocodeDireccion = (direccion) => {
-    if (!direccion || !window.google?.maps || !geocoderRef.current) return;
-    geocoderRef.current.geocode(
+    if (!window.google?.maps) return;
+    const geocoder = new window.google.maps.Geocoder();
+    geocoder.geocode(
       { address: direccion, componentRestrictions: { country: "CL" } },
       (results, status) => {
         if (status === "OK" && results?.[0]) {
@@ -147,22 +104,9 @@ export default function FormularioCliente({ onGuardado }) {
             latitud: location.lat(),
             longitud: location.lng(),
           }));
-          setMapsError("");
         }
       }
     );
-  };
-
-  const formatRut = (value) => {
-    let rut = value.replace(/[^0-9kK]/g, "").toUpperCase();
-    if (rut.length > 9) {
-      rut = rut.slice(0, 9);
-    }
-    if (rut.length <= 1) return rut;
-    const dv = rut.slice(-1);
-    let cuerpo = rut.slice(0, -1);
-    cuerpo = cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-    return `${cuerpo}-${dv}`;
   };
 
   const formatTelefono = (value) => {
@@ -241,11 +185,11 @@ export default function FormularioCliente({ onGuardado }) {
   };
 
   return (
-    <div style={base.container} className="client-form-card">
-      <div style={base.title}>👤 Registrar Nuevo Cliente</div>
+    <div style={base.container} className="client-form-card operator-glass-card">
+      <div style={base.title} className="client-form-title">👤 Registrar Nuevo Cliente</div>
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column' }}>
         
-        <label style={base.label}>Nombre Cliente o Empresa</label>
+        <label style={base.label} className="client-form-label">Nombre Cliente o Empresa</label>
         <input 
           style={base.input}
           placeholder="Ej: Logística SpA" 
@@ -256,7 +200,7 @@ export default function FormularioCliente({ onGuardado }) {
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
           <div>
-            <label style={base.label}>RUT</label>
+            <label style={base.label} className="client-form-label">RUT</label>
             <input 
               style={base.input}
               placeholder="Ej: 76.000.000-K" 
@@ -268,7 +212,7 @@ export default function FormularioCliente({ onGuardado }) {
             />
           </div>
           <div>
-            <label style={base.label}>Teléfono</label>
+            <label style={base.label} className="client-form-label">Teléfono</label>
             <input 
               style={base.input}
               placeholder="+56 9 1234 5678" 
@@ -281,7 +225,7 @@ export default function FormularioCliente({ onGuardado }) {
           </div>
         </div>
 
-        <label style={base.label}>Dirección Base</label>
+        <label style={base.label} className="client-form-label">Dirección Base</label>
         {mapsError && (
           <div style={{ color: "#fca5a5", fontSize: "11px", marginBottom: "8px" }}>
             {mapsError}
@@ -303,7 +247,7 @@ export default function FormularioCliente({ onGuardado }) {
           autoComplete="off"
         />
 
-        <label style={base.label}>Ubicación Exacta de Entrega</label>
+        <label style={base.label} className="client-form-label">Ubicación Exacta de Entrega</label>
         <SelectorCoordenadas 
           latInicial={formData.latitud} 
           lngInicial={formData.longitud} 

@@ -161,7 +161,18 @@ export default function OperatorDashboard({ operator, onSignOut }) {
         )}
 
         {activeSection === "mensajes" && (
-          <div style={{ flex: 1, minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column", height: "100%" }} className="premium-card">
+          <div
+            style={{
+              flex: 1,
+              minHeight: 0,
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+              height: "100%",
+              padding: "10px",
+            }}
+            className="premium-scroll operator-section mensajes-section"
+          >
             <MensajesConductor
               mensajes={mensajes}
               rutasMap={rutasMap}
@@ -176,7 +187,9 @@ export default function OperatorDashboard({ operator, onSignOut }) {
         {activeSection !== "alertas" && activeSection !== "mensajes" && (
           <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
             {activeSection === "rrhh" ? (
-              <MonitoreoLicencias />
+              <div style={{ padding: "10px", height: "100%", overflow: "auto" }} className="premium-scroll operator-section">
+                <MonitoreoLicencias />
+              </div>
             ) : activeSection === "rutas" ? (
               <div style={{ padding: "10px", height: "100%", overflow: "auto" }} className="premium-scroll operator-section">
                 <RutasActivas />

@@ -314,7 +314,10 @@ body {
 
 .premium-app.light-mode .stellar-shell [style*="background: #111827"],
 .premium-app.light-mode .stellar-shell [style*="background:#111827"],
-.premium-app.light-mode .stellar-shell [style*="background: \"#111827\""] {
+.premium-app.light-mode .stellar-shell [style*="background: \"#111827\""],
+.premium-app.light-mode .stellar-shell [style*="background: #0F172A"],
+.premium-app.light-mode .stellar-shell [style*="background:#0F172A"],
+.premium-app.light-mode .stellar-shell [style*="background: \"#0F172A\""] {
   background: rgba(255, 255, 255, 0.58) !important;
 }
 
@@ -471,12 +474,105 @@ body {
 }
 
 /* RRHH / Monitoreo licencias: etiquetas con color oscuro en modo claro (inline seguía en blanco) */
-.premium-app.light-mode .operator-glass-card .rrhh-field-label {
-  color: rgba(15, 23, 42, 0.82) !important;
+.premium-app.light-mode .operator-glass-card .rrhh-field-label,
+.premium-app.light-mode .operator-glass-card .rrhh-section-title,
+.premium-app.light-mode .client-form-card .client-form-label,
+.premium-app.light-mode .client-form-card .client-form-title {
+  color: rgba(15, 23, 42, 0.88) !important;
+}
+
+.premium-app.light-mode .operator-glass-card input,
+.premium-app.light-mode .operator-glass-card select,
+.premium-app.light-mode .operator-glass-card textarea,
+.premium-app.light-mode .client-form-card input,
+.premium-app.light-mode .client-form-card select {
+  background: rgba(255, 255, 255, 0.72) !important;
+  color: #0f172a !important;
+  border: 1px solid rgba(148, 163, 184, 0.45) !important;
+  backdrop-filter: blur(10px) saturate(120%);
+}
+
+.premium-app.light-mode .operator-glass-card input[type="date"],
+.premium-app.light-mode .client-form-card input[type="date"] {
+  color-scheme: light;
+  -webkit-text-fill-color: #0f172a !important;
 }
 
 .premium-app.light-mode .coord-map-container {
   border: 1px solid rgba(148, 163, 184, 0.42) !important;
   background: rgba(255, 255, 255, 0.5) !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+/* Sugerencias de Google Places: por encima del panel y sin quedar en iframe roto */
+.rutas-nueva-form {
+  overflow: visible !important;
+}
+
+.pac-container {
+  z-index: 10050 !important;
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+  font-family: "Inter", "Poppins", system-ui, sans-serif;
+}
+
+.premium-app.light-mode .pac-container {
+  background: rgba(255, 255, 255, 0.96) !important;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+}
+
+.premium-app.light-mode .pac-item {
+  color: #0f172a !important;
+}
+
+.premium-app.light-mode .pac-item-query {
+  color: #0f172a !important;
+}
+
+/* Mensajería: liquid glass en modo claro */
+.premium-app.light-mode .mensajes-section .operator-glass-card,
+.premium-app.light-mode .mensajes-panel .operator-glass-card {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.68), rgba(241, 245, 249, 0.52)) !important;
+  border: 1px solid rgba(148, 163, 184, 0.38) !important;
+  box-shadow:
+    0 14px 34px rgba(15, 23, 42, 0.09),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 0 28px rgba(191, 219, 254, 0.28) !important;
+  backdrop-filter: blur(18px) saturate(155%) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(155%) !important;
+}
+
+.premium-app.light-mode .mensajes-title,
+.premium-app.light-mode .mensajes-subtitle,
+.premium-app.light-mode .mensajes-field-label,
+.premium-app.light-mode .mensajes-route-card span,
+.premium-app.light-mode .mensajes-route-card button,
+.premium-app.light-mode .mensajes-table th,
+.premium-app.light-mode .mensajes-table td {
+  color: #0f172a !important;
+}
+
+.premium-app.light-mode .mensajes-route-card [style*="color: #94a3b8"],
+.premium-app.light-mode .mensajes-panel [style*="color: #8b92b8"],
+.premium-app.light-mode .mensajes-panel [style*="color: #64748b"] {
+  color: rgba(15, 23, 42, 0.62) !important;
+}
+
+.premium-app.light-mode .mensajes-search-input,
+.premium-app.light-mode .mensajes-panel input {
+  background: rgba(255, 255, 255, 0.72) !important;
+  color: #0f172a !important;
+  border: 1px solid rgba(148, 163, 184, 0.45) !important;
+}
+
+.premium-app.light-mode .mensajes-route-body {
+  background: rgba(255, 255, 255, 0.35) !important;
+}
+
+.premium-app.light-mode .mensajes-route-card {
+  background: rgba(255, 255, 255, 0.45) !important;
+}
+
+.premium-app.light-mode .mensajes-table thead tr {
+  background: rgba(226, 232, 240, 0.5) !important;
 }

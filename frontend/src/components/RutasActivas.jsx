@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch } from "../lib/apiClient";
 import { crearRuta } from "../lib/rutasService";
+import { useGooglePlacesAutocomplete } from "../hooks/useGooglePlacesAutocomplete";
 
 const base = {
   container: {
@@ -187,6 +188,21 @@ export default function RutasActivas() {
     eta: "",
   });
 
+  const origenInputRef = useRef(null);
+  const destinoInputRef = useRef(null);
+
+  const { error: mapsOrigenError } = useGooglePlacesAutocomplete(origenInputRef, {
+    enabled: showForm,
+    onPlaceSelected: (address) =>
+      setForm((prev) => ({ ...prev, origen: address })),
+  });
+  const { error: mapsDestinoError } = useGooglePlacesAutocomplete(destinoInputRef, {
+    enabled: showForm,
+    onPlaceSelected: (address) =>
+      setForm((prev) => ({ ...prev, destino: address })),
+  });
+  const mapsError = mapsOrigenError || mapsDestinoError;
+
   const cargarRutas = useCallback(async () => {
     setLoading(true);
     const res = await apiFetch("/api/rutas");
@@ -316,7 +332,11 @@ export default function RutasActivas() {
         </div>
 
         {showForm && (
-          <form onSubmit={enviarFormulario} style={{ ...base.card, padding: "16px", marginBottom: "16px" }}>
+          <form
+            onSubmit={enviarFormulario}
+            className="rutas-nueva-form operator-glass-card"
+            style={{ ...base.card, padding: "16px", marginBottom: "16px", overflow: "visible" }}
+          >
             <div style={{ fontWeight: 700, marginBottom: "8px", color: "#e2e8f0" }}>Nueva ruta</div>
             <div style={base.formGrid}>
               <div>
@@ -370,22 +390,31 @@ export default function RutasActivas() {
               </div>
               <div style={{ gridColumn: "1 / -1" }}>
                 <label style={base.label}>Origen *</label>
+                {mapsError && (
+                  <div style={{ color: "#fca5a5", fontSize: "11px", marginBottom: "6px" }}>
+                    {mapsError}
+                  </div>
+                )}
                 <input
+                  ref={origenInputRef}
                   style={base.input}
                   required
+                  autoComplete="off"
                   value={form.origen}
                   onChange={(e) => actualizarCampo("origen", e.target.value)}
-                  placeholder="Ej: Centro de distribución Santiago"
+                  placeholder="Escribe y selecciona una dirección sugerida…"
                 />
               </div>
               <div style={{ gridColumn: "1 / -1" }}>
                 <label style={base.label}>Destino *</label>
                 <input
+                  ref={destinoInputRef}
                   style={base.input}
                   required
+                  autoComplete="off"
                   value={form.destino}
                   onChange={(e) => actualizarCampo("destino", e.target.value)}
-                  placeholder="Ej: Av. Los Leones 123, Providencia"
+                  placeholder="Escribe y selecciona una dirección sugerida…"
                 />
               </div>
               <div>

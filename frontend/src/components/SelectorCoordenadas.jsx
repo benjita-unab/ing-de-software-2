@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-
-const MAPS_API_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
+import { isGoogleMapsConfigured, loadGoogleMaps } from "../lib/googleMapsLoader";
 
 export default function SelectorCoordenadas({
   latInicial,
@@ -25,26 +24,24 @@ export default function SelectorCoordenadas({
   }, [onAddressResolved]);
 
   useEffect(() => {
-    if (!MAPS_API_KEY) {
+    if (!isGoogleMapsConfigured()) {
       setError("No se encontró la API Key de Google Maps");
       return;
     }
-    if (window.google?.maps) {
-      setMapLoaded(true);
-      return;
-    }
 
-    const scriptId = "google-maps-script";
-    if (!document.getElementById(scriptId)) {
-      const script = document.createElement("script");
-      script.id = scriptId;
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${MAPS_API_KEY}&libraries=places&v=weekly`;
-      script.async = true;
-      script.defer = true;
-      script.onload = () => setMapLoaded(true);
-      script.onerror = () => setError("Error cargando Google Maps");
-      document.head.appendChild(script);
-    }
+    let cancelled = false;
+
+    loadGoogleMaps({ libraries: ["maps", "geocoding"] })
+      .then(() => {
+        if (!cancelled) setMapLoaded(true);
+      })
+      .catch(() => {
+        if (!cancelled) setError("Error cargando Google Maps");
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
