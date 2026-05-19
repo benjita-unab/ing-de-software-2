@@ -24,13 +24,6 @@ type RutaApi = {
   destino?: string | null;
 };
 
-function esRutaOperativa(estado?: string | null): boolean {
-  const e = String(estado ?? '')
-    .trim()
-    .toUpperCase();
-  return e !== 'ENTREGADO' && e !== 'CANCELADO';
-}
-
 /** UUID pueden llegar con distinta capitalización desde API vs estado local */
 function mismoId(
   a: string | null | undefined,
@@ -76,15 +69,18 @@ export default function HomeScreen() {
             : `Error HTTP ${res.status}`;
         throw new Error(msg || `Error HTTP ${res.status}`);
       }
-      const lista: RutaApi[] = Array.isArray(raw) ? raw : [];
-      const activas = lista.filter((r) => esRutaOperativa(r.estado));
-      setRutasOperativas(activas);
+      const lista: RutaApi[] = Array.isArray(raw)
+        ? raw
+        : raw && typeof raw === 'object' && Array.isArray((raw as any).data)
+        ? (raw as any).data
+        : [];
+      setRutasOperativas(lista);
 
       const persisted = await AsyncStorage.getItem(STORAGE_RUTA_ACTIVA_ID);
       const persistedTrim = persisted?.trim() ?? '';
 
       if (persistedTrim) {
-        const encontrada = activas.find((r) => mismoId(r.id, persistedTrim));
+        const encontrada = lista.find((r) => mismoId(r.id, persistedTrim));
         if (encontrada) {
           console.log('USANDO RUTA GUARDADA');
           setRutaActivaId(encontrada.id);
@@ -96,18 +92,18 @@ export default function HomeScreen() {
         await AsyncStorage.removeItem(STORAGE_RUTA_ACTIVA_ID);
       }
 
-      if (activas.length === 0) {
+      if (lista.length === 0) {
         setRutaActivaId(null);
         return;
       }
 
-      if (activas.length > 1) {
+      if (lista.length > 1) {
         console.log('MOSTRANDO SELECTOR DE RUTAS');
         setRutaActivaId(null);
         return;
       }
 
-      const solo = activas[0].id;
+      const solo = lista[0].id;
       console.log('SET AUTO SOLO UNA RUTA');
       setRutaActivaId(solo);
       await AsyncStorage.setItem(STORAGE_RUTA_ACTIVA_ID, solo);
