@@ -43,6 +43,7 @@ export class EntregasService {
         fecha_fin,
         origen,
         destino,
+        ficha_despacho_url,
         clientes(id, nombre, contacto_email),
         conductores(rut),
         camiones(patente)
@@ -57,6 +58,11 @@ export class EntregasService {
       );
     }
     console.log('CLOSE DELIVERY -> ruta cargada OK:', ruta.id);
+
+    // HU-20 CA-3: no permitir cerrar despacho sin ficha de despacho.
+    // Se considera válida si la ruta tiene `ficha_despacho_url` o existe
+    // un `traceability_events` con tipo FICHA_DESPACHO o etapa HOJA_DESPACHO.
+    await this.validarFichaDespachoOFallar(supabase, rutaId, ruta);
 
     const cliente = Array.isArray(ruta.clientes)
       ? ruta.clientes[0]
@@ -553,6 +559,73 @@ export class EntregasService {
   }
 
   // ========== HELPERS PRIVADOS ==========
+
+  /**
+   * HU-20 CA-3: valida que la ruta tenga al menos una ficha de despacho
+   * adjunta antes de cerrar. La ficha se considera válida si:
+   *   - `rutas.ficha_despacho_url` está poblado, o
+   *   - existe un `traceability_events` con `ruta_id` y
+   *     `tipo === 'FICHA_DESPACHO'`, o
+   *   - existe un `traceability_events` con `ruta_id` y
+   *     `etapa === 'HOJA_DESPACHO'`.
+   *
+   * Tolera BDs antiguas que aún no tienen las columnas `tipo` o `ruta_id`
+   * en `traceability_events`: en ese caso solo valida `ficha_despacho_url`.
+   */
+  private async validarFichaDespachoOFallar(
+    supabase: ReturnType<SupabaseConfigService['getClient']>,
+    rutaId: string,
+    ruta: { ficha_despacho_url?: string | null },
+  ): Promise<void> {
+    const fichaUrl = String(ruta?.ficha_despacho_url || '').trim();
+    if (fichaUrl && fichaUrl.toLowerCase() !== 'null') {
+      return;
+    }
+
+    // Sondeo en traceability_events por ruta + (tipo o etapa)
+    let traceQuery = await supabase
+      .from('traceability_events')
+      .select('id')
+      .eq('ruta_id', rutaId)
+      .or('tipo.eq.FICHA_DESPACHO,etapa.eq.HOJA_DESPACHO')
+      .limit(1);
+
+    // Si la columna `tipo` no existe en BD, reintentamos solo con etapa.
+    const errMsg =
+      (traceQuery.error as { message?: string } | undefined)?.message || '';
+    if (traceQuery.error && /tipo/i.test(errMsg)) {
+      traceQuery = await supabase
+        .from('traceability_events')
+        .select('id')
+        .eq('ruta_id', rutaId)
+        .eq('etapa', 'HOJA_DESPACHO')
+        .limit(1);
+    }
+
+    // Si la columna `ruta_id` tampoco existe, no podemos validar por
+    // traceability; con la URL ausente no hay ficha verificable.
+    if (
+      traceQuery.error &&
+      ['42703', 'PGRST204'].includes(
+        (traceQuery.error as { code?: string }).code || '',
+      )
+    ) {
+      console.warn(
+        'CLOSE DELIVERY -> validación ficha: traceability_events.ruta_id/tipo no disponibles, validando solo URL',
+      );
+      throw new BadRequestException(
+        'No se puede cerrar el despacho porque no hay ficha de despacho adjunta.',
+      );
+    }
+
+    if (!traceQuery.error && (traceQuery.data?.length ?? 0) > 0) {
+      return;
+    }
+
+    throw new BadRequestException(
+      'No se puede cerrar el despacho porque no hay ficha de despacho adjunta.',
+    );
+  }
 
   /**
    * Opción B: crea una fila mínima en `entregas` si la ruta existe.

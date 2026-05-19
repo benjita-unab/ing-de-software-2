@@ -222,6 +222,33 @@ const modalStyles = {
 
 const ESTADOS_FINALIZADOS = ["ENTREGADO", "ENTREGADA"];
 
+/** Etiquetas para valores nuevos (API) y legacy en evidencias */
+function etiquetaEtapaVisible(foto) {
+  const raw = String(foto?.etapa ?? "").trim();
+  const u = raw.toUpperCase();
+  if (u === "RECEPCION") return "Recepción de carga";
+  if (u === "ENTREGADO") return "Entrega final";
+  if (u === "HOJA_DESPACHO") return "Hoja de despacho";
+  if (u === "EVIDENCIA_ADICIONAL") return "Evidencia extra";
+  const low = raw.toLowerCase();
+  if (low === "ficha") return "Hoja de despacho";
+  if (["carga", "salida", "transito", "tránsito"].includes(low))
+    return "Recepción de carga";
+  if (low === "entrega") return "Entrega final";
+  if (low === "extra") return "Evidencia extra";
+  return raw || "—";
+}
+
+function esFichaDespachoFallback(foto) {
+  const t = String(foto?.tipo || "").trim().toUpperCase();
+  if (t === "FICHA_DESPACHO") return true;
+  const e = String(foto?.etapa || "").trim();
+  if (!e) return false;
+  if (e.toLowerCase() === "ficha") return true;
+  if (e.toUpperCase() === "HOJA_DESPACHO") return true;
+  return false;
+}
+
 function formatFecha(value) {
   if (!value) return "—";
   const d = new Date(value);
@@ -241,9 +268,25 @@ function EvidenciasModal({ despacho, evidencias, loading, error, onClose }) {
 
   const pdfs = evidencias?.pdfs || [];
   const fotos = evidencias?.fotos || [];
+  const fotosEvidencia =
+    evidencias?.fotosEvidencia != null
+      ? Array.isArray(evidencias.fotosEvidencia)
+        ? evidencias.fotosEvidencia
+        : []
+      : fotos.filter((f) => !esFichaDespachoFallback(f));
+  const fichasDespacho =
+    evidencias?.fichasDespacho != null
+      ? Array.isArray(evidencias.fichasDespacho)
+        ? evidencias.fichasDespacho
+        : []
+      : fotos.filter((f) => esFichaDespachoFallback(f));
   const firmaUrl = evidencias?.firmaUrl || null;
   const noHayNada =
-    !loading && !error && pdfs.length === 0 && fotos.length === 0 && !firmaUrl;
+    !loading &&
+    !error &&
+    pdfs.length === 0 &&
+    fotos.length === 0 &&
+    !firmaUrl;
 
   return (
     <div
@@ -315,30 +358,65 @@ function EvidenciasModal({ despacho, evidencias, loading, error, onClose }) {
             </div>
 
             <div style={modalStyles.section}>
-              <div style={modalStyles.sectionTitle}>📷 Fotos de trazabilidad</div>
-              {fotos.length === 0 ? (
+              <div style={modalStyles.sectionTitle}>📷 Evidencias fotográficas</div>
+              {fotosEvidencia.length === 0 ? (
                 <p style={modalStyles.emptyText}>
-                  Sin fotos registradas para este despacho.
+                  Sin evidencias fotográficas para este despacho.
                 </p>
               ) : (
                 <div style={modalStyles.fotosGrid}>
-                  {fotos.map((foto) => (
+                  {fotosEvidencia.map((foto) => (
                     <a
                       key={foto.id}
                       href={foto.url}
                       target="_blank"
                       rel="noopener noreferrer"
                       style={modalStyles.fotoItem}
-                      title={foto.etapa || "Foto"}
+                      title={etiquetaEtapaVisible(foto)}
                     >
                       <img
                         src={foto.url}
-                        alt={foto.etapa || "evidencia"}
+                        alt={etiquetaEtapaVisible(foto)}
                         style={modalStyles.fotoImg}
                         loading="lazy"
                       />
                       <div style={modalStyles.fotoMeta}>
-                        {foto.etapa || "—"}
+                        {etiquetaEtapaVisible(foto)}
+                        {foto.timestamp
+                          ? " · " + formatFecha(foto.timestamp)
+                          : ""}
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={modalStyles.section}>
+              <div style={modalStyles.sectionTitle}>📑 Ficha de despacho</div>
+              {fichasDespacho.length === 0 ? (
+                <p style={modalStyles.emptyText}>
+                  Sin ficha registrada desde la app u otros canales.
+                </p>
+              ) : (
+                <div style={modalStyles.fotosGrid}>
+                  {fichasDespacho.map((foto) => (
+                    <a
+                      key={foto.id}
+                      href={foto.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={modalStyles.fotoItem}
+                      title={etiquetaEtapaVisible(foto)}
+                    >
+                      <img
+                        src={foto.url}
+                        alt={etiquetaEtapaVisible(foto)}
+                        style={modalStyles.fotoImg}
+                        loading="lazy"
+                      />
+                      <div style={modalStyles.fotoMeta}>
+                        {etiquetaEtapaVisible(foto)}
                         {foto.timestamp
                           ? " · " + formatFecha(foto.timestamp)
                           : ""}
@@ -441,6 +519,12 @@ export default function HistorialDespachos() {
         setModalEvidencias({
           pdfs: Array.isArray(payload.pdfs) ? payload.pdfs : [],
           fotos: Array.isArray(payload.fotos) ? payload.fotos : [],
+          fotosEvidencia: Array.isArray(payload.fotosEvidencia)
+            ? payload.fotosEvidencia
+            : undefined,
+          fichasDespacho: Array.isArray(payload.fichasDespacho)
+            ? payload.fichasDespacho
+            : undefined,
           firmaUrl: payload.firmaUrl || null,
         });
       }
