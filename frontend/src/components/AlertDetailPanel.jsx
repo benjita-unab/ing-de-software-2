@@ -39,8 +39,8 @@ function timeAgo(ts) {
 
 // Genera el enlace a Google Maps (CA-2 placeholder — sin API key requerida)
 function buildMapsLink(alert) {
-  if (alert.lat && alert.lng) {
-    return `https://www.google.com/maps?q=${alert.lat},${alert.lng}`;
+  if (alert.lat && alert.long) {
+    return `https://www.google.com/maps?q=${alert.lat},${alert.long}`;
   }
   if (alert.last_location_label) {
     return `https://www.google.com/maps/search/${encodeURIComponent(alert.last_location_label)}`;
@@ -150,12 +150,24 @@ export default function AlertDetailPanel({ alert, onAcknowledge, onResolve, curr
         <Section title="Ubicación">
           <InfoRow
             icon="📍"
-            label="Última posición conocida"
+            label="Coordenadas (Incidencia)"
             value={
               alert.last_location_label
-                ?? (alert.lat && alert.lng ? `${alert.lat?.toFixed(5)}, ${alert.lng?.toFixed(5)}` : "Sin datos de ubicación")
+                ?? (alert.lat && alert.long ? `${alert.lat}, ${alert.long}` : "Sin datos de ubicación")
             }
           />
+          {alert.lat && alert.long && (
+            <div style={{ marginTop: "12px", borderRadius: "8px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.1)" }}>
+              <iframe
+                width="100%"
+                height="200"
+                style={{ border: 0, display: "block" }}
+                loading="lazy"
+                allowFullScreen
+                src={`https://maps.google.com/maps?q=${alert.lat},${alert.long}&z=15&output=embed`}
+              ></iframe>
+            </div>
+          )}
           {mapsLink ? (
             <a
               href={mapsLink}

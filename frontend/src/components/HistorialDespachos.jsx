@@ -3,7 +3,7 @@ import { apiFetch } from "../lib/apiClient";
 
 const base = {
   container: {
-    minHeight: "100%",
+    height: "100%",
     background: "transparent",
     color: "#fff",
     padding: "10px",

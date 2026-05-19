@@ -27,6 +27,7 @@ export class IncidenciasService {
         *,
         conductores (
           id,
+          rut,
           usuarios ( nombre )
         ),
         rutas (
