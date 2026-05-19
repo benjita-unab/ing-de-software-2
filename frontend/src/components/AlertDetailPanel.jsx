@@ -159,6 +159,7 @@ export default function AlertDetailPanel({ alert, onAcknowledge, onResolve, curr
           {alert.lat && alert.long && (
             <div style={{ marginTop: "12px", borderRadius: "8px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.1)" }}>
               <iframe
+                title="Mapa de ubicación de incidencia"
                 width="100%"
                 height="200"
                 style={{ border: 0, display: "block" }}
