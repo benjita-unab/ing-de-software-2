@@ -96,6 +96,22 @@ export class RutasController {
   }
 
   /**
+   * PATCH /api/rutas/:id/tiempos
+   * Actualiza los tiempos de inspección de una ruta y calcula el tiempo de espera si ambos están presentes
+   */
+  @Patch(':id/tiempos')
+  @UseGuards(JwtGuard)
+  async updateTiemposInspeccion(
+    @Param('id') rutaId: string,
+    @Body() body: {
+      hora_llegada_destino?: string;
+      hora_inspeccion_aprobada?: string;
+    },
+  ) {
+    return await this.rutasService.updateTiemposInspeccion(rutaId, body);
+  }
+
+  /**
    * GET /api/rutas
    * Lista rutas con filtros opcionales
    */

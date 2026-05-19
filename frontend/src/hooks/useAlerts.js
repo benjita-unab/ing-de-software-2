@@ -40,8 +40,10 @@ const PRIORIDAD_MAP = {
 
 // ── Normaliza una fila de `incidencias` al formato de la UI ─────────────────
 function mapIncidencia(row) {
-  const conductor = row.conductores ?? {};
-  const driverName = conductor.usuarios?.nombre || "—";
+  // Maneja casos donde conductores o usuarios vengan como array (debido a relaciones Supabase) o como objeto
+  const c = Array.isArray(row.conductores) ? row.conductores[0] : row.conductores;
+  const u = c ? (Array.isArray(c.usuarios) ? c.usuarios[0] : c.usuarios) : null;
+  const driverName = u?.nombre || c?.nombre || row.usuarios?.nombre || row.conductor_nombre || (c?.rut ? `RUT: ${c.rut}` : "—");
 
   // Patente: puede estar en camiones (via rutas) o en el row directamente
   const vehiclePlate =
@@ -68,7 +70,8 @@ function mapIncidencia(row) {
 
     // Ubicación (para enlace Google Maps)
     lat:               row.latitud  ?? row.lat  ?? null,
-    lng:               row.longitud ?? row.lng  ?? null,
+    lng:               row.longitud ?? row.long ?? row.lng  ?? null,
+    long:              row.longitud ?? row.long ?? row.lng  ?? null, // compatibilidad con ambos formatos
     last_location_label: row.ultima_ubicacion ?? row.ubicacion ?? null,
 
     // Acuse de recibo (CA-3)

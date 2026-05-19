@@ -44,9 +44,9 @@ async function bootstrap() {
 
       return callback(new Error(`CORS blocked origin: ${origin}`));
     },
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
     allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: false,
+    credentials: true,
     preflightContinue: false,
     optionsSuccessStatus: 204,
   });
@@ -73,8 +73,8 @@ async function bootstrap() {
   );
 
   const port = process.env.PORT || 3000;
-  await app.listen(port);
-  console.log(`✅ Backend iniciado en http://localhost:${port}`);
+  await app.listen(port, '0.0.0.0');
+  console.log(`✅ Backend iniciado en http://0.0.0.0:${port}`);
 }
 
 bootstrap().catch((err) => {

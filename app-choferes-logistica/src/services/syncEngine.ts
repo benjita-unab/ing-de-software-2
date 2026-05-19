@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { bffFetch } from "./bffService";
 
 export type TraceabilityTipo = "EVIDENCIA" | "FICHA_DESPACHO";
@@ -81,6 +82,80 @@ function storageFolderFromRecord(r: TraceabilityRecord): string {
   return storageFolderFromEtapa(r.etapa || r.stage || "");
 }
 
+export type TiemposInspeccionRecord = {
+  id: string; // Para identificar encolado único (ej: uuid o timestamp)
+  rutaId: string;
+  hora_llegada_destino?: string;
+  hora_inspeccion_aprobada?: string;
+};
+
+const STORAGE_TIEMPOS_QUEUE = 'logitrack_tiempos_queue';
+
+export async function encolarTiempoInspeccion(record: TiemposInspeccionRecord) {
+  try {
+    const arrStr = await AsyncStorage.getItem(STORAGE_TIEMPOS_QUEUE);
+    const arr: TiemposInspeccionRecord[] = arrStr ? JSON.parse(arrStr) : [];
+    arr.push(record);
+    await AsyncStorage.setItem(STORAGE_TIEMPOS_QUEUE, JSON.stringify(arr));
+  } catch (err) {
+    console.error('Error encolando tiempo de inspección', err);
+  }
+}
+
+let isSyncingTiempos = false;
+
+export async function syncTiemposInspeccion(): Promise<void> {
+  if (isSyncingTiempos) return;
+  isSyncingTiempos = true;
+
+  try {
+    const arrStr = await AsyncStorage.getItem(STORAGE_TIEMPOS_QUEUE);
+    if (!arrStr) return;
+    const arr: TiemposInspeccionRecord[] = JSON.parse(arrStr);
+    if (arr.length === 0) return;
+    
+    const successfulIds = new Set<string>();
+    
+    for (const record of arr) {
+      try {
+        const payload: any = {};
+        if (record.hora_llegada_destino) payload.hora_llegada_destino = record.hora_llegada_destino;
+        if (record.hora_inspeccion_aprobada) payload.hora_inspeccion_aprobada = record.hora_inspeccion_aprobada;
+        
+        const res = await bffFetch(`/api/rutas/${record.rutaId}/tiempos`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        
+        if (!res.ok) {
+          throw new Error('Error HTTP ' + res.status);
+        }
+        successfulIds.add(record.id);
+      } catch (e) {
+        // Falló este registro, se mantendrá encolado
+      }
+    }
+    
+    // Obtenemos la versión más reciente de la cola y quitamos solo los procesados exitosamente
+    const latestStr = await AsyncStorage.getItem(STORAGE_TIEMPOS_QUEUE);
+    if (latestStr) {
+      const latestArr: TiemposInspeccionRecord[] = JSON.parse(latestStr);
+      const remaining = latestArr.filter(r => !successfulIds.has(r.id));
+      
+      if (remaining.length > 0) {
+        await AsyncStorage.setItem(STORAGE_TIEMPOS_QUEUE, JSON.stringify(remaining));
+      } else {
+        await AsyncStorage.removeItem(STORAGE_TIEMPOS_QUEUE);
+      }
+    }
+  } catch (err) {
+    console.error('Error sincronizando tiempos de inspección', err);
+  } finally {
+    isSyncingTiempos = false;
+  }
+}
+
 function resolveRutaId(
   record: TraceabilityRecord,
   rutaIdOpcional?: string,
@@ -88,14 +163,14 @@ function resolveRutaId(
   const fromParam = rutaIdOpcional?.trim();
   if (fromParam) return fromParam;
   const fromRecord =
-    record.ruta_id?.trim() || record.rutaId?.trim() || "";
+    (record as any).ruta_id?.trim() || (record as any).rutaId?.trim() || "";
   return fromRecord;
 }
 
 function resolveTipo(record: TraceabilityRecord, etapaLogica: string): TraceabilityTipo {
   const explicit = record.tipo?.trim();
   if (explicit === "FICHA_DESPACHO" || explicit === "EVIDENCIA") {
-    return explicit;
+    return explicit as TraceabilityTipo;
   }
   if (etapaLogica === "HOJA_DESPACHO") return "FICHA_DESPACHO";
   return "EVIDENCIA";

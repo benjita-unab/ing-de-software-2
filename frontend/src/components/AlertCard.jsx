@@ -137,7 +137,7 @@ export default function AlertCard({
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 16px", marginBottom: "14px" }}>
         <DataRow icon="👤" label="Conductor"       value={alert.driver_name ?? "—"} />
         <DataRow icon="🚛" label="Patente"         value={alert.vehicle_plate ?? "—"} highlight />
-        <DataRow icon="📍" label="Última posición" value={alert.last_location_label ?? `${alert.lat?.toFixed(5)}, ${alert.lng?.toFixed(5)}`} />
+        <DataRow icon="📍" label="Última posición" value={alert.last_location_label ?? (alert.lat != null && alert.lng != null ? `${Number(alert.lat).toFixed(5)}, ${Number(alert.lng).toFixed(5)}` : "Sin datos")} />
         <DataRow icon="🕐" label="Evento"          value={`${formatTimestamp(alert.created_at)} (${timeAgo(alert.created_at)})`} />
         {alert.acknowledged_by && (
           <DataRow icon="✅" label="Acusado por" value={`${alert.acknowledged_by} — ${formatTimestamp(alert.acknowledged_at)}`} />
