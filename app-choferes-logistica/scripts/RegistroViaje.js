@@ -9,12 +9,23 @@ import {
   Image,
   ActivityIndicator,
   ScrollView,
+  Modal,
+  Pressable,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useAutoSyncScheduler } from '../src/hooks/useAutoSyncScheduler';
+import {
+  loadMensajeQueue,
+  saveMensajeQueue,
+  enqueueConductorMessage,
+  sendEmergencyMessageInmediately,
+} from '../src/services/mensajesConductorService';
+import { useMensajesQueueScheduler } from '../src/hooks/useMensajesQueueScheduler';
+import { MENSAJES_CATALOGO } from '../src/constants/mensajesCatalog';
 
 /** Claves canónicas (etapa en API / carpeta en storage) */
 const HOJA_DESPACHO = 'HOJA_DESPACHO';
@@ -93,9 +104,11 @@ function inferirTipo(etapa) {
 function migrarRegistro(raw, rutaId) {
   const etapa = aEtapaCanonico(raw.etapa ?? raw.stage);
   const tipo = inferirTipo(etapa);
+  const ruta_id = String(raw.ruta_id ?? raw.rutaId ?? rutaId ?? '').trim() || String(rutaId ?? '').trim();
   return {
     id: raw.id,
-    ruta_id: String(raw.ruta_id ?? rutaId ?? '').trim() || String(rutaId),
+    ruta_id,
+    rutaId: ruta_id,
     etapa,
     tipo,
     photoUri: raw.photoUri,
@@ -111,7 +124,9 @@ function registroNecesitaPersistenciaMigracion(raw, migrado) {
   const rawEtapa = raw.etapa ?? raw.stage;
   const etapaDistinta = String(rawEtapa ?? '').trim() !== migrado.etapa;
   const tipoDistinto = String(raw.tipo ?? '') !== String(migrado.tipo ?? '');
-  return etapaDistinta || tipoDistinto;
+  const rutaDistinta =
+    String(raw.ruta_id ?? raw.rutaId ?? '').trim() !== String(migrado.ruta_id ?? '');
+  return etapaDistinta || tipoDistinto || rutaDistinta;
 }
 
 function contarPorCategoria(registros, cat) {
@@ -137,21 +152,32 @@ function etiquetaParaRegistro(r) {
 }
 
 export default function RegistroViaje({ onSyncComplete, rutaId }) {
+  const insets = useSafeAreaInsets();
   const STORAGE_KEY = storageKeyFromRutaId(rutaId);
   const [registros, setRegistros] = useState([]);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isMessagesSyncing, setIsMessagesSyncing] = useState(false);
+  const [mensajesQueue, setMensajesQueue] = useState([]);
+  const [isModalVisible, setIsModalVisible] = useState(false);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const cameraRef = useRef(null);
   /** Si no es null, la próxima foto usa esta etapa (extra) sin cambiar el chip seleccionado */
   const etapaCapturaRef = useRef(null);
   const registrosRef = useRef(registros);
   registrosRef.current = registros;
+  const mensajesQueueRef = useRef(mensajesQueue);
+  mensajesQueueRef.current = mensajesQueue;
 
   const recordsRevision = useMemo(
     () => registros.map((r) => `${r.id}:${r.synced ? 1 : 0}:${r.etapa}`).join(';'),
     [registros],
+  );
+
+  const mensajesRevision = useMemo(
+    () => mensajesQueue.map((item) => `${item.id}:${item.synced ? 1 : 0}`).join(';'),
+    [mensajesQueue],
   );
 
   const applySyncedIds = useCallback(
@@ -166,6 +192,18 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
     [STORAGE_KEY],
   );
 
+  const applySyncedMessageIds = useCallback(
+    async (syncedIds) => {
+      const current = mensajesQueueRef.current;
+      const next = current.map((message) =>
+        syncedIds.includes(message.id) ? { ...message, synced: true } : message,
+      );
+      await saveMensajeQueue(rutaId, next);
+      setMensajesQueue(next);
+    },
+    [rutaId],
+  );
+
   useAutoSyncScheduler({
     rutaId,
     registrosRef,
@@ -173,6 +211,18 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
     setIsSyncing,
     recordsRevision,
   });
+
+  useMensajesQueueScheduler({
+    rutaId,
+    queueRef: mensajesQueueRef,
+    applySyncedIds: applySyncedMessageIds,
+    setIsSyncing: setIsMessagesSyncing,
+    queueRevision: mensajesRevision,
+  });
+
+  useEffect(() => {
+    console.log('REGISTRO VIAJE -> ruta activa al entrar:', String(rutaId ?? '').trim() || '(vacía)');
+  }, [rutaId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -197,7 +247,12 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
           }
         }
 
-        if (!cancelled) setRegistros(migrados);
+        const mensajes = await loadMensajeQueue(idActual);
+
+        if (!cancelled) {
+          setRegistros(migrados);
+          setMensajesQueue(Array.isArray(mensajes) ? mensajes : []);
+        }
       } catch {
         if (!cancelled) Alert.alert('Error', 'No se pudieron cargar registros locales.');
       }
@@ -212,6 +267,11 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
   const persistRecords = async (nextRecords) => {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(nextRecords));
     setRegistros(nextRecords);
+  };
+
+  const persistMessages = async (nextMessages) => {
+    await saveMensajeQueue(rutaId, nextMessages);
+    setMensajesQueue(nextMessages);
   };
 
   const pendingCount = registros.filter((r) => !r.synced).length;
@@ -281,9 +341,11 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
         }),
       ]);
 
+      const ruta_id = String(rutaId ?? '').trim();
       const newRecord = {
         id: recordId,
-        ruta_id: String(rutaId).trim(),
+        ruta_id,
+        rutaId: ruta_id,
         etapa,
         tipo: inferirTipo(etapa),
         photoUri: newPath,
@@ -293,12 +355,85 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
         synced: false,
       };
 
+      console.log('REGISTRO VIAJE -> evidencia local guardada:', {
+        id: newRecord.id,
+        ruta_id: newRecord.ruta_id,
+        etapa: newRecord.etapa,
+        tipo: newRecord.tipo,
+        photoUri: newRecord.photoUri,
+        timestamp: newRecord.timestamp,
+      });
+
       await persistRecords([...registros, newRecord]);
       cerrarCamara();
     } catch {
       Alert.alert('Error', 'No se pudo capturar foto y ubicacion.');
     } finally {
       setIsCapturing(false);
+    }
+  };
+
+  const reportarEstado = async (option) => {
+    if (!rutaId || !String(rutaId).trim()) {
+      Alert.alert('Ruta no disponible', 'Debes seleccionar una ruta activa para enviar un mensaje.');
+      return;
+    }
+
+    const esEmergencia = option.prioridad === 'ALTA' && option.tipo === 'EMERGENCIA';
+
+    try {
+      let message;
+      let synced = false;
+
+      if (esEmergencia) {
+        const payload = {
+          ruta_id: String(rutaId).trim(),
+          mensaje: option.label,
+          tipo: option.tipo,
+          prioridad: option.prioridad,
+        };
+        console.log('EMERGENCIA payload:', payload);
+        const result = await sendEmergencyMessageInmediately(rutaId, option.label);
+        console.log('EMERGENCIA response:', result);
+        message = result.message;
+        synced = result.synced;
+
+        if (synced) {
+          const updatedQueue = [...mensajesQueueRef.current, message];
+          await persistMessages(updatedQueue);
+        } else {
+          const freshQueue = await loadMensajeQueue(rutaId);
+          setMensajesQueue(freshQueue);
+        }
+      } else {
+        message = await enqueueConductorMessage(
+          rutaId,
+          option.label,
+          option.tipo,
+          option.prioridad,
+        );
+        const updatedQueue = [...mensajesQueueRef.current, message];
+        await persistMessages(updatedQueue);
+      }
+
+      if (esEmergencia) {
+        Alert.alert(
+          'Emergencia reportada',
+          synced
+            ? 'La emergencia se envió inmediatamente al servidor.'
+            : 'La emergencia se guardó localmente y se sincronizará cuando haya conexión.',
+        );
+      } else {
+        Alert.alert(
+          'Mensaje guardado',
+          'El estado se ha guardado localmente y se sincronizará automáticamente.',
+        );
+      }
+    } catch (error) {
+      if (esEmergencia) {
+        console.error('EMERGENCIA error:', error);
+      }
+      Alert.alert('Error', 'No se pudo guardar el mensaje. Intenta de nuevo.');
     }
   };
 
@@ -371,6 +506,16 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
               </TouchableOpacity>
             </View>
 
+            <View style={styles.messageSection}>
+              <TouchableOpacity
+                style={styles.btnGestionEstado}
+                onPress={() => setIsModalVisible(true)}
+                accessibilityRole="button"
+              >
+                <Text style={styles.btnGestionEstadoText}>Notificar Estado</Text>
+              </TouchableOpacity>
+            </View>
+
             <View style={styles.resumenCard}>
               <Text style={styles.resumenLine}>
                 Total evidencias: <Text style={styles.resumenStrong}>{totalEvidencias}</Text>
@@ -423,6 +568,106 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
           </>
         )}
       </ScrollView>
+
+      <Modal
+        visible={isModalVisible}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setIsModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable
+            style={styles.modalBackdrop}
+            onPress={() => setIsModalVisible(false)}
+            accessibilityRole="button"
+            accessibilityLabel="Cerrar modal"
+          />
+          <View
+            style={[
+              styles.modalCard,
+              {
+                marginTop: Math.max(insets.top, 12),
+                marginBottom: Math.max(insets.bottom, 12),
+              },
+            ]}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Gestión de Estado / Reportes</Text>
+              <TouchableOpacity
+                onPress={() => setIsModalVisible(false)}
+                style={styles.modalCloseButton}
+                accessibilityRole="button"
+                accessibilityLabel="Cerrar"
+              >
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              style={styles.modalScroll}
+              contentContainerStyle={styles.modalScrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator
+            >
+              <View style={styles.modalSection}>
+                <Text style={styles.sectionTitle}>Estado actual</Text>
+                <Text style={styles.sectionSubtitle}>
+                  Reporta el estado de tu viaje
+                </Text>
+                <View style={styles.messageGrid}>
+                  {MENSAJES_CATALOGO.filter(option => option.tipo === 'ESTADO').map((option) => (
+                    <TouchableOpacity
+                      key={option.id}
+                      onPress={() => {
+                        reportarEstado(option);
+                        setIsModalVisible(false);
+                      }}
+                      style={styles.messageButton}
+                      accessibilityRole="button"
+                    >
+                      <Text style={styles.messageButtonText}>
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.modalSection}>
+                <Text style={styles.sectionTitle}>Reportar</Text>
+                <Text style={styles.sectionSubtitle}>
+                  Reporta incidencias o emergencias
+                </Text>
+                <View style={styles.messageGrid}>
+                  {MENSAJES_CATALOGO.filter(option => option.tipo !== 'ESTADO').map((option) => (
+                    <TouchableOpacity
+                      key={option.id}
+                      onPress={() => {
+                        reportarEstado(option);
+                        setIsModalVisible(false);
+                      }}
+                      style={[
+                        styles.messageButton,
+                        option.prioridad === 'ALTA' && styles.messageButtonHigh,
+                      ]}
+                      accessibilityRole="button"
+                    >
+                      <Text
+                        style={[
+                          styles.messageButtonText,
+                          option.prioridad === 'ALTA' && styles.messageButtonTextHigh,
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -499,6 +744,102 @@ const styles = StyleSheet.create({
   thumbSub: { fontSize: 12, color: '#475467', marginTop: 2 },
   syncOk: { color: '#15803D', fontWeight: '700' },
   syncNo: { color: '#C2410C', fontWeight: '700' },
+  messageSection: {
+    marginHorizontal: 16,
+    marginTop: 18,
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#cbd5e1',
+    padding: 18,
+  },
+  btnGestionEstado: {
+    backgroundColor: '#f97316',
+    borderRadius: 12,
+    paddingVertical: 15,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  btnGestionEstadoText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginBottom: 6,
+  },
+  sectionSubtitle: {
+    fontSize: 13,
+    color: '#475569',
+    marginBottom: 14,
+  },
+  messageGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  messageButton: {
+    backgroundColor: '#e2e8f0',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    minWidth: '47%',
+    flexBasis: '47%',
+  },
+  messageButtonHigh: {
+    backgroundColor: '#fee2e2',
+    borderWidth: 1,
+    borderColor: '#ef4444',
+  },
+  messageButtonText: {
+    color: '#0f172a',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  messageButtonTextHigh: {
+    color: '#991b1b',
+  },
+  queueSummary: {
+    marginTop: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+  },
+  queueSummaryText: {
+    color: '#475569',
+    fontSize: 13,
+  },
+  queueList: {
+    marginTop: 12,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#cbd5e1',
+    backgroundColor: '#f8fafc',
+    overflow: 'hidden',
+  },
+  queueItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#e2e8f0',
+  },
+  queueItemLabel: {
+    color: '#0f172a',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  queueItemMeta: {
+    marginTop: 4,
+    color: '#475569',
+    fontSize: 12,
+  },
   cameraContainer: { flex: 1, minHeight: 420, backgroundColor: '#000' },
   camera: { flex: 1 },
   cameraActions: {
@@ -523,4 +864,66 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   btnLightText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  modalCard: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 8,
+    maxHeight: '88%',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 16,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#e2e8f0',
+  },
+  modalTitle: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0f172a',
+    paddingRight: 12,
+  },
+  modalCloseButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCloseText: {
+    fontSize: 18,
+    color: '#475569',
+    fontWeight: '700',
+  },
+  modalScroll: {
+    flexGrow: 0,
+  },
+  modalScrollContent: {
+    paddingBottom: 20,
+  },
+  modalSection: {
+    marginBottom: 18,
+  },
 });

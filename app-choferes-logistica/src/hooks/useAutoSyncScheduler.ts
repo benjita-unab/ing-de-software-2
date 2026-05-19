@@ -149,6 +149,7 @@ export function useAutoSyncScheduler({
       // También intentar sincronizar tiempos de inspección de manera automática
       await syncTiemposInspeccion().catch(e => console.error("Error bg sync tiempos", e));
 
+      console.log("AUTO SYNC -> ruta activa:", route, "pendientes:", pending.length);
       const syncedIds = await syncTraceabilityRecords(pending, route);
       await applySyncedIdsRef.current(syncedIds);
       failureIndexRef.current = 0;

@@ -69,10 +69,19 @@ export class TrazabilidadController {
       throw new BadRequestException('latitud y longitud deben ser números válidos');
     }
 
-    const tipoNorm =
+    let tipoNorm =
       typeof tipo === 'string' && tipo.trim() ? tipo.trim() : null;
 
-    return this.trazabilidadService.createEvent({
+    if (!tipoNorm) {
+      const etapaUpper = String(etapa).trim().toUpperCase();
+      if (etapaUpper === 'HOJA_DESPACHO') {
+        tipoNorm = 'FICHA_DESPACHO';
+      } else if (etapaUpper) {
+        tipoNorm = 'EVIDENCIA';
+      }
+    }
+
+    const normalized = {
       id,
       etapa,
       foto_uri: foto_uri ?? null,
@@ -81,6 +90,9 @@ export class TrazabilidadController {
       timestamp_evento,
       ruta_id,
       tipo: tipoNorm,
-    });
+    };
+    console.log('BODY TRAZABILIDAD normalizado:', normalized);
+
+    return this.trazabilidadService.createEvent(normalized);
   }
 }

@@ -17,6 +17,7 @@ import { TrazabilidadModule } from './modules/trazabilidad/trazabilidad.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ClientesModule } from './modules/clientes/clientes.module';
 import { CamionesModule } from './modules/camiones/camiones.module';
+import { MensajesConductorModule } from './modules/mensajes-conductor/mensajes-conductor.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { CamionesModule } from './modules/camiones/camiones.module';
     TrazabilidadModule,
     ClientesModule,
     CamionesModule,
+    MensajesConductorModule,
   ],
   controllers: [AppController],
   providers: [AppService, SupabaseConfigService, ResendConfigService, JwtStrategy],
