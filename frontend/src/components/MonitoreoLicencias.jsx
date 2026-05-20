@@ -10,54 +10,59 @@ const DRIVERS_TEMP = [
 const API_BASE_URL = getApiBaseUrl();
 
 const base = {
-  dashboard: {
+  container: {
     minHeight: "100%",
-    background: "#0F172A",
+    background: "transparent",
     color: "#E2E8F0",
-    padding: "24px",
+    padding: "10px",
     fontFamily: "Inter, system-ui, sans-serif",
+    overflow: "auto",
   },
   card: {
     width: "100%",
     maxWidth: "680px",
     margin: "0 auto",
     borderRadius: "16px",
-    border: "1px solid #1E293B",
-    background: "#111827",
+    border: "1px solid rgba(255,255,255,0.12)",
+    background: "rgba(8,8,12,0.72)",
     boxShadow: "0 10px 30px rgba(0,0,0,0.45)",
     padding: "24px",
+    backdropFilter: "blur(8px)",
   },
   label: {
     display: "block",
-    color: "#94A3B8",
+    color: "rgba(226,232,240,0.9)",
     marginBottom: "8px",
     fontSize: "0.92rem",
+    fontWeight: 600,
   },
   input: {
     width: "100%",
     padding: "10px 12px",
     borderRadius: "10px",
-    border: "1px solid #334155",
-    background: "#0F172A",
+    border: "1px solid rgba(255,255,255,0.15)",
+    background: "rgba(15,23,42,0.65)",
     color: "#F8FAFC",
     marginBottom: "16px",
     outline: "none",
+    boxSizing: "border-box",
   },
   select: {
     width: "100%",
     padding: "10px 12px",
     borderRadius: "10px",
-    border: "1px solid #334155",
-    background: "#0F172A",
+    border: "1px solid rgba(255,255,255,0.15)",
+    background: "rgba(15,23,42,0.95)",
     color: "#F8FAFC",
     marginBottom: "16px",
+    boxSizing: "border-box",
   },
   button: {
     width: "100%",
     padding: "12px 14px",
     border: "none",
     borderRadius: "10px",
-    background: "#0EA5E9",
+    background: "linear-gradient(135deg, #2563eb, #7c3aed)",
     color: "#FFFFFF",
     fontWeight: 700,
     fontSize: "0.95rem",
@@ -69,24 +74,28 @@ const base = {
     cursor: "not-allowed",
   },
   messageSuccess: {
-    background: "#0F766E",
-    color: "#D1FAE5",
+    background: "rgba(34,197,94,0.15)",
+    color: "#86efac",
+    border: "1px solid rgba(34,197,94,0.45)",
     borderRadius: "10px",
     padding: "10px 12px",
     marginBottom: "14px",
+    fontSize: "13px",
   },
   messageError: {
-    background: "#991B1B",
-    color: "#FEE2E2",
+    background: "rgba(239,68,68,0.12)",
+    color: "#fecaca",
+    border: "1px solid rgba(248,113,113,0.45)",
     borderRadius: "10px",
     padding: "10px 12px",
     marginBottom: "14px",
+    fontSize: "13px",
   },
   subtitle: {
     color: "#60A5FA",
     marginBottom: "16px",
     fontSize: "1.08rem",
-    fontWeight: 600,
+    fontWeight: 700,
   },
 };
 
@@ -171,15 +180,17 @@ export default function MonitoreoLicencias() {
   };
 
   return (
-    <div style={base.dashboard}>
-      <div style={base.card}>
-        <h2 style={base.subtitle}>Monitoreo de licencias</h2>
+    <div style={base.container}>
+      <div style={base.card} className="operator-glass-card">
+        <h2 style={base.subtitle} className="rrhh-section-title">
+          Monitoreo de licencias
+        </h2>
 
         {errorText && <div style={base.messageError}>{errorText}</div>}
         {successText && <div style={base.messageSuccess}>{successText}</div>}
 
         <form onSubmit={handleSubmit}>
-          <label htmlFor="driverSelect" style={base.label}>
+          <label htmlFor="driverSelect" style={base.label} className="rrhh-field-label">
             Selector de Chofer
           </label>
           <select
@@ -197,7 +208,7 @@ export default function MonitoreoLicencias() {
             ))}
           </select>
 
-          <label htmlFor="licenseFile" style={base.label}>
+          <label htmlFor="licenseFile" style={base.label} className="rrhh-field-label">
             Carga de Documento
           </label>
           <input
@@ -210,7 +221,7 @@ export default function MonitoreoLicencias() {
             disabled={isLoading}
           />
 
-          <label htmlFor="expiryDate" style={base.label}>
+          <label htmlFor="expiryDate" style={base.label} className="rrhh-field-label">
             Fecha de Vencimiento
           </label>
           <input

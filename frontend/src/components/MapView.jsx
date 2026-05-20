@@ -1,7 +1,6 @@
 // src/components/MapView.jsx
 import React, { useEffect, useRef, useState } from "react";
-
-const MAPS_API_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
+import { isGoogleMapsConfigured, loadGoogleMaps } from "../lib/googleMapsLoader";
 
 const DEFAULT_CENTER = { lat: -33.4489, lng: -70.6693 };
 const DEFAULT_ZOOM   = 11;
@@ -14,20 +13,24 @@ export default function MapView({ alerts, focusedAlert }) {
   const [mapError, setMapError]   = useState(false);
 
   useEffect(() => {
-    if (!MAPS_API_KEY) { setMapError(true); return; }
-    if (window.google?.maps) { setMapLoaded(true); return; }
-
-    const scriptId = "google-maps-script";
-    if (!document.getElementById(scriptId)) {
-      const script    = document.createElement("script");
-      script.id       = scriptId;
-      script.src      = `https://maps.googleapis.com/maps/api/js?key=${MAPS_API_KEY}&libraries=marker`;
-      script.async    = true;
-      script.defer    = true;
-      script.onload   = () => setMapLoaded(true);
-      script.onerror  = () => setMapError(true);
-      document.head.appendChild(script);
+    if (!isGoogleMapsConfigured()) {
+      setMapError(true);
+      return;
     }
+
+    let cancelled = false;
+
+    loadGoogleMaps({ libraries: ["maps"] })
+      .then(() => {
+        if (!cancelled) setMapLoaded(true);
+      })
+      .catch(() => {
+        if (!cancelled) setMapError(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {

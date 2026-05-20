@@ -97,29 +97,31 @@ export default function MensajesConductor({ mensajes, rutasMap = {}, loading, er
   };
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: '16px' }} className="mensajes-panel">
       <div
+        className="operator-glass-card mensajes-header-card"
         style={{
           borderRadius: '16px',
-          background: '#151d3f',
-          border: '1px solid rgba(255,255,255,0.1)',
+          background: 'rgba(8,8,12,0.72)',
+          border: '1px solid rgba(255,255,255,0.12)',
           padding: '16px 20px',
           display: 'flex',
           flexDirection: 'column',
           gap: '12px',
+          backdropFilter: 'blur(8px)',
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'flex-start' }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: '16px', color: '#fff' }}>
+            <h2 className="mensajes-title" style={{ margin: 0, fontSize: '16px', color: '#fff' }}>
               Mensajes del conductor
             </h2>
-            <p style={{ margin: '6px 0 0', color: '#bfc7e4', fontSize: '13px', maxWidth: '620px' }}>
+            <p className="mensajes-subtitle" style={{ margin: '6px 0 0', color: 'rgba(226,232,240,0.75)', fontSize: '13px', maxWidth: '620px' }}>
               Estados rápidos enviados desde la app móvil. Actualización automática cada 10 segundos.
             </p>
           </div>
           <div style={{ flex: '0 0 320px', minWidth: 0 }}>
-            <label htmlFor="ruta-search" style={{ display: 'block', marginBottom: '6px', color: '#cbd5e1', fontSize: '12px' }}>
+            <label htmlFor="ruta-search" className="mensajes-field-label" style={{ display: 'block', marginBottom: '6px', color: 'rgba(226,232,240,0.9)', fontSize: '12px' }}>
               Buscar rutas por nombre o ID de ruta
             </label>
             <input
@@ -128,14 +130,16 @@ export default function MensajesConductor({ mensajes, rutasMap = {}, loading, er
               value={searchRuta}
               onChange={(event) => setSearchRuta(event.target.value)}
               placeholder="Ej: 5a8c3d2f-..."
+              className="mensajes-search-input"
               style={{
                 width: '100%',
                 borderRadius: '12px',
-                border: '1px solid rgba(255,255,255,0.14)',
-                background: '#0f172a',
-                color: '#fff',
+                border: '1px solid rgba(255,255,255,0.15)',
+                background: 'rgba(15,23,42,0.65)',
+                color: '#f8fafc',
                 padding: '10px 14px',
                 fontSize: '13px',
+                boxSizing: 'border-box',
               }}
             />
           </div>
@@ -171,15 +175,17 @@ export default function MensajesConductor({ mensajes, rutasMap = {}, loading, er
       )}
 
       <div
+        className="operator-glass-card mensajes-list-card"
         style={{
-          borderRadius: '12px',
+          borderRadius: '16px',
           overflow: 'hidden',
-          border: '1px solid rgba(255,255,255,0.1)',
-          background: '#1a2747',
+          border: '1px solid rgba(255,255,255,0.12)',
+          background: 'rgba(8,8,12,0.72)',
           flex: 1,
           display: 'flex',
           flexDirection: 'column',
           minHeight: 0,
+          backdropFilter: 'blur(8px)',
         }}
       >
         {routeGroups.length === 0 && !loading ? (
@@ -200,12 +206,13 @@ export default function MensajesConductor({ mensajes, rutasMap = {}, loading, er
               return (
                 <div
                   key={route.rutaId}
+                  className="mensajes-route-card operator-glass-card"
                   style={{
                     marginBottom: '14px',
                     borderRadius: '18px',
                     overflow: 'hidden',
-                    border: '1px solid rgba(255,255,255,0.08)',
-                    background: '#121b38',
+                    border: '1px solid rgba(255,255,255,0.12)',
+                    background: 'rgba(15,23,42,0.55)',
                   }}
                 >
                   <button
@@ -257,9 +264,10 @@ export default function MensajesConductor({ mensajes, rutasMap = {}, loading, er
                   </button>
 
                   {isOpen && (
-                    <div style={{ padding: '0 16px 18px', background: '#111a34' }}>
+                    <div className="mensajes-route-body" style={{ padding: '0 16px 18px', background: 'rgba(15,23,42,0.35)' }}>
                       <div style={{ overflowX: 'auto' }}>
                         <table
+                          className="mensajes-table"
                           style={{
                             width: '100%',
                             borderCollapse: 'collapse',
@@ -267,7 +275,7 @@ export default function MensajesConductor({ mensajes, rutasMap = {}, loading, er
                           }}
                         >
                           <thead>
-                            <tr style={{ background: '#0f1629', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                            <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
                               <th
                                 style={{
                                   padding: '12px 14px',
