@@ -1,4 +1,5 @@
 import { bffFetch } from "./bffService";
+import { syncTiemposInspeccion } from "./syncEngine";
 
 export type CierreDespachoResultado = {
   emailEnviadoA: string;
@@ -15,6 +16,14 @@ export async function cerrarDespachoYEnviarComprobante(
   const id = String(rutaId).trim();
   if (!id) {
     throw new Error("rutaId es obligatorio.");
+  }
+
+  // Fuerza la sincronización de cualquier tiempo pendiente justo antes de cerrar
+  // para que si se recobrό conexión en este instante, el backend sepa cuánto tiempo esperó
+  try {
+    await syncTiemposInspeccion();
+  } catch (err) {
+    console.warn("Fallo el sync forzado de tiempos en el cierre de despacho:", err);
   }
 
   const email = "oyanadelbastian5@gmail.com";
