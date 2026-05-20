@@ -3,9 +3,11 @@ import {
   BadRequestException,
   NotFoundException,
   ForbiddenException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { SupabaseConfigService } from '../../config/supabase.config';
 import { ConductoresService } from '../conductores/conductores.service';
+import { EmailService } from '../email/email.service';
 
 /** Cuerpo esperado por POST /api/rutas (validación en createRoute). */
 export type CreateRutaDto = {
@@ -36,7 +38,47 @@ export class RutasService {
   constructor(
     private supabaseConfig: SupabaseConfigService,
     private conductoresService: ConductoresService,
+    private emailService: EmailService,
   ) {}
+
+  private static readonly FECHAS_ESTIMADAS_SELECT = `
+    fecha_estimada_inicio,
+    fecha_estimada_fin,
+    fecha_estimada_entrega,
+    notificacion_fecha_estimada_enviada_at,
+    notificacion_fecha_estimada_destinatario
+  `;
+
+  private parseDateOnly(value: unknown): string | null {
+    if (value == null || String(value).trim() === '') return null;
+    const s = String(value).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    const d = new Date(s);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toISOString().slice(0, 10);
+  }
+
+  private formatDateCl(isoDate: string): string {
+    const [y, m, d] = isoDate.split('-');
+    return `${d}/${m}/${y}`;
+  }
+
+  private validarRangoFechasEstimadas(
+    inicio: string,
+    fin: string,
+    entrega: string,
+  ): void {
+    if (inicio > fin) {
+      throw new BadRequestException(
+        'fecha_estimada_inicio no puede ser posterior a fecha_estimada_fin',
+      );
+    }
+    if (entrega < inicio || entrega > fin) {
+      throw new BadRequestException(
+        'El día estimado debe estar entre la fecha de inicio y la fecha de fin del rango.',
+      );
+    }
+  }
 
   /**
    * Crea una ruta en Supabase.
@@ -328,7 +370,12 @@ export class RutasService {
         conductor_id,
         camion_id,
         ficha_despacho_url,
-        clientes(id, nombre),
+        fecha_estimada_inicio,
+        fecha_estimada_fin,
+        fecha_estimada_entrega,
+        notificacion_fecha_estimada_enviada_at,
+        notificacion_fecha_estimada_destinatario,
+        clientes(id, nombre, contacto_email),
         conductores(id, rut, licencia_vencimiento),
         camiones(id, patente, capacidad_kg)
       `)
@@ -566,7 +613,12 @@ export class RutasService {
       conductor_id,
       camion_id,
       ficha_despacho_url,
-      clientes(id, nombre),
+      fecha_estimada_inicio,
+      fecha_estimada_fin,
+      fecha_estimada_entrega,
+      notificacion_fecha_estimada_enviada_at,
+      notificacion_fecha_estimada_destinatario,
+      clientes(id, nombre, contacto_email),
       conductores(id, rut),
       camiones(id, patente)
     `);
@@ -844,6 +896,223 @@ export class RutasService {
       fichasDespacho,
       fichaDespachoUrl: fichaUrlRuta || null,
       firmaUrl,
+    };
+  }
+
+  /**
+   * HU-9: actualiza rango y día estimado de entrega en la ruta.
+   */
+  async updateFechasEstimadas(
+    rutaId: string,
+    body: {
+      fecha_estimada_inicio?: string;
+      fecha_estimada_fin?: string;
+      fecha_estimada_entrega?: string;
+    },
+  ) {
+    if (!rutaId?.trim()) {
+      throw new BadRequestException('rutaId es requerido');
+    }
+
+    const inicio = this.parseDateOnly(body?.fecha_estimada_inicio);
+    const fin = this.parseDateOnly(body?.fecha_estimada_fin);
+    const entrega = this.parseDateOnly(body?.fecha_estimada_entrega);
+
+    if (!inicio || !fin || !entrega) {
+      throw new BadRequestException(
+        'fecha_estimada_inicio, fecha_estimada_fin y fecha_estimada_entrega son obligatorias (formato YYYY-MM-DD)',
+      );
+    }
+
+    this.validarRangoFechasEstimadas(inicio, fin, entrega);
+
+    const supabase = this.supabaseConfig.getClient();
+    const { data, error } = await supabase
+      .from('rutas')
+      .update({
+        fecha_estimada_inicio: inicio,
+        fecha_estimada_fin: fin,
+        fecha_estimada_entrega: entrega,
+      })
+      .eq('id', rutaId)
+      .select(
+        `
+        id,
+        origen,
+        destino,
+        fecha_estimada_inicio,
+        fecha_estimada_fin,
+        fecha_estimada_entrega,
+        notificacion_fecha_estimada_enviada_at,
+        notificacion_fecha_estimada_destinatario
+      `,
+      )
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        throw new NotFoundException(`Ruta no encontrada: ${rutaId}`);
+      }
+      throw new BadRequestException(
+        `No se pudieron guardar las fechas estimadas: ${error.message}`,
+      );
+    }
+
+    return {
+      success: true,
+      message: 'Fechas estimadas guardadas correctamente',
+      data,
+    };
+  }
+
+  /**
+   * HU-9: envía notificación de fecha estimada al correo del cliente.
+   */
+  async notificarFechaEstimada(rutaId: string) {
+    if (!rutaId?.trim()) {
+      throw new BadRequestException('rutaId es requerido');
+    }
+
+    const supabase = this.supabaseConfig.getClient();
+
+    const { data: ruta, error } = await supabase
+      .from('rutas')
+      .select(
+        `
+        id,
+        origen,
+        destino,
+        cliente_id,
+        fecha_estimada_inicio,
+        fecha_estimada_fin,
+        fecha_estimada_entrega,
+        clientes(id, nombre, contacto_email)
+      `,
+      )
+      .eq('id', rutaId)
+      .single();
+
+    if (error || !ruta) {
+      throw new NotFoundException(
+        `Ruta no encontrada: ${error?.message ?? rutaId}`,
+      );
+    }
+
+    const inicio = this.parseDateOnly(ruta.fecha_estimada_inicio);
+    const fin = this.parseDateOnly(ruta.fecha_estimada_fin);
+    const entrega = this.parseDateOnly(ruta.fecha_estimada_entrega);
+
+    if (!inicio || !fin || !entrega) {
+      throw new BadRequestException(
+        'La ruta debe tener inicio de rango, fin de rango y día estimado de entrega antes de notificar.',
+      );
+    }
+
+    this.validarRangoFechasEstimadas(inicio, fin, entrega);
+
+    const clienteRaw = ruta.clientes as
+      | { id?: string; nombre?: string; contacto_email?: string }
+      | { id?: string; nombre?: string; contacto_email?: string }[]
+      | null;
+    const cliente = Array.isArray(clienteRaw) ? clienteRaw[0] : clienteRaw;
+
+    if (!ruta.cliente_id) {
+      throw new BadRequestException(
+        'La ruta no tiene cliente asociado. No se puede enviar la notificación.',
+      );
+    }
+
+    const email = cliente?.contacto_email?.trim();
+    if (!email) {
+      throw new BadRequestException(
+        'El cliente no tiene correo de contacto registrado (contacto_email). Actualice el cliente antes de notificar.',
+      );
+    }
+
+    const nombreCliente = cliente?.nombre?.trim() || 'Cliente';
+    const rangoInicioFmt = this.formatDateCl(inicio);
+    const rangoFinFmt = this.formatDateCl(fin);
+    const entregaFmt = this.formatDateCl(entrega);
+
+    let asunto = `Entrega estimada - ${nombreCliente}`;
+    let resendId: string | null = null;
+    let envioError: string | null = null;
+
+    try {
+      const resultado = await this.emailService.enviarNotificacionFechaEstimada({
+        email,
+        nombreCliente,
+        origen: String(ruta.origen || ''),
+        destino: String(ruta.destino || ''),
+        rutaId: ruta.id,
+        rangoInicio: rangoInicioFmt,
+        rangoFin: rangoFinFmt,
+        fechaEstimadaEntrega: entregaFmt,
+      });
+      asunto = resultado.asunto;
+      resendId = resultado.resendId ?? null;
+      if (!resendId) {
+        envioError = 'Resend no confirmó el id de envío del correo';
+      }
+    } catch (err: unknown) {
+      envioError =
+        err instanceof Error ? err.message : String(err ?? 'Error desconocido');
+    }
+
+    const enviadoAt = new Date().toISOString();
+
+    if (envioError) {
+      await supabase.from('notificaciones_cliente').insert({
+        ruta_id: ruta.id,
+        cliente_id: ruta.cliente_id,
+        destinatario: email,
+        tipo: 'FECHA_ESTIMADA_ENTREGA',
+        asunto,
+        estado: 'fallido',
+        enviado_at: enviadoAt,
+        error: envioError,
+      });
+
+      throw new InternalServerErrorException(
+        `No se pudo enviar la notificación: ${envioError}`,
+      );
+    }
+
+    const { error: histError } = await supabase
+      .from('notificaciones_cliente')
+      .insert({
+        ruta_id: ruta.id,
+        cliente_id: ruta.cliente_id,
+        destinatario: email,
+        tipo: 'FECHA_ESTIMADA_ENTREGA',
+        asunto,
+        estado: 'enviado',
+        enviado_at: enviadoAt,
+        error: null,
+      });
+
+    if (histError) {
+      console.warn(
+        'notificarFechaEstimada: correo enviado pero falló registro historial:',
+        histError.message,
+      );
+    }
+
+    await supabase
+      .from('rutas')
+      .update({
+        notificacion_fecha_estimada_enviada_at: enviadoAt,
+        notificacion_fecha_estimada_destinatario: email,
+      })
+      .eq('id', ruta.id);
+
+    return {
+      success: true,
+      message: 'Notificación de fecha estimada enviada correctamente',
+      destinatario: email,
+      enviadoAt,
+      rutaId: ruta.id,
+      resendId,
     };
   }
 }

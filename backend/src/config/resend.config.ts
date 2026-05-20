@@ -19,17 +19,36 @@ export class ResendConfigService {
     return this.resendClient;
   }
 
-  async sendEmail(to: string, subject: string, html: string, attachments?: any[]) {
+  async sendEmail(
+    to: string,
+    subject: string,
+    html: string,
+    attachments?: any[],
+  ): Promise<{ id: string }> {
     try {
       const response = await this.resendClient.emails.send({
-        from: process.env.RESEND_FROM_EMAIL || 'Sistema LogiTrack <onboarding@resend.dev>',
+        from:
+          process.env.RESEND_FROM_EMAIL ||
+          'Sistema LogiTrack <onboarding@resend.dev>',
         to,
         subject,
         html,
         attachments,
       });
 
-      return response;
+      const res = response as { data?: { id?: string }; error?: { message?: string; name?: string } };
+      if (res?.error) {
+        const msg =
+          res.error?.message || res.error?.name || 'error desconocido de Resend';
+        throw new Error(msg);
+      }
+
+      const id = res?.data?.id;
+      if (!id) {
+        throw new Error('Resend no confirmó el id de envío del correo');
+      }
+
+      return { id };
     } catch (error: any) {
       throw new Error(`Email error: ${error?.message}`);
     }
