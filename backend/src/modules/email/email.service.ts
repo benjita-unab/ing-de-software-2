@@ -96,6 +96,78 @@ export class EmailService {
   }
 
   /**
+   * HU-9: notificación al cliente con rango y día estimado de entrega.
+   */
+  async enviarNotificacionFechaEstimada(params: {
+    email: string;
+    nombreCliente: string;
+    origen: string;
+    destino: string;
+    rutaId: string;
+    rangoInicio: string;
+    rangoFin: string;
+    fechaEstimadaEntrega: string;
+  }) {
+    const email = params.email?.trim();
+    if (!email) {
+      throw new BadRequestException('email es requerido');
+    }
+
+    const nombreSeguro = this.escapeHtml(params.nombreCliente.trim());
+    const origenSeguro = this.escapeHtml(params.origen.trim());
+    const destinoSeguro = this.escapeHtml(params.destino.trim());
+    const rutaIdSeguro = this.escapeHtml(params.rutaId.trim());
+    const rangoSeguro = `${this.escapeHtml(params.rangoInicio)} – ${this.escapeHtml(params.rangoFin)}`;
+    const fechaSegura = this.escapeHtml(params.fechaEstimadaEntrega);
+
+    const asunto = `Entrega estimada - ${nombreSeguro}`;
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <body style="font-family: Arial, sans-serif; padding: 24px; color: #111827;">
+          <h1 style="color: #1565c0;">Estimación de entrega</h1>
+          <p>Hola, <strong>${nombreSeguro}</strong>,</p>
+          <p>Le informamos el rango estimado de entrega para preparar la zona de descarga:</p>
+          <p style="font-size: 16px;"><strong>Rango estimado:</strong> ${rangoSeguro}</p>
+          <p style="font-size: 16px;"><strong>Fecha estimada:</strong> ${fechaSegura}</p>
+          <hr style="border: none; border-top: 1px solid #E5E7EB; margin: 20px 0;" />
+          <p><strong>Origen:</strong> ${origenSeguro}</p>
+          <p><strong>Destino:</strong> ${destinoSeguro}</p>
+          <p><strong>Cliente:</strong> ${nombreSeguro}</p>
+          <p><strong>ID de despacho:</strong> ${rutaIdSeguro}</p>
+          <p style="color: #6B7280; margin-top: 24px;">Saludos,<br/>LogiTrack</p>
+        </body>
+      </html>
+    `;
+
+    try {
+      const { id: resendId } = await this.resendConfig.sendEmail(
+        email,
+        asunto,
+        html,
+      );
+
+      console.log('HU-9 notificación fecha estimada — envío Resend OK:', {
+        destinatario: email,
+        asunto,
+        resendId,
+      });
+
+      return { asunto, resendId };
+    } catch (error: any) {
+      const errMsg = error?.message || 'Error desconocido';
+      console.warn('HU-9 notificación fecha estimada — envío Resend falló:', {
+        destinatario: email,
+        asunto,
+        error: errMsg,
+      });
+      throw new InternalServerErrorException(
+        `Error al enviar notificación por email: ${errMsg}`,
+      );
+    }
+  }
+
+  /**
    * Busca el `codigo_otp` más reciente vinculado a la ruta. Si no existe
    * registro de entrega o la columna está vacía, devuelve null.
    */

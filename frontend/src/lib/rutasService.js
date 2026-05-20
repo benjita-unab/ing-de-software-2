@@ -210,6 +210,71 @@ export async function actualizarEstadoRuta(rutaId, estado) {
 }
 
 /**
+ * HU-9: guarda rango y día estimado de entrega (PATCH /api/rutas/:id/fechas-estimadas).
+ * @param {string} rutaId
+ * @param {{ fecha_estimada_inicio: string, fecha_estimada_fin: string, fecha_estimada_entrega: string }} fechas — YYYY-MM-DD
+ */
+export async function actualizarFechasEstimadas(rutaId, fechas) {
+  if (!rutaId) {
+    return { success: false, error: "rutaId es requerido" };
+  }
+  const { fecha_estimada_inicio, fecha_estimada_fin, fecha_estimada_entrega } =
+    fechas || {};
+  if (
+    !fecha_estimada_inicio?.trim() ||
+    !fecha_estimada_fin?.trim() ||
+    !fecha_estimada_entrega?.trim()
+  ) {
+    return {
+      success: false,
+      error:
+        "Debe indicar fecha_estimada_inicio, fecha_estimada_fin y fecha_estimada_entrega",
+    };
+  }
+
+  const res = await apiFetch(`/api/rutas/${rutaId}/fechas-estimadas`, {
+    method: "PATCH",
+    json: {
+      fecha_estimada_inicio: fecha_estimada_inicio.trim(),
+      fecha_estimada_fin: fecha_estimada_fin.trim(),
+      fecha_estimada_entrega: fecha_estimada_entrega.trim(),
+    },
+  });
+
+  if (!res.ok) {
+    return {
+      success: false,
+      error: res.error || "No se pudieron guardar las fechas estimadas",
+    };
+  }
+
+  return { success: true, data: res.data?.data ?? res.data };
+}
+
+/**
+ * HU-9: envía notificación de fecha estimada al correo del cliente.
+ * @param {string} rutaId
+ */
+export async function notificarFechaEstimada(rutaId) {
+  if (!rutaId) {
+    return { success: false, error: "rutaId es requerido" };
+  }
+
+  const res = await apiFetch(`/api/rutas/${rutaId}/notificar-fecha-estimada`, {
+    method: "POST",
+  });
+
+  if (!res.ok) {
+    return {
+      success: false,
+      error: res.error || "No se pudo enviar la notificación",
+    };
+  }
+
+  return { success: true, data: res.data };
+}
+
+/**
  * Obtiene el estado de la licencia de un conductor (días para vencer, etc.).
  * Mantiene el contrato de la versión anterior para no romper la UI.
  * @param {string} conductorId

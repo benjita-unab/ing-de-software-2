@@ -1,6 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch } from "../lib/apiClient";
-import { crearRuta } from "../lib/rutasService";
+import {
+  crearRuta,
+  actualizarFechasEstimadas,
+  notificarFechaEstimada,
+} from "../lib/rutasService";
 import { useGooglePlacesAutocomplete } from "../hooks/useGooglePlacesAutocomplete";
 
 const base = {
@@ -85,6 +89,52 @@ const base = {
     cursor: "pointer",
     fontSize: "12px",
   },
+  btnSecondary: {
+    background: "rgba(255,255,255,0.08)",
+    color: "#e2e8f0",
+    border: "1px solid rgba(255,255,255,0.2)",
+    borderRadius: "8px",
+    padding: "6px 10px",
+    fontWeight: 600,
+    cursor: "pointer",
+    fontSize: "11px",
+    marginTop: "6px",
+    display: "block",
+    width: "100%",
+  },
+  btnNotify: {
+    background: "linear-gradient(135deg, #059669, #10b981)",
+    color: "#fff",
+    border: "none",
+    borderRadius: "8px",
+    padding: "6px 10px",
+    fontWeight: 700,
+    cursor: "pointer",
+    fontSize: "11px",
+    marginTop: "6px",
+    display: "block",
+    width: "100%",
+  },
+  dateField: {
+    marginBottom: "8px",
+  },
+  dateFieldLabel: {
+    display: "block",
+    fontSize: "11px",
+    fontWeight: 600,
+    color: "rgba(226,232,240,0.85)",
+    marginBottom: "4px",
+  },
+  dateInput: {
+    width: "100%",
+    padding: "6px 8px",
+    borderRadius: "6px",
+    border: "1px solid rgba(255,255,255,0.15)",
+    background: "rgba(15,23,42,0.65)",
+    color: "#f8fafc",
+    fontSize: "12px",
+    boxSizing: "border-box",
+  },
   label: {
     display: "block",
     fontSize: "12px",
@@ -136,7 +186,33 @@ const base = {
     fontSize: "13px",
     marginBottom: "12px",
   },
+  alertOkRow: {
+    padding: "8px 10px",
+    borderRadius: "8px",
+    background: "rgba(34,197,94,0.15)",
+    border: "1px solid rgba(34,197,94,0.45)",
+    color: "#86efac",
+    fontSize: "11px",
+    marginTop: "8px",
+    lineHeight: 1.4,
+  },
+  alertErrRow: {
+    padding: "8px 10px",
+    borderRadius: "8px",
+    background: "rgba(239,68,68,0.12)",
+    border: "1px solid rgba(248,113,113,0.45)",
+    color: "#fecaca",
+    fontSize: "11px",
+    marginTop: "8px",
+    lineHeight: 1.4,
+  },
 };
+
+function MensajeFilaRuta({ mensaje }) {
+  if (!mensaje?.texto) return null;
+  const style = mensaje.tipo === "ok" ? base.alertOkRow : base.alertErrRow;
+  return <div style={style}>{mensaje.texto}</div>;
+}
 
 function openWazeNavigation(destinoTexto) {
   const q = String(destinoTexto || "").trim();
@@ -167,6 +243,20 @@ function fmtDate(iso) {
   }
 }
 
+function toInputDate(val) {
+  if (!val) return "";
+  const s = String(val).slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : "";
+}
+
+function fechasFromRuta(ruta) {
+  return {
+    inicio: toInputDate(ruta?.fecha_estimada_inicio),
+    fin: toInputDate(ruta?.fecha_estimada_fin),
+    entrega: toInputDate(ruta?.fecha_estimada_entrega),
+  };
+}
+
 export default function RutasActivas() {
   const [rutas, setRutas] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -177,6 +267,10 @@ export default function RutasActivas() {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [mensaje, setMensaje] = useState(null);
+  const [mensajesRuta, setMensajesRuta] = useState({});
+  const [fechasEdit, setFechasEdit] = useState({});
+  const [savingFechasId, setSavingFechasId] = useState(null);
+  const [notifyingId, setNotifyingId] = useState(null);
 
   const [form, setForm] = useState({
     clienteId: "",
@@ -215,6 +309,11 @@ export default function RutasActivas() {
     const payload = res.data;
     const lista = Array.isArray(payload) ? payload : payload?.data ?? [];
     setRutas(lista);
+    const fechasMap = {};
+    lista.forEach((r) => {
+      fechasMap[r.id] = fechasFromRuta(r);
+    });
+    setFechasEdit(fechasMap);
     setLoading(false);
   }, []);
 
@@ -300,6 +399,83 @@ export default function RutasActivas() {
       eta: "",
     });
     setShowForm(false);
+    await cargarRutas();
+  };
+
+  const actualizarFechaRuta = (rutaId, campo, valor) => {
+    setFechasEdit((prev) => ({
+      ...prev,
+      [rutaId]: { ...(prev[rutaId] || fechasFromRuta({})), [campo]: valor },
+    }));
+  };
+
+  const setMensajeRuta = (rutaId, scope, payload) => {
+    setMensajesRuta((prev) => ({
+      ...prev,
+      [rutaId]: { ...(prev[rutaId] || {}), [scope]: payload },
+    }));
+  };
+
+  const limpiarMensajeRuta = (rutaId, scope) => {
+    setMensajesRuta((prev) => {
+      const actual = { ...(prev[rutaId] || {}) };
+      delete actual[scope];
+      if (Object.keys(actual).length === 0) {
+        const next = { ...prev };
+        delete next[rutaId];
+        return next;
+      }
+      return { ...prev, [rutaId]: actual };
+    });
+  };
+
+  const guardarFechasRuta = async (rutaId) => {
+    const f = fechasEdit[rutaId] || {};
+    limpiarMensajeRuta(rutaId, "fechas");
+    limpiarMensajeRuta(rutaId, "notificar");
+    setSavingFechasId(rutaId);
+    const res = await actualizarFechasEstimadas(rutaId, {
+      fecha_estimada_inicio: f.inicio,
+      fecha_estimada_fin: f.fin,
+      fecha_estimada_entrega: f.entrega,
+    });
+    setSavingFechasId(null);
+    if (!res.success) {
+      setMensajeRuta(rutaId, "fechas", {
+        tipo: "error",
+        texto: res.error || "No se pudieron guardar las fechas estimadas.",
+      });
+      return;
+    }
+    setMensajeRuta(rutaId, "fechas", {
+      tipo: "ok",
+      texto: "Fechas estimadas guardadas.",
+    });
+    await cargarRutas();
+  };
+
+  const enviarNotificacionRuta = async (rutaId) => {
+    limpiarMensajeRuta(rutaId, "notificar");
+    limpiarMensajeRuta(rutaId, "fechas");
+    setNotifyingId(rutaId);
+    const res = await notificarFechaEstimada(rutaId);
+    setNotifyingId(null);
+    if (!res.success) {
+      setMensajeRuta(rutaId, "notificar", {
+        tipo: "error",
+        texto: res.error || "No se pudo enviar la notificación.",
+      });
+      return;
+    }
+    const refResend = res.data?.resendId
+      ? ` (ref. Resend: ${res.data.resendId})`
+      : "";
+    setMensajeRuta(rutaId, "notificar", {
+      tipo: "ok",
+      texto:
+        (res.data?.message ||
+          "Notificación de fecha estimada enviada correctamente.") + refResend,
+    });
     await cargarRutas();
   };
 
@@ -469,6 +645,7 @@ export default function RutasActivas() {
                   <th style={base.th}>Estado</th>
                   <th style={base.th}>Conductor / Camión</th>
                   <th style={base.th}>ETA</th>
+                  <th style={base.th}>Fechas estimadas</th>
                   <th style={base.th}>Acciones</th>
                 </tr>
               </thead>
@@ -489,6 +666,81 @@ export default function RutasActivas() {
                     </td>
                     <td style={base.td}>{fmtDate(ruta.eta)}</td>
                     <td style={base.td}>
+                      <div style={base.dateField}>
+                        <label style={base.dateFieldLabel} htmlFor={`fecha-inicio-${ruta.id}`}>
+                          Inicio rango estimado
+                        </label>
+                        <input
+                          id={`fecha-inicio-${ruta.id}`}
+                          type="date"
+                          style={base.dateInput}
+                          value={(fechasEdit[ruta.id] || fechasFromRuta(ruta)).inicio}
+                          onChange={(e) =>
+                            actualizarFechaRuta(ruta.id, "inicio", e.target.value)
+                          }
+                        />
+                      </div>
+                      <div style={base.dateField}>
+                        <label style={base.dateFieldLabel} htmlFor={`fecha-fin-${ruta.id}`}>
+                          Fin rango estimado
+                        </label>
+                        <input
+                          id={`fecha-fin-${ruta.id}`}
+                          type="date"
+                          style={base.dateInput}
+                          value={(fechasEdit[ruta.id] || fechasFromRuta(ruta)).fin}
+                          onChange={(e) =>
+                            actualizarFechaRuta(ruta.id, "fin", e.target.value)
+                          }
+                        />
+                      </div>
+                      <div style={base.dateField}>
+                        <label style={base.dateFieldLabel} htmlFor={`fecha-entrega-${ruta.id}`}>
+                          Día estimado de entrega
+                        </label>
+                        <input
+                          id={`fecha-entrega-${ruta.id}`}
+                          type="date"
+                          style={base.dateInput}
+                          value={(fechasEdit[ruta.id] || fechasFromRuta(ruta)).entrega}
+                          onChange={(e) =>
+                            actualizarFechaRuta(ruta.id, "entrega", e.target.value)
+                          }
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        style={base.btnSecondary}
+                        disabled={savingFechasId === ruta.id}
+                        onClick={() => guardarFechasRuta(ruta.id)}
+                      >
+                        {savingFechasId === ruta.id ? "Guardando…" : "Guardar fechas"}
+                      </button>
+                      <MensajeFilaRuta mensaje={mensajesRuta[ruta.id]?.fechas} />
+                      {ruta.notificacion_fecha_estimada_enviada_at && (
+                        <div
+                          style={{
+                            fontSize: "10px",
+                            color: "#86efac",
+                            marginTop: "4px",
+                          }}
+                        >
+                          Notificado:{" "}
+                          {fmtDate(ruta.notificacion_fecha_estimada_enviada_at)}
+                        </div>
+                      )}
+                    </td>
+                    <td style={base.td}>
+                      <button
+                        type="button"
+                        style={base.btnNotify}
+                        disabled={notifyingId === ruta.id}
+                        onClick={() => enviarNotificacionRuta(ruta.id)}
+                      >
+                        {notifyingId === ruta.id
+                          ? "Enviando…"
+                          : "Notificar fecha estimada"}
+                      </button>
                       <button
                         type="button"
                         style={base.btnWaze}
@@ -497,6 +749,7 @@ export default function RutasActivas() {
                       >
                         Abrir en Waze
                       </button>
+                      <MensajeFilaRuta mensaje={mensajesRuta[ruta.id]?.notificar} />
                     </td>
                   </tr>
                 ))}

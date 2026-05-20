@@ -112,6 +112,34 @@ export class RutasController {
   }
 
   /**
+   * PATCH /api/rutas/:id/fechas-estimadas
+   * HU-9: guarda rango y día estimado de entrega.
+   */
+  @Patch(':id/fechas-estimadas')
+  @UseGuards(JwtGuard)
+  async updateFechasEstimadas(
+    @Param('id') rutaId: string,
+    @Body()
+    body: {
+      fecha_estimada_inicio: string;
+      fecha_estimada_fin: string;
+      fecha_estimada_entrega: string;
+    },
+  ) {
+    return await this.rutasService.updateFechasEstimadas(rutaId, body);
+  }
+
+  /**
+   * POST /api/rutas/:id/notificar-fecha-estimada
+   * HU-9: envía correo al cliente con fechas estimadas de entrega.
+   */
+  @Post(':id/notificar-fecha-estimada')
+  @UseGuards(JwtGuard)
+  async notificarFechaEstimada(@Param('id') rutaId: string) {
+    return await this.rutasService.notificarFechaEstimada(rutaId);
+  }
+
+  /**
    * GET /api/rutas
    * Lista rutas con filtros opcionales
    */
