@@ -23,6 +23,7 @@ type RutaApi = {
   estado?: string | null;
   origen?: string | null;
   destino?: string | null;
+  bultos_despachados?: number | null;
 };
 
 /** UUID pueden llegar con distinta capitalización desde API vs estado local */
@@ -161,6 +162,9 @@ export default function HomeScreen() {
   );
 
   const rutasMemo = useMemo(() => rutasOperativas, [rutasOperativas]);
+  const rutaActiva = rutaActivaId
+    ? rutasMemo.find((ruta) => mismoId(ruta.id, rutaActivaId))
+    : undefined;
 
   /** Referencia estable por fila → no recrea el callback en cada render del map */
   const onPressPorRutaId = useMemo(() => {
@@ -311,6 +315,7 @@ export default function HomeScreen() {
                 <TiemposInspeccionBotones rutaId={rutaActivaId} />
                 <BotonCerrarDespacho
                   rutaId={rutaActivaId}
+                  bultosDespachadosOriginal={rutaActiva?.bultos_despachados ?? null}
                   onDespachoFinalizado={alFinalizarDespachoExitoso}
                 />
               </>
