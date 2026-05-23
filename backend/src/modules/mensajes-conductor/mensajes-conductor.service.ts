@@ -31,6 +31,13 @@ export class MensajesConductorService {
     return tipo as (typeof VALID_TIPOS)[number];
   }
 
+  private static readonly VALID_MENSAJES = [
+    'Emergencia',
+    'Problema Mecánico',
+    'Detencion por tráfico',
+    'Detencion por inspeccion',
+  ] as const;
+
   private validatePrioridad(value: unknown) {
     const prioridad = String(value ?? '').trim().toUpperCase();
     if (!VALID_PRIORIDADES.includes(prioridad as any)) {
@@ -39,6 +46,19 @@ export class MensajesConductorService {
       );
     }
     return prioridad as (typeof VALID_PRIORIDADES)[number];
+  }
+
+  private validateMensaje(value: unknown) {
+    const mensaje = String(value ?? '').trim();
+    if (!mensaje) {
+      throw new BadRequestException('mensaje es obligatorio');
+    }
+    if (!MensajesConductorService.VALID_MENSAJES.includes(mensaje as any)) {
+      throw new BadRequestException(
+        `Mensaje inválido. Valores permitidos: ${MensajesConductorService.VALID_MENSAJES.join(', ')}`,
+      );
+    }
+    return mensaje;
   }
 
   private validateTimestamp(value: unknown) {
@@ -78,7 +98,7 @@ export class MensajesConductorService {
   }) {
     const id = this.validateString(body.id, 'id');
     const rutaId = this.validateString(body.ruta_id, 'ruta_id');
-    const mensaje = this.validateString(body.mensaje, 'mensaje');
+    const mensaje = this.validateMensaje(body.mensaje);
     const tipo = this.validateTipo(body.tipo);
     const prioridad = this.validatePrioridad(body.prioridad);
     const timestamp_evento = this.validateTimestamp(body.timestamp_evento);

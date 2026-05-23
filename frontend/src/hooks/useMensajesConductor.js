@@ -1,6 +1,13 @@
 import { useEffect, useState, useCallback } from 'react';
 import { apiFetch } from '../lib/apiClient';
 
+const ALLOWED_CONDUCTOR_MESSAGES = new Set([
+  'Emergencia',
+  'Problema Mecánico',
+  'Detencion por tráfico',
+  'Detencion por inspeccion',
+]);
+
 function mapMensaje(row) {
   return {
     id: row.id,
@@ -14,6 +21,10 @@ function mapMensaje(row) {
     acknowledged: row.acknowledged ?? false,
     created_at: row.created_at || new Date().toISOString(),
   };
+}
+
+function isAllowedMensaje(mensaje) {
+  return ALLOWED_CONDUCTOR_MESSAGES.has(String(mensaje ?? '').trim());
 }
 
 function rutaLabelFromApi(ruta = {}, fallbackId = 'Sin ruta') {
@@ -99,7 +110,10 @@ export function useMensajesConductor() {
         throw new Error(res.error || `HTTP ${res.status}`);
       }
       const data = Array.isArray(res.data) ? res.data : res.data?.data || [];
-      setMensajes(sortMensajes(data.map(mapMensaje)));
+      const mensajes = data
+        .map(mapMensaje)
+        .filter((mensaje) => isAllowedMensaje(mensaje.mensaje));
+      setMensajes(sortMensajes(mensajes));
     } catch (error) {
       console.error('Error cargando mensajes de conductor:', error?.message || error);
       setError(error?.message || 'Error al cargar mensajes');
