@@ -8,7 +8,11 @@ import {
   Param,
   Query,
 } from '@nestjs/common';
-import { RutasService, CreateRutaDto } from './rutas.service';
+import {
+  RutasService,
+  CreateRutaDto,
+  EstimarFechasDto,
+} from './rutas.service';
 import { JwtGuard } from '../../common/guards/jwt.guard';
 import { CurrentUser } from '../../common/decorators/user.decorator';
 
@@ -24,6 +28,16 @@ export class RutasController {
   @UseGuards(JwtGuard)
   async createRoute(@Body() body: CreateRutaDto) {
     return await this.rutasService.createRoute(body);
+  }
+
+  /**
+   * POST /api/rutas/estimar-fechas
+   * HU-24: distancia vial (Google Routes) y fechas estimadas propuestas.
+   */
+  @Post('estimar-fechas')
+  @UseGuards(JwtGuard)
+  async estimarFechas(@Body() body: EstimarFechasDto) {
+    return await this.rutasService.estimarFechas(body);
   }
 
   /**
@@ -124,6 +138,7 @@ export class RutasController {
       fecha_estimada_inicio: string;
       fecha_estimada_fin: string;
       fecha_estimada_entrega: string;
+      distancia_km?: number | string | null;
     },
   ) {
     return await this.rutasService.updateFechasEstimadas(rutaId, body);
