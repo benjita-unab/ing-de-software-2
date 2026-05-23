@@ -369,11 +369,11 @@ export default function RutasActivas() {
       !form.bultosDespachos.trim() ||
       Number.isNaN(bultosDespachosValue) ||
       !Number.isInteger(bultosDespachosValue) ||
-      bultosDespachosValue < 0
+      bultosDespachosValue < 1
     ) {
       setSaving(false);
       window.alert(
-        "El campo 'Cantidad de Bultos a Despachar' es obligatorio y debe ser un número entero mayor o igual a 0.",
+        "El campo Cantidad de Bultos a Despachar es obligatorio y debe ser un número entero mayor o igual a 1.",
       );
       return;
     }
@@ -641,7 +641,7 @@ export default function RutasActivas() {
                 <input
                   style={base.input}
                   type="number"
-                  min="0"
+                  min="1"
                   value={form.bultosDespachos}
                   onChange={(e) => actualizarCampo("bultosDespachos", e.target.value)}
                   placeholder="Ej: 25"
