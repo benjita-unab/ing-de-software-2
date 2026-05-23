@@ -1,9 +1,9 @@
-import React, { useRef, useState } from "react";
-import { apiFetch } from "../lib/apiClient";
+import React, { useRef, useState, useEffect } from "react";
 import { formatRut } from "../lib/formatRut";
 import { useGooglePlacesAutocomplete } from "../hooks/useGooglePlacesAutocomplete";
 import { loadGoogleMaps } from "../lib/googleMapsLoader";
 import SelectorCoordenadas from "./SelectorCoordenadas";
+import { createCliente, updateCliente } from "../lib/clientesService";
 
 const base = {
   container: {
@@ -59,7 +59,7 @@ const base = {
   }
 };
 
-export default function FormularioCliente({ onGuardado }) {
+export default function FormularioCliente({ onGuardado, clienteInicial = null, onCancel }) {
   const direccionInputRef = useRef(null);
   const [formData, setFormData] = useState({
     nombre: "",
@@ -70,6 +70,21 @@ export default function FormularioCliente({ onGuardado }) {
     longitud: -70.6693
   });
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+
+  useEffect(() => {
+    if (clienteInicial) {
+      setFormData({
+        nombre: clienteInicial.nombre || "",
+        rut: clienteInicial.rut || "",
+        telefono: clienteInicial.contacto_telefono || "",
+        direccion: clienteInicial.direccion || "",
+        latitud: clienteInicial.latitud || -33.4489,
+        longitud: clienteInicial.longitud || -70.6693,
+      });
+      setErrorMsg("");
+    }
+  }, [clienteInicial]);
 
   const { error: mapsError } = useGooglePlacesAutocomplete(direccionInputRef, {
     onPlaceSelected: (address, place) => {
@@ -126,6 +141,20 @@ export default function FormularioCliente({ onGuardado }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setErrorMsg("");
+    
+    // CA-6 Validaciones de campos obligatorios
+    if (!formData.nombre.trim()) {
+      setErrorMsg("El campo 'Nombre Cliente o Empresa' es obligatorio.");
+      setLoading(false);
+      return;
+    }
+    if (!formData.rut.trim()) {
+      setErrorMsg("El campo 'RUT' es obligatorio.");
+      setLoading(false);
+      return;
+    }
+
     try {
       // La tabla `clientes` NO tiene columnas latitud/longitud,
       // por lo que solo enviamos las columnas reales del schema.
@@ -136,34 +165,25 @@ export default function FormularioCliente({ onGuardado }) {
         direccion: formData.direccion,
       };
 
-      const res = await apiFetch("/api/clientes", {
-        method: "POST",
-        json: payload,
-      });
-
-      if (!res.ok) {
-        if (res.status === 404 || res.status === 0) {
-          alert(
-            "⚠️ Endpoint de clientes no disponible aún en el backend. " +
-            "El cliente no se guardó. Intenta más tarde."
-          );
-          return;
-        }
-        throw new Error(res.error || "Error al guardar cliente");
+      if (clienteInicial && clienteInicial.id) {
+        await updateCliente(clienteInicial.id, payload);
+        alert("✅ Cliente actualizado exitosamente");
+      } else {
+        await createCliente(payload);
+        alert("✅ Cliente guardado exitosamente");
+        setFormData({
+          nombre: "",
+          rut: "",
+          telefono: "",
+          direccion: "",
+          latitud: -33.4489,
+          longitud: -70.6693,
+        });
       }
-
-      alert("✅ Cliente guardado exitosamente");
-      setFormData({
-        nombre: "",
-        rut: "",
-        telefono: "",
-        direccion: "",
-        latitud: -33.4489,
-        longitud: -70.6693,
-      });
+      
       if (onGuardado) onGuardado();
     } catch (err) {
-      alert("❌ Error al guardar cliente: " + err.message);
+      alert("❌ " + err.message);
     } finally {
       setLoading(false);
     }
@@ -186,7 +206,23 @@ export default function FormularioCliente({ onGuardado }) {
 
   return (
     <div style={base.container} className="client-form-card operator-glass-card">
-      <div style={base.title} className="client-form-title">👤 Registrar Nuevo Cliente</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        <div style={{...base.title, marginBottom: 0}} className="client-form-title">
+          {clienteInicial ? "✏️ Editar Cliente" : "👤 Registrar Nuevo Cliente"}
+        </div>
+        {onCancel && (
+          <button type="button" onClick={onCancel} style={{ background: 'transparent', border: 'none', color: '#94A3B8', cursor: 'pointer', fontSize: '14px' }}>
+            ✖ Cerrar
+          </button>
+        )}
+      </div>
+
+      {errorMsg && (
+        <div style={{ background: 'rgba(239, 68, 68, 0.2)', border: '1px solid rgba(239, 68, 68, 0.5)', color: '#FCA5A5', padding: '10px', borderRadius: '8px', marginBottom: '16px', fontSize: '13px' }}>
+          ⚠️ {errorMsg}
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column' }}>
         
         <label style={base.label} className="client-form-label">Nombre Cliente o Empresa</label>

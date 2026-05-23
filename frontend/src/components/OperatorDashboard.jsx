@@ -12,7 +12,7 @@ import MonitoreoLicencias from "./MonitoreoLicencias";
 import AsignacionRutas from "./AsignacionRutas";
 import RutasActivas from "./RutasActivas";
 import GuiasDespacho from "./GuiasDespacho";
-import FormularioCliente from "./FormularioCliente";
+import Clientes from "./Clientes";
 import HistorialDespachos from "./HistorialDespachos";
 import { useAlerts } from "../hooks/useAlerts";
 import { useMensajesConductor } from "../hooks/useMensajesConductor";
@@ -197,8 +197,8 @@ export default function OperatorDashboard({ operator, onSignOut }) {
             ) : activeSection === "asignacion" ? (
               <AsignacionRutas />
             ) : activeSection === "clientes" ? (
-              <div style={{ padding: "10px", height: "100%", overflow: "auto" }} className="premium-scroll operator-section">
-                <FormularioCliente />
+              <div style={{ padding: "10px", height: "100%", overflow: "auto", display: "flex", flexDirection: "column" }} className="premium-scroll operator-section">
+                <Clientes />
               </div>
             ) : activeSection === "historial" ? (
               <HistorialDespachos />
