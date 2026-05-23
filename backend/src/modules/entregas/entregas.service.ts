@@ -25,7 +25,12 @@ export class EntregasService {
    * propaga error si la ruta no existe o si la subida del PDF falla
    * sin alternativas.
    */
-  async closeDelivery(rutaId: string, clienteEmail?: string) {
+  async closeDelivery(
+    rutaId: string,
+    clienteEmail?: string,
+    bultos_recepcionados?: number | null,
+    comentario_diferencia_bultos?: string | null,
+  ) {
     console.log('CLOSE DELIVERY START -> rutaId:', rutaId, 'clienteEmail:', clienteEmail);
 
     if (!rutaId) {
@@ -44,6 +49,7 @@ export class EntregasService {
         origen,
         destino,
         ficha_despacho_url,
+        bultos_despachados,
         clientes(id, nombre, contacto_email),
         conductores(rut),
         camiones(patente)
@@ -120,6 +126,9 @@ export class EntregasService {
           cliente,
           conductor: ruta.conductores,
           camion: ruta.camiones,
+          bultosDespachados: ruta.bultos_despachados ?? null,
+          bultosRecepcionados: bultos_recepcionados ?? null,
+          comentarioDiferenciaBultos: comentario_diferencia_bultos?.trim() || null,
           firmaBuffer,
         });
         console.log('PDF STEP -> PDF generado, bytes:', pdfBuffer?.length ?? 0);
@@ -200,6 +209,24 @@ export class EntregasService {
 
       // ── 7) Marcar entregas como validadas (tolerante al enum) ──
       try {
+        // HU-23 CA-3: Validación estricta de diferencia de bultos
+        // Si bultos_recepcionados != bultos_despachados, comentario DEBE ser válido
+        if (typeof bultos_recepcionados === 'number') {
+          const bultosDespachadosRuta = ruta.bultos_despachados ?? null;
+          if (
+            bultosDespachadosRuta !== null &&
+            bultos_recepcionados !== bultosDespachadosRuta
+          ) {
+            const comentarioTrim = String(comentario_diferencia_bultos || '').trim();
+            if (!comentarioTrim) {
+              throw new BadRequestException(
+                'Justificación obligatoria por diferencia de bultos: ' +
+                  `despachados=${bultosDespachadosRuta}, recepcionados=${bultos_recepcionados}`,
+              );
+            }
+          }
+        }
+
         // Algunos ambientes tienen el enum `estado_entrega` con valor
         // ENTREGADA, otros no lo aceptan. Si el primer intento falla
         // por enum/columna, reintentamos sin la columna `estado`.
@@ -208,6 +235,19 @@ export class EntregasService {
           fecha_entrega_real: new Date().toISOString(),
           estado: 'ENTREGADA',
         };
+
+        // Incluir nuevos campos si fueron provistos por el frontend
+        if (typeof bultos_recepcionados === 'number') {
+          updatePayload.bultos_recepcionados = bultos_recepcionados;
+        }
+        if (
+          comentario_diferencia_bultos != null &&
+          String(comentario_diferencia_bultos).trim() !== ''
+        ) {
+          updatePayload.comentario_diferencia_bultos = String(
+            comentario_diferencia_bultos,
+          ).trim();
+        }
         const { error: updateError } = await supabase
           .from('entregas')
           .update(updatePayload)
@@ -854,6 +894,9 @@ export class EntregasService {
     cliente: any;
     conductor: any;
     camion: any;
+    bultosDespachados?: number | null;
+    bultosRecepcionados?: number | null;
+    comentarioDiferenciaBultos?: string | null;
     firmaBuffer?: Buffer | null;
   }): Promise<Buffer> {
     console.log(
@@ -920,6 +963,22 @@ export class EntregasService {
         ['Vehículo', data.camion?.patente || 'N/A'],
         ['Fecha de inicio', this.formatearFecha(data.fechaInicio)],
         ['Fecha de entrega', this.formatearFecha(data.fechaFin)],
+        [
+          'Bultos Asignados',
+          data.bultosDespachados != null
+            ? String(data.bultosDespachados)
+            : 'No registrado',
+        ],
+        [
+          'Bultos Entregados',
+          data.bultosRecepcionados != null
+            ? String(data.bultosRecepcionados)
+            : 'No registrado',
+        ],
+        [
+          'Observaciones',
+          data.comentarioDiferenciaBultos?.trim() || 'Sin observaciones',
+        ],
         ['Estado validación', 'ENTREGADO – VALIDADO'],
       );
 

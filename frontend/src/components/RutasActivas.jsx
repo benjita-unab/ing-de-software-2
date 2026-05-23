@@ -346,6 +346,7 @@ export default function RutasActivas() {
     distanciaKm: "",
     fechasEstimadas: { ...FECHAS_VACIAS },
     advertenciaEstimacion: "",
+    bultosDespachos: "",
   });
 
   const origenInputRef = useRef(null);
@@ -551,10 +552,25 @@ export default function RutasActivas() {
     setMensaje(null);
     setSaving(true);
 
+    const bultosDespachosValue = Number(form.bultosDespachos);
+    if (
+      !form.bultosDespachos.trim() ||
+      Number.isNaN(bultosDespachosValue) ||
+      !Number.isInteger(bultosDespachosValue) ||
+      bultosDespachosValue < 1
+    ) {
+      setSaving(false);
+      window.alert(
+        "El campo Cantidad de Bultos a Despachar es obligatorio y debe ser un número entero mayor o igual a 1.",
+      );
+      return;
+    }
+
     const payload = {
       cliente_id: form.clienteId.trim(),
       origen: form.origen.trim(),
       destino: form.destino.trim(),
+      bultos_despachados: bultosDespachosValue,
     };
 
     if (form.conductorId.trim()) payload.conductor_id = form.conductorId.trim();
@@ -598,6 +614,7 @@ export default function RutasActivas() {
       distanciaKm: "",
       fechasEstimadas: { ...FECHAS_VACIAS },
       advertenciaEstimacion: "",
+      bultosDespachos: "",
     });
     setShowForm(false);
     await cargarRutas();
@@ -814,6 +831,18 @@ export default function RutasActivas() {
                   type="datetime-local"
                   value={form.eta}
                   onChange={(e) => actualizarCampo("eta", e.target.value)}
+                />
+              </div>
+              <div>
+                <label style={base.label}>Cantidad de Bultos a Despachar *</label>
+                <input
+                  style={base.input}
+                  type="number"
+                  min="1"
+                  required
+                  value={form.bultosDespachos}
+                  onChange={(e) => actualizarCampo("bultosDespachos", e.target.value)}
+                  placeholder="Ej: 25"
                 />
               </div>
               <div style={{ gridColumn: "1 / -1" }}>

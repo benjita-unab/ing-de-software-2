@@ -11,7 +11,9 @@ export type CierreDespachoResultado = {
  * Orquesta el cierre: genera PDF, envía correo al cliente y marca la entrega como validada.
  */
 export async function cerrarDespachoYEnviarComprobante(
-  rutaId: string
+  rutaId: string,
+  bultosRecepcionados?: number | null,
+  comentarioDiferenciaBultos?: string | null,
 ): Promise<CierreDespachoResultado> {
   const id = String(rutaId).trim();
   if (!id) {
@@ -27,12 +29,21 @@ export async function cerrarDespachoYEnviarComprobante(
   }
 
   const email = "oyanadelbastian5@gmail.com";
+  const bodyPayload: Record<string, unknown> = {
+    clienteEmail: email,
+  };
+
+  if (typeof bultosRecepcionados === "number") {
+    bodyPayload.bultos_recepcionados = bultosRecepcionados;
+  }
+  if (comentarioDiferenciaBultos?.trim()) {
+    bodyPayload.comentario_diferencia_bultos = comentarioDiferenciaBultos.trim();
+  }
+
   const response = await bffFetch(`/api/entregas/${id}/close`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      clienteEmail: email,
-    })
+    body: JSON.stringify(bodyPayload),
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {

@@ -26,13 +26,20 @@ export class EntregasController {
   async closeDelivery(
     @Param('rutaId') rutaId: string,
     @CurrentUser('email') userEmail: string,
-    @Body() body?: { clienteEmail?: string },
+    @Body()
+    body?: {
+      clienteEmail?: string;
+      bultos_recepcionados?: number;
+      comentario_diferencia_bultos?: string;
+    },
   ) {
     // TEMP LOG
     console.log('CLOSE DELIVERY -> rutaId:', rutaId, 'body:', body);
     return await this.entregasService.closeDelivery(
       rutaId,
       body?.clienteEmail || userEmail,
+      body?.bultos_recepcionados,
+      body?.comentario_diferencia_bultos,
     );
   }
 
