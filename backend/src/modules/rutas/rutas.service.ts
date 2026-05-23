@@ -19,6 +19,7 @@ export type CreateRutaDto = {
   estado?: string | null;
   fecha_inicio?: string | null;
   eta?: string | null;
+  bultos_despachados?: number | null;
 };
 
 @Injectable()
@@ -151,6 +152,16 @@ export class RutasService {
     }
     if (body.eta != null && String(body.eta).trim() !== '') {
       insert.eta = String(body.eta).trim();
+    }
+
+    // Aceptar bultos_despachados opcional enviado desde el panel web
+    if (body.bultos_despachados != null && String(body.bultos_despachados).trim() !== '') {
+      const raw = body.bultos_despachados;
+      const val = Number(raw);
+      if (!Number.isInteger(val) || val < 0) {
+        throw new BadRequestException('bultos_despachados debe ser un entero no negativo');
+      }
+      insert.bultos_despachados = val;
     }
 
     if (estadoInicial === 'ASIGNADO' && insert.fecha_inicio === undefined) {
@@ -618,6 +629,7 @@ export class RutasService {
       fecha_estimada_entrega,
       notificacion_fecha_estimada_enviada_at,
       notificacion_fecha_estimada_destinatario,
+      bultos_despachados,
       clientes(id, nombre, contacto_email),
       conductores(id, rut),
       camiones(id, patente)

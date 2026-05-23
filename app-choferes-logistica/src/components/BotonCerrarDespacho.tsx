@@ -6,6 +6,8 @@ import {
   StyleSheet,
   View,
   ActivityIndicator,
+  TextInput,
+  Modal,
 } from "react-native";
 import {
   cerrarDespachoYEnviarComprobante,
@@ -17,6 +19,7 @@ import SignatureScreen from "react-native-signature-canvas";
 
 export type BotonCerrarDespachoProps = {
   rutaId: string;
+  bultosDespachadosOriginal?: number | null;
   className?: string;
   etiquetaListo?: string;
   /** Tras cerrar despacho OK en backend (firma + PDF + correo). Limpieza de ruta activa en el padre. */
@@ -87,6 +90,7 @@ function parsearPayloadQR(raw: string): {
 
 export function BotonCerrarDespacho({
   rutaId,
+  bultosDespachadosOriginal = null,
   etiquetaListo: _etiquetaListo = "Cerrar despacho y enviar",
   onDespachoFinalizado,
 }: BotonCerrarDespachoProps) {
@@ -94,7 +98,16 @@ export function BotonCerrarDespacho({
   const [estadoFlujo, setEstadoFlujo] = useState<EstadoFlujo>("inicio");
   const [estadoTexto, setEstadoTexto] = useState("");
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [bultosRecepcionados, setBultosRecepcionados] = useState("");
+  const [comentarioDiferenciaBultos, setComentarioDiferenciaBultos] = useState("");
   const signatureRef = useRef<any>(null);
+
+  const bultosDespachadosOriginalValue =
+    typeof bultosDespachadosOriginal === "number" &&
+    Number.isFinite(bultosDespachadosOriginal) &&
+    bultosDespachadosOriginal >= 0
+      ? bultosDespachadosOriginal
+      : null;
 
   // Guard contra doble lectura del mismo QR (CameraView dispara
   // onBarcodeScanned en cada frame mientras el código siga visible).
@@ -276,7 +289,60 @@ export function BotonCerrarDespacho({
     setEstadoTexto("Generando comprobante y enviando correo...");
 
     try {
-      const resultado = await cerrarDespachoYEnviarComprobante(rutaId);
+      const trimmed = bultosRecepcionados.trim();
+      const bultosRecepcionadosValue =
+        trimmed === "" ? null : parseInt(trimmed, 10);
+
+      if (
+        trimmed !== "" &&
+        (bultosRecepcionadosValue === null ||
+          Number.isNaN(bultosRecepcionadosValue) ||
+          bultosRecepcionadosValue < 0)
+      ) {
+        Alert.alert(
+          "Error",
+          "Cantidad de bultos recepcionados debe ser un número entero no negativo.",
+        );
+        setCargando(false);
+        setEstadoTexto("");
+        return;
+      }
+
+      if (
+        bultosRecepcionadosValue !== null &&
+        bultosDespachadosOriginalValue !== null &&
+        bultosRecepcionadosValue > bultosDespachadosOriginalValue
+      ) {
+        Alert.alert(
+          "Error",
+          "No puede recepcionar más bultos de los despachados",
+        );
+        setCargando(false);
+        setEstadoTexto("");
+        return;
+      }
+
+      const comentarioTrim = comentarioDiferenciaBultos.trim();
+      if (
+        bultosRecepcionadosValue !== null &&
+        bultosDespachadosOriginalValue !== null &&
+        bultosRecepcionadosValue !== bultosDespachadosOriginalValue &&
+        comentarioTrim === ""
+      ) {
+        Alert.alert(
+          "Error",
+          "Justificación obligatoria: debe ingresar un comentario cuando los bultos recibidos difieren de los despachados.",
+        );
+        setCargando(false);
+        setEstadoTexto("");
+        return;
+      }
+
+      const resultado = await cerrarDespachoYEnviarComprobante(
+        rutaId,
+        bultosRecepcionadosValue,
+        comentarioTrim || null,
+      );
 
       setEstadoFlujo("hecho");
       try {
@@ -290,11 +356,21 @@ export function BotonCerrarDespacho({
       );
     } catch (err) {
       console.warn("CIERRE DESPACHO ERROR:", err);
-      const mensaje =
-        err instanceof Error && err.message
-          ? err.message
-          : "No se pudo finalizar el despacho. Inténtalo nuevamente.";
-      Alert.alert("Error al finalizar despacho", mensaje);
+      if (
+        err instanceof Error &&
+        err.message.includes("Justificación obligatoria por diferencia de bultos")
+      ) {
+        Alert.alert(
+          "Error",
+          "Debe ingresar un comentario justificando la diferencia de bultos",
+        );
+      } else {
+        const mensaje =
+          err instanceof Error && err.message
+            ? err.message
+            : "No se pudo finalizar el despacho. Inténtalo nuevamente.";
+        Alert.alert("Error al finalizar despacho", mensaje);
+      }
     } finally {
       cancelarWatchdogLoading();
       setCargando(false);
@@ -311,6 +387,49 @@ export function BotonCerrarDespacho({
   };
 
   const handleSaveSignature = () => {
+    const trimmed = bultosRecepcionados.trim();
+    const bultosRecepcionadosValue =
+      trimmed === "" ? null : parseInt(trimmed, 10);
+
+    if (
+      trimmed !== "" &&
+      (bultosRecepcionadosValue === null ||
+        Number.isNaN(bultosRecepcionadosValue) ||
+        bultosRecepcionadosValue < 0)
+    ) {
+      Alert.alert(
+        "Error",
+        "Cantidad de bultos recepcionados debe ser un número entero no negativo.",
+      );
+      return;
+    }
+
+    if (
+      bultosRecepcionadosValue !== null &&
+      bultosDespachadosOriginalValue !== null &&
+      bultosRecepcionadosValue > bultosDespachadosOriginalValue
+    ) {
+      Alert.alert(
+        "Error",
+        "No puede recepcionar más bultos de los despachados",
+      );
+      return;
+    }
+
+    const comentarioTrim = comentarioDiferenciaBultos.trim();
+    if (
+      bultosRecepcionadosValue !== null &&
+      bultosDespachadosOriginalValue !== null &&
+      bultosRecepcionadosValue !== bultosDespachadosOriginalValue &&
+      comentarioTrim === ""
+    ) {
+      Alert.alert(
+        "Error",
+        "Justificación obligatoria: debe ingresar un comentario cuando los bultos recibidos difieren de los despachados.",
+      );
+      return;
+    }
+
     signatureRef.current?.readSignature();
   };
 
@@ -367,140 +486,120 @@ export function BotonCerrarDespacho({
 
   if (estadoFlujo === "firmar") {
     return (
-      <View style={[styles.container, { height: 500, paddingBottom: 20 }]}>
-        <Text style={styles.instruccionTexto}>Firma del receptor (Cliente)</Text>
-        {cargando ? (
-          <View
-            style={{
-              flex: 1,
-              justifyContent: "center",
-              alignItems: "center",
-              backgroundColor: "#ffffff",
-              borderRadius: 12,
-              marginHorizontal: 5,
-              paddingHorizontal: 24,
-            }}
-          >
-            <ActivityIndicator size="large" color="#1565c0" />
-            <Text
-              style={{
-                marginTop: 16,
-                fontSize: 15,
-                fontWeight: "600",
-                color: "#111827",
-                textAlign: "center",
-              }}
-            >
-              {estadoTexto || "Procesando..."}
-            </Text>
-            <Text
-              style={{
-                marginTop: 8,
-                fontSize: 12,
-                color: "#6b7280",
-                textAlign: "center",
-              }}
-            >
-              No cierre la app. Esto puede tardar hasta dos minutos.
-            </Text>
-          </View>
-        ) : (
-          <>
-            <View
-              style={{
-                flex: 1,
-                borderWidth: 1,
-                borderColor: "#ccc",
-                borderRadius: 8,
-                overflow: "hidden",
-                marginHorizontal: 5,
-                backgroundColor: "#fff",
-              }}
-            >
-              <SignatureScreen
-                ref={signatureRef}
-                onOK={manejarFirmaOK}
-                onEmpty={handleSignatureEmpty}
-                webStyle={`
-                  .m-signature-pad { 
-                    box-shadow: none; 
-                    border: none; 
-                  }
-                  .m-signature-pad--footer {
-                    display: none;
-                    margin: 0px;
-                  }
-                  body, html {
-                    width: 100%; height: 100%; margin: 0; padding: 0;
-                  }
-                `}
-              />
+      <Modal visible transparent={false} animationType="slide">
+        <View style={styles.modalRoot}>
+          <Text style={styles.instruccionTexto}>Firma del receptor (Cliente)</Text>
+          {cargando ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#1565c0" />
+              <Text style={styles.loadingText}>{estadoTexto || "Procesando..."}</Text>
+              <Text style={styles.loadingSubtext}>
+                No cierre la app. Esto puede tardar hasta dos minutos.
+              </Text>
             </View>
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                marginHorizontal: 5,
-                marginTop: 15,
-              }}
-            >
-              <TouchableOpacity
-                style={[
-                  styles.boton,
-                  {
-                    flex: 1,
-                    marginRight: 5,
-                    backgroundColor: "#d32f2f",
-                    paddingVertical: 10,
-                  },
-                ]}
-                onPress={handleClearSignature}
-              >
-                <Text style={[styles.texto, { fontSize: 14 }]}>
-                  Limpiar Pizarra
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.boton,
-                  {
-                    flex: 1,
-                    marginLeft: 5,
-                    backgroundColor: "#2e7d32",
-                    paddingVertical: 10,
-                  },
-                ]}
-                onPress={handleSaveSignature}
-              >
-                <Text style={[styles.texto, { fontSize: 14 }]}>
-                  Guardar Firma
-                </Text>
-              </TouchableOpacity>
-            </View>
-            <TouchableOpacity
-              style={[
-                styles.boton,
-                {
-                  marginTop: 10,
-                  alignSelf: "center",
-                  width: "90%",
-                  backgroundColor: "#9e9e9e",
-                  paddingVertical: 10,
-                },
-              ]}
-              onPress={() => {
-                scannedRef.current = false;
-                alertOpenRef.current = false;
-                setEstadoFlujo("escanearQR");
-              }}
-            >
-              <Text style={styles.texto}>Volver al escáner QR</Text>
-            </TouchableOpacity>
-          </>
-        )}
-      </View>
+          ) : (
+            <>
+              <View style={styles.signatureContainer}>
+                <SignatureScreen
+                  ref={signatureRef}
+                  onOK={manejarFirmaOK}
+                  onEmpty={handleSignatureEmpty}
+                  webStyle={`
+                    .m-signature-pad { 
+                      box-shadow: none; 
+                      border: none; 
+                    }
+                    .m-signature-pad--footer {
+                      display: none;
+                      margin: 0px;
+                    }
+                    body, html {
+                      width: 100%; height: 100%; margin: 0; padding: 0;
+                    }
+                  `}
+                />
+              </View>
+              <View style={styles.bottomContainer}>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Cantidad de Bultos Recepcionados</Text>
+                  <TextInput
+                    style={styles.input}
+                    keyboardType="numeric"
+                    value={bultosRecepcionados}
+                    onChangeText={setBultosRecepcionados}
+                    placeholder="Ej: 10"
+                    placeholderTextColor="#9ca3af"
+                  />
+                </View>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Comentario diferencia de bultos</Text>
+                  <TextInput
+                    style={[styles.input, styles.textarea]}
+                    multiline
+                    numberOfLines={3}
+                    value={comentarioDiferenciaBultos}
+                    onChangeText={setComentarioDiferenciaBultos}
+                    placeholder="Ingrese justificación si los bultos difieren"
+                    placeholderTextColor="#9ca3af"
+                  />
+                </View>
+                <View style={styles.buttonRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.boton,
+                      {
+                        flex: 1,
+                        marginRight: 5,
+                        backgroundColor: "#d32f2f",
+                        paddingVertical: 10,
+                      },
+                    ]}
+                    onPress={handleClearSignature}
+                  >
+                    <Text style={[styles.texto, { fontSize: 14 }]}>Limpiar Pizarra</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.boton,
+                      {
+                        flex: 1,
+                        marginLeft: 5,
+                        backgroundColor: "#2e7d32",
+                        paddingVertical: 10,
+                      },
+                    ]}
+                    onPress={handleSaveSignature}
+                  >
+                    <Text style={[styles.texto, { fontSize: 14 }]}>Guardar Firma</Text>
+                  </TouchableOpacity>
+                </View>
+                <TouchableOpacity
+                  style={[
+                    styles.boton,
+                    {
+                      marginTop: 10,
+                      alignSelf: "center",
+                      width: "90%",
+                      backgroundColor: "#9e9e9e",
+                      paddingVertical: 10,
+                    },
+                  ]}
+                  onPress={() => {
+                    scannedRef.current = false;
+                    alertOpenRef.current = false;
+                    setEstadoFlujo("escanearQR");
+                  }}
+                >
+                  <Text style={styles.texto}>Volver al escáner QR</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+        </View>
+      </Modal>
     );
   }
+
 
   return (
     <View style={styles.container}>
@@ -573,5 +672,72 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontSize: 16,
     fontWeight: "bold",
+  },
+  label: {
+    color: "#111827",
+    fontSize: 14,
+    fontWeight: "600",
+    marginBottom: 6,
+  },
+  input: {
+    backgroundColor: "#ffffff",
+    color: "#111827",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+  },
+  textarea: {
+    minHeight: 90,
+    textAlignVertical: "top",
+  },
+  modalRoot: {
+    flex: 1,
+    backgroundColor: "#f9fafb",
+    paddingTop: 20,
+    paddingHorizontal: 16,
+    justifyContent: "space-between",
+  },
+  signatureContainer: {
+    flex: 1,
+    borderRadius: 16,
+    overflow: "hidden",
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+    marginBottom: 16,
+    minHeight: 320,
+  },
+  bottomContainer: {
+    width: "100%",
+    paddingBottom: 24,
+  },
+  buttonRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 16,
+  },
+  loadingText: {
+    fontSize: 16,
+    marginTop: 14,
+    color: "#111827",
+    textAlign: "center",
+  },
+  loadingSubtext: {
+    fontSize: 13,
+    color: "#4b5563",
+    marginTop: 8,
+    textAlign: "center",
+  },
+  inputGroup: {
+    marginBottom: 12,
   },
 });
