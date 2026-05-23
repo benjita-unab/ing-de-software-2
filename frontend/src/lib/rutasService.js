@@ -210,9 +210,30 @@ export async function actualizarEstadoRuta(rutaId, estado) {
 }
 
 /**
+ * HU-24: distancia vial (Google Routes en backend) y fechas estimadas.
+ * @param {{ origen?: string, destino?: string, distancia_km?: number|string, fecha_inicio?: string, fecha_referencia?: string }} payload
+ */
+export async function estimarFechasEstimadas(payload) {
+  const res = await apiFetch("/api/rutas/estimar-fechas", {
+    method: "POST",
+    json: payload || {},
+  });
+
+  if (!res.ok) {
+    return {
+      success: false,
+      error: res.error || "No se pudo calcular la estimación",
+    };
+  }
+
+  const data = res.data?.data ?? res.data ?? {};
+  return { success: true, data };
+}
+
+/**
  * HU-9: guarda rango y día estimado de entrega (PATCH /api/rutas/:id/fechas-estimadas).
  * @param {string} rutaId
- * @param {{ fecha_estimada_inicio: string, fecha_estimada_fin: string, fecha_estimada_entrega: string }} fechas — YYYY-MM-DD
+ * @param {{ fecha_estimada_inicio: string, fecha_estimada_fin: string, fecha_estimada_entrega: string, distancia_km?: number|string }} fechas — YYYY-MM-DD
  */
 export async function actualizarFechasEstimadas(rutaId, fechas) {
   if (!rutaId) {
@@ -232,13 +253,18 @@ export async function actualizarFechasEstimadas(rutaId, fechas) {
     };
   }
 
+  const json = {
+    fecha_estimada_inicio: fecha_estimada_inicio.trim(),
+    fecha_estimada_fin: fecha_estimada_fin.trim(),
+    fecha_estimada_entrega: fecha_estimada_entrega.trim(),
+  };
+  if (fechas.distancia_km != null && String(fechas.distancia_km).trim() !== "") {
+    json.distancia_km = Number(fechas.distancia_km);
+  }
+
   const res = await apiFetch(`/api/rutas/${rutaId}/fechas-estimadas`, {
     method: "PATCH",
-    json: {
-      fecha_estimada_inicio: fecha_estimada_inicio.trim(),
-      fecha_estimada_fin: fecha_estimada_fin.trim(),
-      fecha_estimada_entrega: fecha_estimada_entrega.trim(),
-    },
+    json,
   });
 
   if (!res.ok) {

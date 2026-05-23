@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch } from "../lib/apiClient";
 import {
   crearRuta,
+  estimarFechasEstimadas,
   actualizarFechasEstimadas,
   notificarFechaEstimada,
 } from "../lib/rutasService";
@@ -206,13 +207,45 @@ const base = {
     marginTop: "8px",
     lineHeight: 1.4,
   },
+  alertWarnRow: {
+    padding: "8px 10px",
+    borderRadius: "8px",
+    background: "rgba(234,179,8,0.12)",
+    border: "1px solid rgba(250,204,21,0.45)",
+    color: "#fde68a",
+    fontSize: "11px",
+    marginTop: "8px",
+    lineHeight: 1.4,
+  },
+  alertWarn: {
+    padding: "10px 14px",
+    borderRadius: "10px",
+    background: "rgba(234,179,8,0.12)",
+    border: "1px solid rgba(250,204,21,0.45)",
+    color: "#fde68a",
+    fontSize: "13px",
+    marginBottom: "12px",
+  },
 };
 
 function MensajeFilaRuta({ mensaje }) {
   if (!mensaje?.texto) return null;
-  const style = mensaje.tipo === "ok" ? base.alertOkRow : base.alertErrRow;
+  const style =
+    mensaje.tipo === "ok"
+      ? base.alertOkRow
+      : mensaje.tipo === "warn"
+        ? base.alertWarnRow
+        : base.alertErrRow;
   return <div style={style}>{mensaje.texto}</div>;
 }
+
+const FECHAS_VACIAS = { inicio: "", fin: "", entrega: "" };
+
+const AYUDA_DISTANCIA_VIAL =
+  "La distancia se calcula por carretera usando origen y destino. Puede ajustarse manualmente por criterio operativo.";
+
+const ADVERTENCIA_DISTANCIA_VIAL =
+  "No se pudo calcular la distancia vial automáticamente. Ingrese la distancia manualmente o revise origen/destino.";
 
 function openWazeNavigation(destinoTexto) {
   const q = String(destinoTexto || "").trim();
@@ -254,7 +287,35 @@ function fechasFromRuta(ruta) {
     inicio: toInputDate(ruta?.fecha_estimada_inicio),
     fin: toInputDate(ruta?.fecha_estimada_fin),
     entrega: toInputDate(ruta?.fecha_estimada_entrega),
+    distanciaKm:
+      ruta?.distancia_km != null && ruta.distancia_km !== ""
+        ? String(ruta.distancia_km)
+        : "",
   };
+}
+
+function buildEstimarPayload({ origen, destino, distanciaKm, fechaInicioIso }) {
+  const payload = {};
+  const o = String(origen ?? "").trim();
+  const d = String(destino ?? "").trim();
+  if (o) payload.origen = o;
+  if (d) payload.destino = d;
+  const km = String(distanciaKm ?? "").trim();
+  if (km !== "") payload.distancia_km = Number(km);
+  if (fechaInicioIso) payload.fecha_inicio = fechaInicioIso;
+  return payload;
+}
+
+function mensajeEstimacionOk(data) {
+  const km = data?.distancia_km;
+  const ref = data?.fecha_referencia;
+  if (data?.distancia_origen === "google_routes" && data?.duracion_minutos != null) {
+    return `Distancia vial: ${km} km (~${data.duracion_minutos} min). Fechas calculadas (ref. ${ref}). Revise y guarde.`;
+  }
+  if (data?.distancia_origen === "manual") {
+    return `Fechas recalculadas con distancia manual (${km} km, ref. ${ref}). Revise y guarde.`;
+  }
+  return `Estimación lista (${km} km, ref. ${ref}). Revise y guarde.`;
 }
 
 export default function RutasActivas() {
@@ -271,6 +332,8 @@ export default function RutasActivas() {
   const [fechasEdit, setFechasEdit] = useState({});
   const [savingFechasId, setSavingFechasId] = useState(null);
   const [notifyingId, setNotifyingId] = useState(null);
+  const [calculandoEstimacion, setCalculandoEstimacion] = useState(false);
+  const [calculandoEstimacionRutaId, setCalculandoEstimacionRutaId] = useState(null);
 
   const [form, setForm] = useState({
     clienteId: "",
@@ -280,6 +343,9 @@ export default function RutasActivas() {
     destino: "",
     fechaInicio: "",
     eta: "",
+    distanciaKm: "",
+    fechasEstimadas: { ...FECHAS_VACIAS },
+    advertenciaEstimacion: "",
     bultosDespachos: "",
   });
 
@@ -359,6 +425,128 @@ export default function RutasActivas() {
     setForm((prev) => ({ ...prev, [campo]: valor }));
   };
 
+  const actualizarFechaForm = (campo, valor) => {
+    setForm((prev) => ({
+      ...prev,
+      fechasEstimadas: { ...prev.fechasEstimadas, [campo]: valor },
+    }));
+  };
+
+  const calcularDistanciaYFechasForm = async () => {
+    setForm((prev) => ({ ...prev, advertenciaEstimacion: "" }));
+    const tieneKm = String(form.distanciaKm ?? "").trim() !== "";
+    if (!tieneKm && (!form.origen.trim() || !form.destino.trim())) {
+      setForm((prev) => ({
+        ...prev,
+        advertenciaEstimacion:
+          "Indique origen y destino para calcular la distancia vial, o ingrese la distancia manualmente.",
+      }));
+      return;
+    }
+
+    setCalculandoEstimacion(true);
+    const fi = localDatetimeToIso(form.fechaInicio);
+    const res = await estimarFechasEstimadas(
+      buildEstimarPayload({
+        origen: form.origen,
+        destino: form.destino,
+        distanciaKm: tieneKm ? form.distanciaKm : "",
+        fechaInicioIso: fi,
+      }),
+    );
+    setCalculandoEstimacion(false);
+
+    if (!res.success) {
+      setForm((prev) => ({
+        ...prev,
+        advertenciaEstimacion: res.error || ADVERTENCIA_DISTANCIA_VIAL,
+      }));
+      return;
+    }
+
+    const data = res.data;
+    if (!data?.ok) {
+      setForm((prev) => ({
+        ...prev,
+        advertenciaEstimacion: data?.advertencia || ADVERTENCIA_DISTANCIA_VIAL,
+      }));
+      return;
+    }
+
+    setForm((prev) => ({
+      ...prev,
+      advertenciaEstimacion: "",
+      distanciaKm:
+        data.distancia_km != null ? String(data.distancia_km) : prev.distanciaKm,
+      fechasEstimadas: {
+        inicio: data.fecha_estimada_inicio || "",
+        fin: data.fecha_estimada_fin || "",
+        entrega: data.fecha_estimada_entrega || "",
+      },
+    }));
+  };
+
+  const calcularDistanciaYFechasRuta = async (ruta) => {
+    const rutaId = ruta.id;
+    limpiarMensajeRuta(rutaId, "estimacion");
+    const edit = fechasEdit[rutaId] || fechasFromRuta(ruta);
+    const tieneKm = String(edit.distanciaKm ?? "").trim() !== "";
+    if (
+      !tieneKm &&
+      (!String(ruta.origen || "").trim() || !String(ruta.destino || "").trim())
+    ) {
+      setMensajeRuta(rutaId, "estimacion", {
+        tipo: "warn",
+        texto:
+          "La ruta no tiene origen/destino para calcular distancia vial. Ingrese distancia manualmente.",
+      });
+      return;
+    }
+
+    setCalculandoEstimacionRutaId(rutaId);
+    const res = await estimarFechasEstimadas(
+      buildEstimarPayload({
+        origen: ruta.origen,
+        destino: ruta.destino,
+        distanciaKm: tieneKm ? edit.distanciaKm : "",
+        fechaInicioIso: ruta.fecha_inicio || null,
+      }),
+    );
+    setCalculandoEstimacionRutaId(null);
+
+    if (!res.success) {
+      setMensajeRuta(rutaId, "estimacion", {
+        tipo: "warn",
+        texto: res.error || ADVERTENCIA_DISTANCIA_VIAL,
+      });
+      return;
+    }
+
+    const data = res.data;
+    if (!data?.ok) {
+      setMensajeRuta(rutaId, "estimacion", {
+        tipo: "warn",
+        texto: data?.advertencia || ADVERTENCIA_DISTANCIA_VIAL,
+      });
+      return;
+    }
+
+    setFechasEdit((prev) => ({
+      ...prev,
+      [rutaId]: {
+        inicio: data.fecha_estimada_inicio || "",
+        fin: data.fecha_estimada_fin || "",
+        entrega: data.fecha_estimada_entrega || "",
+        distanciaKm:
+          data.distancia_km != null ? String(data.distancia_km) : edit.distanciaKm,
+      },
+    }));
+    setMensajeRuta(rutaId, "estimacion", {
+      tipo: "ok",
+      texto: mensajeEstimacionOk(data),
+    });
+  };
+
   const enviarFormulario = async (e) => {
     e.preventDefault();
     setMensaje(null);
@@ -393,12 +581,14 @@ export default function RutasActivas() {
     if (fi) payload.fecha_inicio = fi;
     if (eta) payload.eta = eta;
 
-    // HU-23: Incluir cantidad de bultos despachados si se proporciona
-    if (form.bultosDespachos.trim()) {
-      const bultos = parseInt(form.bultosDespachos, 10);
-      if (!isNaN(bultos) && bultos >= 0) {
-        payload.bultos_despachados = bultos;
-      }
+    const { inicio, fin, entrega } = form.fechasEstimadas;
+    if (inicio?.trim() && fin?.trim() && entrega?.trim()) {
+      payload.fecha_estimada_inicio = inicio.trim();
+      payload.fecha_estimada_fin = fin.trim();
+      payload.fecha_estimada_entrega = entrega.trim();
+    }
+    if (String(form.distanciaKm ?? "").trim() !== "") {
+      payload.distancia_km = Number(form.distanciaKm);
     }
 
     const resultado = await crearRuta(payload);
@@ -421,6 +611,9 @@ export default function RutasActivas() {
       destino: "",
       fechaInicio: "",
       eta: "",
+      distanciaKm: "",
+      fechasEstimadas: { ...FECHAS_VACIAS },
+      advertenciaEstimacion: "",
       bultosDespachos: "",
     });
     setShowForm(false);
@@ -459,11 +652,15 @@ export default function RutasActivas() {
     limpiarMensajeRuta(rutaId, "fechas");
     limpiarMensajeRuta(rutaId, "notificar");
     setSavingFechasId(rutaId);
-    const res = await actualizarFechasEstimadas(rutaId, {
+    const body = {
       fecha_estimada_inicio: f.inicio,
       fecha_estimada_fin: f.fin,
       fecha_estimada_entrega: f.entrega,
-    });
+    };
+    if (String(f.distanciaKm ?? "").trim() !== "") {
+      body.distancia_km = f.distanciaKm;
+    }
+    const res = await actualizarFechasEstimadas(rutaId, body);
     setSavingFechasId(null);
     if (!res.success) {
       setMensajeRuta(rutaId, "fechas", {
@@ -642,10 +839,92 @@ export default function RutasActivas() {
                   style={base.input}
                   type="number"
                   min="1"
+                  required
                   value={form.bultosDespachos}
                   onChange={(e) => actualizarCampo("bultosDespachos", e.target.value)}
                   placeholder="Ej: 25"
                 />
+              </div>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <label style={base.label}>Distancia vial calculada (km)</label>
+                <p style={{ ...base.subtitle, marginTop: 0, marginBottom: "8px", fontSize: "12px" }}>
+                  {AYUDA_DISTANCIA_VIAL}
+                </p>
+                <input
+                  style={base.input}
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value={form.distanciaKm}
+                  onChange={(e) => actualizarCampo("distanciaKm", e.target.value)}
+                  placeholder="Vacío = calcular por carretera con origen y destino"
+                />
+              </div>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: "10px",
+                    alignItems: "center",
+                    marginTop: "8px",
+                  }}
+                >
+                  <span style={{ fontWeight: 700, color: "#e2e8f0", fontSize: "13px" }}>
+                    Fechas estimadas de entrega
+                  </span>
+                  <button
+                    type="button"
+                    style={base.btnSecondary}
+                    disabled={calculandoEstimacion || saving}
+                    onClick={calcularDistanciaYFechasForm}
+                  >
+                    {calculandoEstimacion
+                      ? "Calculando…"
+                      : "Calcular distancia y fechas"}
+                  </button>
+                </div>
+                {form.advertenciaEstimacion && (
+                  <div style={{ ...base.alertWarn, marginTop: "10px" }}>
+                    {form.advertenciaEstimacion}
+                  </div>
+                )}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
+                    gap: "10px",
+                    marginTop: "10px",
+                  }}
+                >
+                  <div style={base.dateField}>
+                    <label style={base.dateFieldLabel}>Inicio rango estimado</label>
+                    <input
+                      type="date"
+                      style={base.dateInput}
+                      value={form.fechasEstimadas.inicio}
+                      onChange={(e) => actualizarFechaForm("inicio", e.target.value)}
+                    />
+                  </div>
+                  <div style={base.dateField}>
+                    <label style={base.dateFieldLabel}>Fin rango estimado</label>
+                    <input
+                      type="date"
+                      style={base.dateInput}
+                      value={form.fechasEstimadas.fin}
+                      onChange={(e) => actualizarFechaForm("fin", e.target.value)}
+                    />
+                  </div>
+                  <div style={base.dateField}>
+                    <label style={base.dateFieldLabel}>Día estimado de entrega</label>
+                    <input
+                      type="date"
+                      style={base.dateInput}
+                      value={form.fechasEstimadas.entrega}
+                      onChange={(e) => actualizarFechaForm("entrega", e.target.value)}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
             <div style={{ marginTop: "18px", display: "flex", gap: "12px", alignItems: "center" }}>
@@ -702,6 +981,34 @@ export default function RutasActivas() {
                     </td>
                     <td style={base.td}>{fmtDate(ruta.eta)}</td>
                     <td style={base.td}>
+                      <div style={base.dateField}>
+                        <label style={base.dateFieldLabel} htmlFor={`distancia-${ruta.id}`}>
+                          Distancia vial calculada (km)
+                        </label>
+                        <input
+                          id={`distancia-${ruta.id}`}
+                          type="number"
+                          min="0"
+                          step="0.1"
+                          style={base.dateInput}
+                          value={(fechasEdit[ruta.id] || fechasFromRuta(ruta)).distanciaKm}
+                          onChange={(e) =>
+                            actualizarFechaRuta(ruta.id, "distanciaKm", e.target.value)
+                          }
+                          placeholder="Vacío = Google Routes"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        style={{ ...base.btnSecondary, marginTop: 0, marginBottom: "8px" }}
+                        disabled={calculandoEstimacionRutaId === ruta.id}
+                        onClick={() => calcularDistanciaYFechasRuta(ruta)}
+                      >
+                        {calculandoEstimacionRutaId === ruta.id
+                          ? "Calculando…"
+                          : "Calcular distancia y fechas"}
+                      </button>
+                      <MensajeFilaRuta mensaje={mensajesRuta[ruta.id]?.estimacion} />
                       <div style={base.dateField}>
                         <label style={base.dateFieldLabel} htmlFor={`fecha-inicio-${ruta.id}`}>
                           Inicio rango estimado

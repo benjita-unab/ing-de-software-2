@@ -8,6 +8,7 @@ import {
 import { SupabaseConfigService } from '../../config/supabase.config';
 import { ConductoresService } from '../conductores/conductores.service';
 import { EmailService } from '../email/email.service';
+import { calcularDistanciaVialGoogle } from './google-routes-distance.helper';
 
 /** Cuerpo esperado por POST /api/rutas (validación en createRoute). */
 export type CreateRutaDto = {
@@ -19,8 +20,36 @@ export type CreateRutaDto = {
   estado?: string | null;
   fecha_inicio?: string | null;
   eta?: string | null;
-  bultos_despachados?: number | null;
+  distancia_km?: number | string | null;
+  fecha_estimada_inicio?: string | null;
+  fecha_estimada_fin?: string | null;
+  fecha_estimada_entrega?: string | null;
+  bultos_despachados?: number | string | null;
 };
+
+/** POST /api/rutas/estimar-fechas (HU-24). */
+export type EstimarFechasDto = {
+  origen?: string | null;
+  destino?: string | null;
+  distancia_km?: number | string | null;
+  fecha_referencia?: string | null;
+  fecha_inicio?: string | null;
+};
+
+export type EstimarFechasResult = {
+  ok: boolean;
+  distancia_km?: number;
+  distancia_origen?: 'manual' | 'google_routes';
+  duracion_minutos?: number | null;
+  fecha_referencia?: string;
+  fecha_estimada_inicio?: string;
+  fecha_estimada_fin?: string;
+  fecha_estimada_entrega?: string;
+  advertencia?: string;
+};
+
+const ADVERTENCIA_DISTANCIA_VIAL =
+  'No se pudo calcular la distancia vial automáticamente. Ingrese la distancia manualmente o revise origen/destino.';
 
 @Injectable()
 export class RutasService {
@@ -79,6 +108,133 @@ export class RutasService {
         'El día estimado debe estar entre la fecha de inicio y la fecha de fin del rango.',
       );
     }
+  }
+
+  private parseNumeroOpcional(value: unknown): number | null {
+    if (value == null || String(value).trim() === '') return null;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  private parseDistanciaKm(value: unknown): number | null {
+    const n = this.parseNumeroOpcional(value);
+    if (n == null || n < 0) return null;
+    return Math.round(n * 100) / 100;
+  }
+
+  private addDaysDateOnly(isoDate: string, days: number): string {
+    const [y, m, d] = isoDate.split('-').map((x) => Number(x));
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    dt.setUTCDate(dt.getUTCDate() + days);
+    return dt.toISOString().slice(0, 10);
+  }
+
+  /** fecha_inicio del formulario/ruta; si no, fecha_referencia; si no, hoy. */
+  private resolveFechaReferencia(body: {
+    fecha_inicio?: string | null;
+    fecha_referencia?: string | null;
+  }): string {
+    const desdeInicio =
+      body.fecha_inicio != null && String(body.fecha_inicio).trim() !== ''
+        ? this.parseDateOnly(body.fecha_inicio)
+        : null;
+    if (desdeInicio) return desdeInicio;
+
+    const explicita =
+      body.fecha_referencia != null &&
+      String(body.fecha_referencia).trim() !== ''
+        ? this.parseDateOnly(body.fecha_referencia)
+        : null;
+    if (explicita) return explicita;
+
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  private diasEstimadosPorDistancia(km: number): { diasMin: number; diasMax: number } {
+    if (km <= 50) return { diasMin: 0, diasMax: 0 };
+    if (km <= 150) return { diasMin: 1, diasMax: 1 };
+    if (km <= 400) return { diasMin: 2, diasMax: 2 };
+    if (km <= 800) return { diasMin: 3, diasMax: 3 };
+    return { diasMin: 4, diasMax: 5 };
+  }
+
+  calcularFechasPorDistancia(
+    distanciaKm: number,
+    fechaReferencia: string,
+  ): Pick<
+    EstimarFechasResult,
+    | 'fecha_estimada_inicio'
+    | 'fecha_estimada_fin'
+    | 'fecha_estimada_entrega'
+    | 'fecha_referencia'
+  > {
+    const { diasMin, diasMax } = this.diasEstimadosPorDistancia(distanciaKm);
+    const inicio = this.addDaysDateOnly(fechaReferencia, diasMin);
+    const fin = this.addDaysDateOnly(fechaReferencia, diasMax);
+    return {
+      fecha_referencia: fechaReferencia,
+      fecha_estimada_inicio: inicio,
+      fecha_estimada_fin: fin,
+      fecha_estimada_entrega: fin,
+    };
+  }
+
+  private getGoogleMapsApiKey(): string {
+    return String(process.env.GOOGLE_MAPS_API_KEY ?? '').trim();
+  }
+
+  async calcularDistanciaVialGoogle(origen: string, destino: string) {
+    return calcularDistanciaVialGoogle(
+      origen,
+      destino,
+      this.getGoogleMapsApiKey(),
+    );
+  }
+
+  /**
+   * HU-24: distancia vial (Google Routes) o override manual → fechas estimadas HU-9.
+   */
+  async estimarFechas(body: EstimarFechasDto): Promise<EstimarFechasResult> {
+    const fechaReferencia = this.resolveFechaReferencia(body);
+
+    const manual = this.parseDistanciaKm(body.distancia_km);
+    if (manual != null) {
+      return {
+        ok: true,
+        distancia_km: manual,
+        distancia_origen: 'manual',
+        duracion_minutos: null,
+        ...this.calcularFechasPorDistancia(manual, fechaReferencia),
+      };
+    }
+
+    const origen = String(body.origen ?? '').trim();
+    const destino = String(body.destino ?? '').trim();
+
+    if (!origen || !destino) {
+      return {
+        ok: false,
+        fecha_referencia: fechaReferencia,
+        advertencia: ADVERTENCIA_DISTANCIA_VIAL,
+      };
+    }
+
+    const vial = await this.calcularDistanciaVialGoogle(origen, destino);
+    if (!vial.ok) {
+      return {
+        ok: false,
+        fecha_referencia: fechaReferencia,
+        advertencia: ADVERTENCIA_DISTANCIA_VIAL,
+      };
+    }
+
+    return {
+      ok: true,
+      distancia_km: vial.distancia_km,
+      distancia_origen: 'google_routes',
+      duracion_minutos: vial.duracion_minutos,
+      ...this.calcularFechasPorDistancia(vial.distancia_km, fechaReferencia),
+    };
   }
 
   /**
@@ -168,6 +324,26 @@ export class RutasService {
       insert.fecha_inicio = new Date().toISOString();
     }
 
+    const distanciaKm = this.parseDistanciaKm(body.distancia_km);
+    if (distanciaKm != null) {
+      insert.distancia_km = distanciaKm;
+    }
+
+    const feInicio = this.parseDateOnly(body.fecha_estimada_inicio);
+    const feFin = this.parseDateOnly(body.fecha_estimada_fin);
+    const feEntrega = this.parseDateOnly(body.fecha_estimada_entrega);
+    if (feInicio || feFin || feEntrega) {
+      if (!feInicio || !feFin || !feEntrega) {
+        throw new BadRequestException(
+          'Si indica fechas estimadas, debe enviar fecha_estimada_inicio, fecha_estimada_fin y fecha_estimada_entrega',
+        );
+      }
+      this.validarRangoFechasEstimadas(feInicio, feFin, feEntrega);
+      insert.fecha_estimada_inicio = feInicio;
+      insert.fecha_estimada_fin = feFin;
+      insert.fecha_estimada_entrega = feEntrega;
+    }
+
     const supabase = this.supabaseConfig.getClient();
 
     const { data: created, error } = await supabase
@@ -185,6 +361,10 @@ export class RutasService {
         fecha_inicio,
         fecha_fin,
         eta,
+        distancia_km,
+        fecha_estimada_inicio,
+        fecha_estimada_fin,
+        fecha_estimada_entrega,
         created_at,
         ficha_despacho_url,
         clientes(id, nombre),
@@ -381,6 +561,7 @@ export class RutasService {
         conductor_id,
         camion_id,
         ficha_despacho_url,
+        distancia_km,
         fecha_estimada_inicio,
         fecha_estimada_fin,
         fecha_estimada_entrega,
@@ -624,6 +805,7 @@ export class RutasService {
       conductor_id,
       camion_id,
       ficha_despacho_url,
+      distancia_km,
       fecha_estimada_inicio,
       fecha_estimada_fin,
       fecha_estimada_entrega,
@@ -920,6 +1102,7 @@ export class RutasService {
       fecha_estimada_inicio?: string;
       fecha_estimada_fin?: string;
       fecha_estimada_entrega?: string;
+      distancia_km?: number | string | null;
     },
   ) {
     if (!rutaId?.trim()) {
@@ -938,20 +1121,26 @@ export class RutasService {
 
     this.validarRangoFechasEstimadas(inicio, fin, entrega);
 
+    const patch: Record<string, unknown> = {
+      fecha_estimada_inicio: inicio,
+      fecha_estimada_fin: fin,
+      fecha_estimada_entrega: entrega,
+    };
+    if (body.distancia_km !== undefined) {
+      patch.distancia_km = this.parseDistanciaKm(body.distancia_km);
+    }
+
     const supabase = this.supabaseConfig.getClient();
     const { data, error } = await supabase
       .from('rutas')
-      .update({
-        fecha_estimada_inicio: inicio,
-        fecha_estimada_fin: fin,
-        fecha_estimada_entrega: entrega,
-      })
+      .update(patch)
       .eq('id', rutaId)
       .select(
         `
         id,
         origen,
         destino,
+        distancia_km,
         fecha_estimada_inicio,
         fecha_estimada_fin,
         fecha_estimada_entrega,
