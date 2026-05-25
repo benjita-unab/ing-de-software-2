@@ -47,17 +47,27 @@ export function clearAuthToken() {
   localStorage.removeItem(TOKEN_KEY_LEGACY);
 }
 
-/** Debe coincidir con DEBUG_EMAIL / DEBUG_PASSWORD del backend (.env). */
-function defaultLoginCredentials() {
+/** Credenciales demo opcionales (Vercel / local). Deben coincidir con DEBUG_* del backend. */
+export function getDemoCredentials() {
   return {
     email:
+      process.env.REACT_APP_DEMO_EMAIL ||
       process.env.REACT_APP_DEBUG_EMAIL ||
       process.env.REACT_APP_AUTH_EMAIL ||
-      'test@test.com',
+      '',
     password:
+      process.env.REACT_APP_DEMO_PASSWORD ||
       process.env.REACT_APP_DEBUG_PASSWORD ||
       process.env.REACT_APP_AUTH_PASSWORD ||
-      '123456',
+      '',
+  };
+}
+
+function defaultLoginCredentials() {
+  const demo = getDemoCredentials();
+  return {
+    email: demo.email || 'test@test.com',
+    password: demo.password || '123456',
   };
 }
 
@@ -102,7 +112,7 @@ export async function loginWeb(
  *   - `json`: si se entrega, serializa a JSON y setea Content-Type.
  * @returns {Promise<{ ok: boolean, status: number, data: any, error: string|null }>}
  */
-async function apiFetchOnce(path, options, isRetryAfter401) {
+async function apiFetchOnce(path, options) {
   const { auth = true, json, headers, body, ...rest } = options;
   const baseUrl = getApiBaseUrl();
   const url = `${baseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
@@ -117,9 +127,15 @@ async function apiFetchOnce(path, options, isRetryAfter401) {
 
   if (auth) {
     const token = getAuthToken();
-    if (token) {
-      finalHeaders['Authorization'] = `Bearer ${token}`;
+    if (!token) {
+      return {
+        ok: false,
+        status: 401,
+        data: null,
+        error: 'No autenticado. Inicia sesión para continuar.',
+      };
     }
+    finalHeaders['Authorization'] = `Bearer ${token}`;
   }
 
   if (typeof window !== 'undefined') {
@@ -144,24 +160,12 @@ async function apiFetchOnce(path, options, isRetryAfter401) {
     data = null;
   }
 
-  if (response.status === 401 && auth && !isRetryAfter401) {
-    // eslint-disable-next-line no-console
-    console.warn('WEB apiFetch -> 401, token limpio + login automático una vez');
+  if (response.status === 401 && auth) {
     clearAuthToken();
-    try {
-      await loginWeb();
-    } catch (loginErr) {
-      const msg =
-        loginErr instanceof Error ? loginErr.message : String(loginErr);
-      // eslint-disable-next-line no-console
-      console.log('WEB LOGIN status fail after 401', msg);
-      const error =
-        (data && (data.message || data.error)) ||
-        msg ||
-        `HTTP ${response.status}`;
-      return { ok: false, status: 401, data, error };
-    }
-    return apiFetchOnce(path, options, true);
+    const error =
+      (data && (data.message || data.error)) ||
+      'Sesión expirada o no autorizada. Vuelve a iniciar sesión.';
+    return { ok: false, status: 401, data, error };
   }
 
   if (!response.ok) {
@@ -175,5 +179,5 @@ async function apiFetchOnce(path, options, isRetryAfter401) {
 }
 
 export async function apiFetch(path, options = {}) {
-  return apiFetchOnce(path, options, false);
+  return apiFetchOnce(path, options);
 }
