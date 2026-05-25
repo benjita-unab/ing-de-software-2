@@ -1,19 +1,65 @@
 // src/components/LoginPage.jsx
 import React, { useState } from "react";
+import { getDemoCredentials } from "../lib/apiClient";
+
+const ROLES = [
+  {
+    id: "operador",
+    label: "Gerente / Operador",
+    description: "Rutas, clientes, mensajes e incidencias",
+    icon: "🚚",
+    available: true,
+  },
+  {
+    id: "cliente",
+    label: "Cliente B2B",
+    description: "Seguimiento de despachos (próximamente)",
+    icon: "📦",
+    available: false,
+  },
+  {
+    id: "admin",
+    label: "Administrador",
+    description: "Configuración global (próximamente)",
+    icon: "⚙️",
+    available: false,
+  },
+];
 
 export default function LoginPage({ onLogin }) {
-  const [email, setEmail]       = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState("");
+  const demo = getDemoCredentials();
+  const [selectedRole, setSelectedRole] = useState("operador");
+  const [email, setEmail] = useState(demo.email || "");
+  const [password, setPassword] = useState(demo.password || "");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   async function handleSubmit(e) {
     e.preventDefault();
+    if (selectedRole !== "operador") return;
+
     setLoading(true);
     setError("");
-    const err = await onLogin(email, password);
-    if (err) setError(err.message);
+    const err = await onLogin(email.trim(), password);
+    if (err) {
+      const message =
+        err instanceof Error ? err.message : String(err || "Error al iniciar sesión");
+      setError(
+        message === "Invalid login credentials"
+          ? "Email o contraseña incorrectos."
+          : message,
+      );
+    }
     setLoading(false);
+  }
+
+  function handleRoleSelect(role) {
+    setSelectedRole(role.id);
+    if (!role.available) {
+      setError("Este acceso estará disponible en una próxima versión.");
+      return;
+    }
+    setError("");
   }
 
   return (
@@ -41,70 +87,103 @@ export default function LoginPage({ onLogin }) {
         .login-btn:active:not(:disabled) {
           transform: translateY(0);
         }
+        .role-card:hover {
+          border-color: #2a4a6a !important;
+        }
+        .role-card.active {
+          border-color: #1565c0 !important;
+          background: #1565c014 !important;
+        }
+        .role-card.disabled {
+          opacity: 0.55;
+          cursor: not-allowed;
+        }
       `}</style>
 
-      {/* Fondo con gradiente animado */}
       <div style={styles.bg} />
 
       <div style={styles.card}>
-        {/* Logo */}
-        <div style={{ textAlign: "center", marginBottom: "36px" }}>
+        <div style={{ textAlign: "center", marginBottom: "28px" }}>
           <div style={styles.logoIcon}>🚚</div>
           <div style={styles.logoTitle}>LogiTrack</div>
-          <div style={styles.logoSub}>PANEL OPERADOR DE SUCURSAL</div>
+          <div style={styles.logoSub}>ACCESO AL PANEL WEB</div>
         </div>
 
-        <form onSubmit={handleSubmit}>
-          <div style={styles.field}>
-            <label style={styles.label}>Correo electrónico</label>
-            <input
-              className="login-input"
-              type="email"
-              required
-              autoComplete="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="operador@empresa.cl"
-              style={styles.input}
-            />
-          </div>
+        <div style={styles.roleGrid}>
+          {ROLES.map((role) => (
+            <button
+              key={role.id}
+              type="button"
+              className={`role-card ${selectedRole === role.id ? "active" : ""} ${!role.available ? "disabled" : ""}`}
+              onClick={() => handleRoleSelect(role)}
+              style={styles.roleCard}
+            >
+              <span style={{ fontSize: "22px" }}>{role.icon}</span>
+              <span style={styles.roleLabel}>{role.label}</span>
+              <span style={styles.roleDesc}>{role.description}</span>
+              {!role.available && (
+                <span style={styles.roleBadge}>Próximamente</span>
+              )}
+            </button>
+          ))}
+        </div>
 
-          <div style={styles.field}>
-            <label style={styles.label}>Contraseña</label>
-            <input
-              className="login-input"
-              type="password"
-              required
-              autoComplete="current-password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              placeholder="••••••••"
-              style={styles.input}
-            />
-          </div>
-
-          {error && (
-            <div style={styles.errorBox}>
-              ⚠️{" "}
-              {error === "Invalid login credentials"
-                ? "Email o contraseña incorrectos."
-                : error}
+        {selectedRole === "operador" && (
+          <form onSubmit={handleSubmit}>
+            <div style={styles.field}>
+              <label style={styles.label}>Correo electrónico</label>
+              <input
+                className="login-input"
+                type="email"
+                required
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="operador@empresa.cl"
+                style={styles.input}
+              />
             </div>
-          )}
 
-          <button
-            className="login-btn"
-            type="submit"
-            disabled={loading}
-            style={{
-              ...styles.button,
-              opacity: loading ? 0.7 : 1,
-              cursor: loading ? "not-allowed" : "pointer",
-            }}
-          >
-            {loading ? "⏳ Ingresando..." : "Iniciar Sesión →"}
-          </button>
-        </form>
+            <div style={styles.field}>
+              <label style={styles.label}>Contraseña</label>
+              <input
+                className="login-input"
+                type="password"
+                required
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                style={styles.input}
+              />
+            </div>
+
+            {error && (
+              <div style={styles.errorBox} role="alert">
+                ⚠️ {error}
+              </div>
+            )}
+
+            <button
+              className="login-btn"
+              type="submit"
+              disabled={loading}
+              style={{
+                ...styles.button,
+                opacity: loading ? 0.7 : 1,
+                cursor: loading ? "not-allowed" : "pointer",
+              }}
+            >
+              {loading ? "⏳ Ingresando..." : "Iniciar Sesión →"}
+            </button>
+          </form>
+        )}
+
+        {selectedRole !== "operador" && error && (
+          <div style={{ ...styles.errorBox, marginTop: 0 }} role="alert">
+            ⚠️ {error}
+          </div>
+        )}
 
         <p style={styles.footer}>
           ¿Problemas para ingresar? Contacta al administrador del sistema.
@@ -141,7 +220,7 @@ const styles = {
     borderRadius: "20px",
     padding: "44px 40px",
     width: "100%",
-    maxWidth: "420px",
+    maxWidth: "480px",
     animation: "fadeIn 0.5s ease, glow 4s infinite",
     boxShadow: "0 24px 80px #00000088",
   },
@@ -162,6 +241,51 @@ const styles = {
     fontFamily: "'DM Mono', monospace",
     letterSpacing: "0.18em",
     marginTop: "6px",
+  },
+  roleGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: "10px",
+    marginBottom: "24px",
+  },
+  roleCard: {
+    display: "grid",
+    gridTemplateColumns: "auto 1fr",
+    gridTemplateRows: "auto auto",
+    columnGap: "12px",
+    rowGap: "2px",
+    alignItems: "center",
+    textAlign: "left",
+    width: "100%",
+    background: "#111827",
+    border: "1px solid #1e2a3a",
+    borderRadius: "12px",
+    padding: "12px 14px",
+    cursor: "pointer",
+    transition: "border-color 0.2s, background 0.2s",
+  },
+  roleLabel: {
+    color: "#e2e8f0",
+    fontSize: "13px",
+    fontWeight: 700,
+    gridColumn: 2,
+  },
+  roleDesc: {
+    color: "#556",
+    fontSize: "10px",
+    fontFamily: "'DM Mono', monospace",
+    gridColumn: 2,
+  },
+  roleBadge: {
+    gridColumn: "1 / -1",
+    justifySelf: "start",
+    marginTop: "4px",
+    marginLeft: "34px",
+    fontSize: "9px",
+    color: "#78909c",
+    fontFamily: "'DM Mono', monospace",
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
   },
   field: {
     marginBottom: "18px",
