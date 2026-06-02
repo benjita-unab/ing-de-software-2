@@ -29,7 +29,7 @@ export class ConductoresController {
   async uploadLicense(
     @CurrentUser('id') userId: string,
     @UploadedFile() file: Express.Multer.File,
-    @Body() body: { expiryDate: string },
+    @Body() body: { expiryDate: string; conductorId?: string },
   ) {
     if (!file) {
       throw new BadRequestException('El archivo es requerido');
@@ -43,6 +43,7 @@ export class ConductoresController {
       userId,
       file,
       body.expiryDate,
+      body.conductorId,
     );
   }
 

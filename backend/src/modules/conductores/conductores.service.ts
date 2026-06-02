@@ -94,32 +94,36 @@ export class ConductoresService {
   }
 
   /**
-   * Sube una licencia de conducir al storage y registra en la BD
-   * @param userId - ID del usuario
+   * Sube una licencia de conducir al storage y registra en la BD.
+   * Tras guardar en driver_licenses, sincroniza conductores.licencia_vencimiento.
+   * @param userId - ID del usuario autenticado (JWT)
    * @param file - Archivo subido
-   * @param expiryDate - Fecha de vencimiento
+   * @param expiryDate - Fecha de vencimiento (YYYY-MM-DD)
+   * @param conductorId - ID del conductor objetivo (RRHH); si no se envía, se infiere por usuario_id
    */
   async uploadDriverLicense(
     userId: string,
     file: Express.Multer.File,
     expiryDate: string,
+    conductorId?: string,
   ) {
     if (!userId || !file || !expiryDate) {
       throw new BadRequestException('userId, file y expiryDate son requeridos');
     }
 
-    // Validar archivo
     this.validateFile(file);
-
-    // Validar fecha
     this.validateExpiryDate(expiryDate);
+
+    const { targetUsuarioId, targetConductorId } = await this.resolveLicenseTarget(
+      userId,
+      conductorId,
+    );
 
     const supabase = this.supabaseConfig.getClient();
     const bucket = process.env.SUPABASE_DRIVER_LICENSES_BUCKET || 'driver_licenses';
 
-    // Generar path único para el archivo
     const fileName = `${Date.now()}_${file.originalname}`;
-    const filePath = `licenses/${userId}/${fileName}`;
+    const filePath = `licenses/${targetUsuarioId}/${fileName}`;
 
     if (!file.buffer) {
       throw new BadRequestException('El archivo no se cargó correctamente en memoria');
@@ -142,7 +146,7 @@ export class ConductoresService {
         .from('driver_licenses')
         .insert([
           {
-            user_id: userId,
+            user_id: targetUsuarioId,
             file_url: publicUrl,
             file_name: file.originalname,
             expiry_date: expiryDate,
@@ -156,14 +160,18 @@ export class ConductoresService {
         throw new BadRequestException(`Error al guardar registro: ${insertError.message}`);
       }
 
+      await this.syncLicenciaVencimiento(targetConductorId, expiryDate);
+
       return {
         success: true,
         message: 'Licencia subida exitosamente',
         data: {
           licenseId: licenseRecord?.[0]?.id,
+          conductorId: targetConductorId,
           fileUrl: publicUrl,
           status: 'pending_review',
           expiryDate,
+          licenciaVencimiento: expiryDate,
         },
       };
     } catch (error) {
@@ -255,6 +263,86 @@ export class ConductoresService {
   }
 
   // ========== HELPERS PRIVADOS ==========
+
+  /**
+   * Resuelve el conductor y usuario objetivo de la carga (RRHH o auto-servicio).
+   */
+  private async resolveLicenseTarget(
+    authenticatedUserId: string,
+    conductorId?: string,
+  ): Promise<{ targetUsuarioId: string; targetConductorId: string }> {
+    const supabase = this.supabaseConfig.getClient();
+
+    if (conductorId) {
+      const { data: conductor, error } = await supabase
+        .from('conductores')
+        .select('id, usuario_id, activo')
+        .eq('id', conductorId)
+        .single();
+
+      if (error || !conductor) {
+        throw new NotFoundException('Conductor no encontrado');
+      }
+
+      if (!conductor.activo) {
+        throw new BadRequestException('El conductor seleccionado no está activo');
+      }
+
+      if (!conductor.usuario_id) {
+        throw new BadRequestException(
+          'El conductor no tiene usuario asociado; no se puede registrar la licencia',
+        );
+      }
+
+      return {
+        targetUsuarioId: conductor.usuario_id,
+        targetConductorId: conductor.id,
+      };
+    }
+
+    const { data: conductor, error } = await supabase
+      .from('conductores')
+      .select('id, usuario_id, activo')
+      .eq('usuario_id', authenticatedUserId)
+      .single();
+
+    if (error || !conductor) {
+      throw new NotFoundException(
+        'No se encontró un conductor asociado al usuario autenticado',
+      );
+    }
+
+    if (!conductor.activo) {
+      throw new BadRequestException('El conductor no está activo en el sistema');
+    }
+
+    return {
+      targetUsuarioId: authenticatedUserId,
+      targetConductorId: conductor.id,
+    };
+  }
+
+  /**
+   * Fuente de verdad para asignación: actualiza conductores.licencia_vencimiento
+   * tras registrar en driver_licenses.
+   */
+  private async syncLicenciaVencimiento(
+    conductorId: string,
+    expiryDate: string,
+  ): Promise<void> {
+    const supabase = this.supabaseConfig.getClient();
+
+    const { error } = await supabase
+      .from('conductores')
+      .update({ licencia_vencimiento: expiryDate })
+      .eq('id', conductorId);
+
+    if (error) {
+      throw new BadRequestException(
+        `Licencia guardada pero no se pudo sincronizar vigencia en conductores: ${error.message}`,
+      );
+    }
+  }
 
   /**
    * Valida el archivo subido
