@@ -13,10 +13,14 @@ import {
   CreateRutaDto,
   EstimarFechasDto,
 } from './rutas.service';
-import { JwtGuard } from '../../common/guards/jwt.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/user.decorator';
+import { JwtGuard } from '../../common/guards/jwt.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
 
 @Controller('api/rutas')
+@UseGuards(JwtGuard, RolesGuard)
+@Roles('ADMIN', 'OPERADOR', 'CONDUCTOR')
 export class RutasController {
   constructor(private rutasService: RutasService) {}
 
@@ -25,7 +29,6 @@ export class RutasController {
    * Crea una nueva ruta (cliente, origen/destino obligatorios; conductor/camión opcionales).
    */
   @Post()
-  @UseGuards(JwtGuard)
   async createRoute(@Body() body: CreateRutaDto) {
     return await this.rutasService.createRoute(body);
   }
@@ -35,7 +38,6 @@ export class RutasController {
    * HU-24: distancia vial (Google Routes) y fechas estimadas propuestas.
    */
   @Post('estimar-fechas')
-  @UseGuards(JwtGuard)
   async estimarFechas(@Body() body: EstimarFechasDto) {
     return await this.rutasService.estimarFechas(body);
   }
@@ -45,7 +47,6 @@ export class RutasController {
    * Asigna un conductor a una ruta
    */
   @Post('assign')
-  @UseGuards(JwtGuard)
   async assignDriver(
     @CurrentUser('id') userId: string,
     @Body()
@@ -70,7 +71,6 @@ export class RutasController {
    * Obtiene rutas sin asignar
    */
   @Get('unassigned')
-  @UseGuards(JwtGuard)
   async getUnassignedRoutes() {
     return await this.rutasService.getUnassignedRoutes();
   }
@@ -81,7 +81,6 @@ export class RutasController {
    * de la ruta. Usado por la vista Historial.
    */
   @Get(':id/evidencias')
-  @UseGuards(JwtGuard)
   async getEvidencias(@Param('id') rutaId: string) {
     return await this.rutasService.getEvidencias(rutaId);
   }
@@ -91,7 +90,6 @@ export class RutasController {
    * Obtiene información detallada de una ruta
    */
   @Get(':id')
-  @UseGuards(JwtGuard)
   async getRouteInfo(@Param('id') rutaId: string) {
     return await this.rutasService.getRouteInfo(rutaId);
   }
@@ -101,7 +99,6 @@ export class RutasController {
    * Actualiza el estado de una ruta
    */
   @Patch(':id/status')
-  @UseGuards(JwtGuard)
   async updateStatus(
     @Param('id') rutaId: string,
     @Body() body: { estado: string },
@@ -114,7 +111,6 @@ export class RutasController {
    * Actualiza los tiempos de inspección de una ruta y calcula el tiempo de espera si ambos están presentes
    */
   @Patch(':id/tiempos')
-  @UseGuards(JwtGuard)
   async updateTiemposInspeccion(
     @Param('id') rutaId: string,
     @Body() body: {
@@ -130,7 +126,6 @@ export class RutasController {
    * HU-9: guarda rango y día estimado de entrega.
    */
   @Patch(':id/fechas-estimadas')
-  @UseGuards(JwtGuard)
   async updateFechasEstimadas(
     @Param('id') rutaId: string,
     @Body()
@@ -149,7 +144,6 @@ export class RutasController {
    * HU-9: envía correo al cliente con fechas estimadas de entrega.
    */
   @Post(':id/notificar-fecha-estimada')
-  @UseGuards(JwtGuard)
   async notificarFechaEstimada(@Param('id') rutaId: string) {
     return await this.rutasService.notificarFechaEstimada(rutaId);
   }
@@ -159,7 +153,6 @@ export class RutasController {
    * Lista rutas con filtros opcionales
    */
   @Get()
-  @UseGuards(JwtGuard)
   async listRoutes(
     @Query('estado') estado?: string,
     @Query('conductorId') conductorId?: string,
