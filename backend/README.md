@@ -29,15 +29,13 @@ Crea `backend/.env` a partir de `.env.example`. Ejemplo con **placeholders** (su
 
 ```env
 PORT=3000
-DEBUG_EMAIL=test@test.com
-DEBUG_PASSWORD=123456
 JWT_SECRET=super_secret_key_123456
 SUPABASE_URL=https://tu-proyecto.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=tu_service_role_key
 RESEND_API_KEY=re_tu_clave_resend
 ```
 
-- `DEBUG_EMAIL` / `DEBUG_PASSWORD`: credenciales que el flujo de login de desarrollo valida contra el servidor.
+- El login valida contra la tabla `public.usuarios` (`email`, `password`, `activo`).
 - `JWT_SECRET`: debe coincidir con lo que espera la validación de tokens emitidos por este backend.
 - `SUPABASE_*` y `RESEND_*`: secretos solo en el servidor; nunca en el frontend ni en la app móvil.
 
@@ -68,7 +66,7 @@ La URL `https://xxxxx.trycloudflare.com` que imprime el comando debe configurars
 
 | Síntoma | Acción |
 |---------|--------|
-| **401** en clientes | Revisa `DEBUG_EMAIL`, `DEBUG_PASSWORD`, `JWT_SECRET`; los clientes deben usar el mismo esquema de auth que este servicio. |
+| **401** en login | Usuario debe existir en `public.usuarios` con `activo=true`; revisa email/password y `JWT_SECRET`. |
 | Cliente no llega desde el móvil | El problema suele ser red o URL en el cliente; expón este puerto con `cloudflared` y actualiza `EXPO_PUBLIC_API_URL` en la app. |
 | Cambié `.env` y sigue igual | Reinicia `npm run start:dev`; Nest carga variables al arrancar. |
 

@@ -18,6 +18,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { ClientesModule } from './modules/clientes/clientes.module';
 import { CamionesModule } from './modules/camiones/camiones.module';
 import { MensajesConductorModule } from './modules/mensajes-conductor/mensajes-conductor.module';
+import { PortalModule } from './modules/portal/portal.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { MensajesConductorModule } from './modules/mensajes-conductor/mensajes-c
     ClientesModule,
     CamionesModule,
     MensajesConductorModule,
+    PortalModule,
   ],
   controllers: [AppController],
   providers: [AppService, SupabaseConfigService, ResendConfigService, JwtStrategy],

@@ -1,10 +1,7 @@
 // src/hooks/useAuth.js
 // ─────────────────────────────────────────────────────────────────────────────
 // Hook de autenticación contra el backend NestJS (POST /api/auth/login).
-// Persiste el token en localStorage en ambas claves para mantener
-// compatibilidad con código legado:
-//   - "accessToken"
-//   - "logitrack_access_token"
+// JWT: { sub: usuarios.id, email, role: usuarios.rol }
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useState } from "react";
@@ -32,16 +29,45 @@ function parseJwtPayload(token) {
   }
 }
 
-function operatorFromToken(token, fallbackEmail = "") {
+/** Normaliza rol del JWT (incluye legacy `mobile` / `operator`). */
+function normalizeRole(role) {
+  const r = String(role || "").toUpperCase();
+  if (r === "ADMIN" || r === "OPERADOR" || r === "CONDUCTOR" || r === "CLIENTE") {
+    return r;
+  }
+  if (r === "MOBILE" || r === "OPERATOR") return "OPERADOR";
+  return "OPERADOR";
+}
+
+function branchLabelForRole(role) {
+  switch (role) {
+    case "ADMIN":
+      return "Administración";
+    case "CLIENTE":
+      return "Portal cliente B2B";
+    case "CONDUCTOR":
+      return "Conductor";
+    default:
+      return "Panel gerente / operador";
+  }
+}
+
+function userFromToken(token, fallbackEmail = "") {
   const payload = parseJwtPayload(token);
   const email = payload?.email || fallbackEmail || "";
-  const nameFromEmail = email ? email.split("@")[0] : "Operador";
+  const role = normalizeRole(payload?.role);
+  const clienteId =
+    typeof payload?.clienteId === "string" && payload.clienteId.trim()
+      ? payload.clienteId.trim()
+      : null;
+  const nameFromEmail = email ? email.split("@")[0] : "Usuario";
   return {
-    id: payload?.sub || email || "operator",
+    id: payload?.sub || "",
     full_name: nameFromEmail.charAt(0).toUpperCase() + nameFromEmail.slice(1),
     email,
-    branch: "Panel gerente / operador",
-    role: payload?.role || "operator",
+    branch: branchLabelForRole(role),
+    role,
+    clienteId,
   };
 }
 
@@ -57,7 +83,7 @@ export function useAuth() {
       return;
     }
     setSession({ access_token: token });
-    setOperator(operatorFromToken(token));
+    setOperator(userFromToken(token));
     setLoading(false);
   }, []);
 
@@ -70,7 +96,7 @@ export function useAuth() {
     const response = await fetch(`${apiUrl}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email: email.trim(), password }),
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || !payload?.accessToken) {
@@ -80,13 +106,16 @@ export function useAuth() {
         payload?.error ||
         (response.status === 401
           ? "Email o contraseña incorrectos."
-          : `No se pudo iniciar sesión (HTTP ${response.status}).`);
+          : response.status === 403
+            ? payload?.message ||
+              "Tu usuario no tiene acceso al portal cliente configurado."
+            : `No se pudo iniciar sesión (HTTP ${response.status}).`);
       return new Error(msg);
     }
 
     setAuthToken(payload.accessToken);
     setSession({ access_token: payload.accessToken });
-    setOperator(operatorFromToken(payload.accessToken, email));
+    setOperator(userFromToken(payload.accessToken, email));
     return null;
   }
 
