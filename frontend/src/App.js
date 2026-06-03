@@ -3,6 +3,7 @@ import React from "react";
 import { useAuth } from "./hooks/useAuth";
 import LoginPage from "./components/LoginPage";
 import OperatorDashboard from "./components/OperatorDashboard";
+import ClientPortalShell from "./components/ClientPortalShell";
 
 const loadingStyle = {
   minHeight: "100vh",
@@ -31,6 +32,10 @@ export default function App() {
 
   if (!session) {
     return <LoginPage onLogin={signIn} />;
+  }
+
+  if (operator?.role === "CLIENTE") {
+    return <ClientPortalShell user={operator} onSignOut={signOut} />;
   }
 
   return <OperatorDashboard operator={operator} onSignOut={signOut} />;

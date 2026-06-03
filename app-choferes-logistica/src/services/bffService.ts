@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const TOKEN_KEY = "logitrack_access_token";
+/** Credenciales de un usuario en `public.usuarios` (típicamente rol CONDUCTOR). */
 const DEBUG_EMAIL = process.env.EXPO_PUBLIC_DEBUG_EMAIL || "EMAIL_TEST";
 const DEBUG_PASSWORD = process.env.EXPO_PUBLIC_DEBUG_PASSWORD || "PASSWORD_TEST";
 

@@ -8,9 +8,9 @@ import type { NextFunction, Request, Response } from 'express';
 
 async function bootstrap() {
   console.log('BACKEND ENV CHECK:', {
-    DEBUG_EMAIL_defined: !!process.env.DEBUG_EMAIL,
-    DEBUG_PASSWORD_defined: !!process.env.DEBUG_PASSWORD,
     JWT_SECRET_defined: !!process.env.JWT_SECRET,
+    SUPABASE_URL_defined: !!process.env.SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY_defined: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
   });
 
   // Desactivamos el bodyParser default de Nest para poder definir nuestros

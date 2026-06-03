@@ -67,8 +67,8 @@ REACT_APP_GOOGLE_MAPS_API_KEY=TU_API_KEY
 
 ```env
 EXPO_PUBLIC_API_URL=https://TU-TUNNEL.trycloudflare.com
-EXPO_PUBLIC_DEBUG_EMAIL=test@test.com
-EXPO_PUBLIC_DEBUG_PASSWORD=123456
+EXPO_PUBLIC_DEBUG_EMAIL=conductor1@sistema.cl
+EXPO_PUBLIC_DEBUG_PASSWORD=hash456
 EXPO_PUBLIC_RUTA_ID=UUID_DE_RUTA_DE_PRUEBA
 ```
 
@@ -76,8 +76,6 @@ EXPO_PUBLIC_RUTA_ID=UUID_DE_RUTA_DE_PRUEBA
 
 ```env
 PORT=3000
-DEBUG_EMAIL=test@test.com
-DEBUG_PASSWORD=123456
 JWT_SECRET=super_secret_key_123456
 SUPABASE_URL=https://tu-proyecto.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=tu_service_role_key
@@ -166,7 +164,7 @@ Archivos a revisar manualmente: `docs/REVISAR_MANUALMENTE.md`.
 |----------|-----------|
 | **Network request failed** (móvil) | Revisa `EXPO_PUBLIC_API_URL` (HTTPS del túnel, sin barra final incorrecta). Confirma que el backend sigue en marcha y que la URL del túnel es la actual. |
 | **HTTP 530** | Túnel caído o URL vieja: vuelve a ejecutar `cloudflared tunnel --url http://localhost:3000` y actualiza `.env` con la nueva URL. |
-| **401 Unauthorized** | Alinea `DEBUG_EMAIL` / `DEBUG_PASSWORD` entre `backend/.env` y lo que envía el cliente; revisa `JWT_SECRET`. En web, limpia `localStorage` / datos del sitio para tokens viejos. |
+| **401 Unauthorized** | Usuario debe existir en `public.usuarios` (`activo=true`); alinea credenciales en cliente con la tabla; revisa `JWT_SECRET`. Limpia tokens viejos en `localStorage` / AsyncStorage. |
 | **Cambié `.env` y no pasa nada** | Reinicia backend, frontend (`npm start`) y Expo (`npx expo start -c`). CRA y Expo leen variables al arrancar. |
 | **La app sigue usando IP o URL vieja** | `npx expo start -c`; si usas Expo Go, borra caché o datos de la app si hace falta. |
 

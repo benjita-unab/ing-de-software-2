@@ -47,17 +47,15 @@ export function clearAuthToken() {
   localStorage.removeItem(TOKEN_KEY_LEGACY);
 }
 
-/** Credenciales demo opcionales (Vercel / local). Deben coincidir con DEBUG_* del backend. */
+/** Credenciales demo opcionales (local). Deben existir en `public.usuarios`. */
 export function getDemoCredentials() {
   return {
     email:
       process.env.REACT_APP_DEMO_EMAIL ||
-      process.env.REACT_APP_DEBUG_EMAIL ||
       process.env.REACT_APP_AUTH_EMAIL ||
       '',
     password:
       process.env.REACT_APP_DEMO_PASSWORD ||
-      process.env.REACT_APP_DEBUG_PASSWORD ||
       process.env.REACT_APP_AUTH_PASSWORD ||
       '',
   };
@@ -66,8 +64,8 @@ export function getDemoCredentials() {
 function defaultLoginCredentials() {
   const demo = getDemoCredentials();
   return {
-    email: demo.email || 'test@test.com',
-    password: demo.password || '123456',
+    email: demo.email || '',
+    password: demo.password || '',
   };
 }
 
