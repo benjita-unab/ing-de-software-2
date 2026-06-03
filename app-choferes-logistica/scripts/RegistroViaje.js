@@ -11,6 +11,8 @@ import {
   ScrollView,
   Modal,
   Pressable,
+  Linking,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -18,6 +20,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useAutoSyncScheduler } from '../src/hooks/useAutoSyncScheduler';
+import { bffFetch } from '../src/services/bffService';
 import {
   loadMensajeQueue,
   saveMensajeQueue,
@@ -437,9 +440,45 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
     }
   };
 
-  const handleOpenWaze = useCallback(() => {
-    console.log('Botón Waze presionado');
-  }, []);
+  const handleOpenWaze = useCallback(async () => {
+    if (!rutaId || !String(rutaId).trim()) {
+      Alert.alert('Ruta no disponible', 'Debes seleccionar una ruta activa para abrir Waze.');
+      return;
+    }
+
+    try {
+      // Intentar obtener la dirección de la ruta desde el BFF
+      const res = await bffFetch(`/api/rutas/${rutaId}`);
+      const body = await res.json().catch(() => null);
+      const ruta = body && body.data ? body.data : body;
+      const destinoRaw = ruta?.destino ?? ruta?.direccion ?? '';
+      const destino = String(destinoRaw ?? '').trim();
+
+      if (!destino) {
+        Alert.alert('Destino no disponible', 'La ruta seleccionada no tiene una dirección de destino.');
+        return;
+      }
+
+      const q = encodeURIComponent(destino);
+      const nativeUrl = `waze://?q=${q}&navigate=yes`;
+      const webUrl = `https://www.waze.com/ul?q=${q}&navigate=yes`;
+
+      try {
+        const can = await Linking.canOpenURL(nativeUrl);
+        if (can) {
+          await Linking.openURL(nativeUrl);
+        } else {
+          await Linking.openURL(webUrl);
+        }
+      } catch (err) {
+        console.log('Error abriendo URL nativa, usando fallback web', err);
+        await Linking.openURL(webUrl);
+      }
+    } catch (err) {
+      console.log('Error al obtener la ruta o abrir Waze:', err);
+      Alert.alert('Error', 'No fue posible abrir Waze. Intenta nuevamente más tarde.');
+    }
+  }, [rutaId]);
 
 
 
@@ -472,14 +511,6 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
                 Captura directa por tipo de evidencia
               </Text>
             </View>
-
-            <TouchableOpacity
-              style={styles.btnOpenWaze}
-              onPress={handleOpenWaze}
-              accessibilityRole="button"
-            >
-              <Text style={styles.btnOpenWazeText}>Abrir en Waze</Text>
-            </TouchableOpacity>
 
             <Text style={styles.sectionLabel}>Captura rápida</Text>
             <View style={styles.directButtonsGrid}>
@@ -527,6 +558,14 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
                 accessibilityRole="button"
               >
                 <Text style={styles.btnGestionEstadoText}>Notificar Estado</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.btnOpenWaze}
+                onPress={handleOpenWaze}
+                accessibilityRole="button"
+              >
+                <Text style={styles.btnOpenWazeText}>Abrir en Waze</Text>
               </TouchableOpacity>
             </View>
 
