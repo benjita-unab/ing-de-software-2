@@ -10,3 +10,9 @@ export async function getPortalPedidos() {
 export async function getPortalPedidoById(pedidoId) {
   return apiFetch(`/api/portal/pedidos/${encodeURIComponent(pedidoId)}`);
 }
+
+export async function getPortalPedidoEvidencias(pedidoId) {
+  return apiFetch(
+    `/api/portal/pedidos/${encodeURIComponent(pedidoId)}/evidencias`,
+  );
+}

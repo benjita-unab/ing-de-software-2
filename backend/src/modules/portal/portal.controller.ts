@@ -35,6 +35,19 @@ export class PortalController {
   }
 
   /**
+   * GET /api/portal/pedidos/:id/evidencias
+   * PDFs, fotos y firma del pedido (solo si pertenece al cliente del JWT).
+   */
+  @Get('pedidos/:id/evidencias')
+  async getPedidoEvidencias(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const clienteId = this.requireClienteId(user);
+    return this.portalService.getPedidoEvidencias(id, clienteId);
+  }
+
+  /**
    * GET /api/portal/pedidos/:id
    * Detalle de pedido con historial, entrega y guías (ownership por cliente_id).
    */

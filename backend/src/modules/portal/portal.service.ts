@@ -4,6 +4,7 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
+import { RutasService } from '../rutas/rutas.service';
 import { SupabaseConfigService } from '../../config/supabase.config';
 import type {
   PortalEntregaDto,
@@ -17,7 +18,10 @@ import type {
 
 @Injectable()
 export class PortalService {
-  constructor(private readonly supabaseConfig: SupabaseConfigService) {}
+  constructor(
+    private readonly supabaseConfig: SupabaseConfigService,
+    private readonly rutasService: RutasService,
+  ) {}
 
   /**
    * Lista pedidos (rutas) del cliente autenticado.
@@ -123,6 +127,62 @@ export class PortalService {
       entregas: entregasRaw.map((e) => this.mapEntrega(e)),
       guias_despacho: guiasRaw.map((g) => this.mapGuia(g)),
     };
+  }
+
+  /**
+   * Evidencias del pedido (HU-27 CA-5). Ownership por JWT; reutiliza RutasService.getEvidencias.
+   */
+  async getPedidoEvidencias(rutaId: string, clienteId: string) {
+    await this.assertPedidoOwned(rutaId, clienteId);
+
+    const evidencias = await this.rutasService.getEvidencias(rutaId.trim());
+
+    const supabase = this.supabaseConfig.getClient();
+    const { data: guias, error: guiasError } = await supabase
+      .from('guias_despacho')
+      .select('numero_guia, url_pdf')
+      .eq('ruta_id', rutaId.trim());
+
+    if (!guiasError && guias?.length) {
+      const urlsVistas = new Set(
+        (evidencias.pdfs || []).map((p) => p.url).filter(Boolean),
+      );
+      for (const g of guias) {
+        const url = String(g.url_pdf || '').trim();
+        if (!url || urlsVistas.has(url)) continue;
+        urlsVistas.add(url);
+        evidencias.pdfs.push({
+          nombre: `Guía ${g.numero_guia ?? 'despacho'}`,
+          url,
+        });
+      }
+    }
+
+    return evidencias;
+  }
+
+  /** 404 si la ruta no existe o no pertenece al cliente del JWT. */
+  private async assertPedidoOwned(
+    rutaId: string,
+    clienteId: string,
+  ): Promise<void> {
+    this.assertClienteId(clienteId);
+
+    if (!rutaId?.trim()) {
+      throw new NotFoundException('Pedido no encontrado');
+    }
+
+    const supabase = this.supabaseConfig.getClient();
+    const { data, error } = await supabase
+      .from('rutas')
+      .select('id')
+      .eq('id', rutaId.trim())
+      .eq('cliente_id', clienteId)
+      .maybeSingle();
+
+    if (error || !data) {
+      throw new NotFoundException('Pedido no encontrado');
+    }
   }
 
   private assertClienteId(clienteId: string | undefined): void {

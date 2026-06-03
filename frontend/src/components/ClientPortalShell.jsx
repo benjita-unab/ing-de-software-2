@@ -1,5 +1,18 @@
-import React, { useCallback, useEffect, useState } from "react";
-import { getPortalPedidoById, getPortalPedidos } from "../lib/portalService";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import PortalEvidenciasModal from "./PortalEvidenciasModal";
+import {
+  getPortalPedidoById,
+  getPortalPedidoEvidencias,
+  getPortalPedidos,
+} from "../lib/portalService";
+
+const TAB_PENDIENTES = "pendientes";
+const TAB_COMPLETADOS = "completados";
+
+/** HU-27 CA-4: ENTREGADO = completado; cualquier otro estado = pendiente. */
+function isPedidoCompletado(estado) {
+  return String(estado || "").trim().toUpperCase() === "ENTREGADO";
+}
 
 const styles = {
   page: {
@@ -48,6 +61,18 @@ const styles = {
     color: "#fff",
     cursor: "pointer",
   },
+  btnEvidencias: {
+    marginTop: "16px",
+    padding: "10px 16px",
+    borderRadius: "8px",
+    border: "1px solid rgba(59,130,246,0.45)",
+    background: "rgba(59,130,246,0.18)",
+    color: "#93C5FD",
+    cursor: "pointer",
+    fontWeight: 600,
+    fontSize: "14px",
+    fontFamily: "inherit",
+  },
   detail: {
     marginTop: "20px",
     padding: "20px",
@@ -62,7 +87,85 @@ const styles = {
     marginBottom: "8px",
     fontSize: "14px",
   },
+  tabs: {
+    display: "flex",
+    gap: "8px",
+    marginBottom: "16px",
+    flexWrap: "wrap",
+  },
+  tab: (active) => ({
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "8px",
+    padding: "10px 16px",
+    borderRadius: "10px",
+    border: active
+      ? "1px solid rgba(14,165,233,0.65)"
+      : "1px solid rgba(255,255,255,0.12)",
+    background: active ? "rgba(14,165,233,0.18)" : "rgba(15,23,42,0.6)",
+    color: active ? "#e0f2fe" : "rgba(226,232,240,0.85)",
+    cursor: "pointer",
+    fontSize: "14px",
+    fontWeight: active ? 600 : 500,
+    fontFamily: "inherit",
+  }),
+  tabCount: (variant) => ({
+    display: "inline-block",
+    minWidth: "22px",
+    padding: "2px 8px",
+    borderRadius: "999px",
+    fontSize: "12px",
+    fontWeight: 700,
+    textAlign: "center",
+    background:
+      variant === "completados"
+        ? "rgba(34,197,94,0.25)"
+        : "rgba(14,165,233,0.25)",
+    color: variant === "completados" ? "#86efac" : "#7dd3fc",
+  }),
+  emptyState: {
+    textAlign: "center",
+    padding: "48px 24px",
+    borderRadius: "16px",
+    border: "1px solid rgba(255,255,255,0.1)",
+    background: "rgba(15,23,42,0.65)",
+    maxWidth: "480px",
+    margin: "24px auto 0",
+  },
+  emptyIcon: {
+    fontSize: "48px",
+    marginBottom: "16px",
+    lineHeight: 1,
+    opacity: 0.85,
+  },
+  emptyTitle: {
+    margin: "0 0 10px",
+    fontSize: "18px",
+    fontWeight: 700,
+    color: "#f1f5f9",
+  },
+  emptyMessage: {
+    margin: 0,
+    fontSize: "14px",
+    lineHeight: 1.5,
+    color: "#94a3b8",
+  },
 };
+
+/** HU-27 CA-6: estado vacío cuando el cliente no tiene pedidos. */
+function PortalPedidosEmptyState() {
+  return (
+    <div style={styles.emptyState} role="status" aria-live="polite">
+      <div style={styles.emptyIcon} aria-hidden="true">
+        📦
+      </div>
+      <h2 style={styles.emptyTitle}>No tienes pedidos disponibles</h2>
+      <p style={styles.emptyMessage}>
+        Los despachos asignados aparecerán aquí
+      </p>
+    </div>
+  );
+}
 
 function formatDate(value) {
   if (!value) return "—";
@@ -75,12 +178,16 @@ function formatDate(value) {
 
 export default function ClientPortalShell({ user, onSignOut }) {
   const [pedidos, setPedidos] = useState([]);
-  const [total, setTotal] = useState(0);
+  const [activeTab, setActiveTab] = useState(TAB_PENDIENTES);
   const [selectedId, setSelectedId] = useState(null);
   const [detalle, setDetalle] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadingDetalle, setLoadingDetalle] = useState(false);
   const [error, setError] = useState("");
+  const [evidenciasOpen, setEvidenciasOpen] = useState(false);
+  const [evidencias, setEvidencias] = useState(null);
+  const [evidenciasLoading, setEvidenciasLoading] = useState(false);
+  const [evidenciasError, setEvidenciasError] = useState(null);
 
   const loadPedidos = useCallback(async () => {
     setLoading(true);
@@ -89,10 +196,8 @@ export default function ClientPortalShell({ user, onSignOut }) {
     if (!res.ok) {
       setError(res.error || "No se pudieron cargar los pedidos");
       setPedidos([]);
-      setTotal(0);
     } else {
       setPedidos(res.data?.data || []);
-      setTotal(res.data?.total ?? 0);
     }
     setLoading(false);
   }, []);
@@ -101,8 +206,27 @@ export default function ClientPortalShell({ user, onSignOut }) {
     loadPedidos();
   }, [loadPedidos]);
 
+  const { pedidosPendientes, pedidosCompletados } = useMemo(() => {
+    const pendientes = [];
+    const completados = [];
+    for (const p of pedidos) {
+      if (isPedidoCompletado(p.estado)) {
+        completados.push(p);
+      } else {
+        pendientes.push(p);
+      }
+    }
+    return { pedidosPendientes: pendientes, pedidosCompletados: completados };
+  }, [pedidos]);
+
+  const pedidosVisibles =
+    activeTab === TAB_COMPLETADOS ? pedidosCompletados : pedidosPendientes;
+
   async function handleSelectPedido(id) {
     setSelectedId(id);
+    setEvidenciasOpen(false);
+    setEvidencias(null);
+    setEvidenciasError(null);
     setLoadingDetalle(true);
     setError("");
     const res = await getPortalPedidoById(id);
@@ -113,6 +237,68 @@ export default function ClientPortalShell({ user, onSignOut }) {
       setDetalle(res.data);
     }
     setLoadingDetalle(false);
+  }
+
+  async function handleVerEvidencias() {
+    if (!selectedId) return;
+    setEvidenciasOpen(true);
+    setEvidencias(null);
+    setEvidenciasError(null);
+    setEvidenciasLoading(true);
+
+    const res = await getPortalPedidoEvidencias(selectedId);
+    if (!res.ok) {
+      setEvidenciasError(res.error || "Error al cargar evidencias");
+      setEvidencias(null);
+    } else {
+      setEvidencias(res.data?.data ?? res.data ?? null);
+    }
+    setEvidenciasLoading(false);
+  }
+
+  function cerrarEvidencias() {
+    setEvidenciasOpen(false);
+    setEvidencias(null);
+    setEvidenciasError(null);
+    setEvidenciasLoading(false);
+  }
+
+  function renderPedidoCard(p) {
+    return (
+      <div
+        key={p.id}
+        role="button"
+        tabIndex={0}
+        style={{
+          ...styles.card,
+          ...(selectedId === p.id ? styles.cardActive : {}),
+        }}
+        onClick={() => handleSelectPedido(p.id)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            handleSelectPedido(p.id);
+          }
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
+          <strong>
+            {p.origen || "—"} → {p.destino || "—"}
+          </strong>
+          <span style={styles.badge(p.estado)}>{p.estado || "—"}</span>
+        </div>
+        <p style={{ margin: "8px 0 0", fontSize: "13px", opacity: 0.8 }}>
+          Entrega estimada: {formatDate(p.fecha_estimada_entrega)}
+          {p.bultos_despachados != null ? ` · ${p.bultos_despachados} bultos` : ""}
+        </p>
+      </div>
+    );
+  }
+
+  function emptyMessageForTab() {
+    if (activeTab === TAB_COMPLETADOS) {
+      return "No hay pedidos completados en este momento.";
+    }
+    return "No hay pedidos en curso en este momento.";
   }
 
   return (
@@ -137,46 +323,38 @@ export default function ClientPortalShell({ user, onSignOut }) {
 
       {loading ? (
         <p style={{ opacity: 0.7 }}>Cargando pedidos…</p>
+      ) : pedidos.length === 0 ? (
+        <PortalPedidosEmptyState />
       ) : (
         <>
-          <p style={{ fontSize: "14px", opacity: 0.75, marginBottom: "12px" }}>
-            {total} pedido{total === 1 ? "" : "s"}
-          </p>
+          <div style={styles.tabs} role="tablist" aria-label="Pedidos por estado">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === TAB_PENDIENTES}
+              style={styles.tab(activeTab === TAB_PENDIENTES)}
+              onClick={() => setActiveTab(TAB_PENDIENTES)}
+            >
+              Pendientes
+              <span style={styles.tabCount("pendientes")}>{pedidosPendientes.length}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === TAB_COMPLETADOS}
+              style={styles.tab(activeTab === TAB_COMPLETADOS)}
+              onClick={() => setActiveTab(TAB_COMPLETADOS)}
+            >
+              Completados
+              <span style={styles.tabCount("completados")}>{pedidosCompletados.length}</span>
+            </button>
+          </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-            <div>
-              {pedidos.length === 0 ? (
-                <p style={{ opacity: 0.7 }}>No hay pedidos para mostrar.</p>
+            <div role="tabpanel">
+              {pedidosVisibles.length === 0 ? (
+                <p style={{ opacity: 0.7 }}>{emptyMessageForTab()}</p>
               ) : (
-                pedidos.map((p) => (
-                  <div
-                    key={p.id}
-                    role="button"
-                    tabIndex={0}
-                    style={{
-                      ...styles.card,
-                      ...(selectedId === p.id ? styles.cardActive : {}),
-                    }}
-                    onClick={() => handleSelectPedido(p.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        handleSelectPedido(p.id);
-                      }
-                    }}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
-                      <strong>
-                        {p.origen || "—"} → {p.destino || "—"}
-                      </strong>
-                      <span style={styles.badge(p.estado)}>{p.estado || "—"}</span>
-                    </div>
-                    <p style={{ margin: "8px 0 0", fontSize: "13px", opacity: 0.8 }}>
-                      Entrega estimada: {formatDate(p.fecha_estimada_entrega)}
-                      {p.bultos_despachados != null
-                        ? ` · ${p.bultos_despachados} bultos`
-                        : ""}
-                    </p>
-                  </div>
-                ))
+                pedidosVisibles.map(renderPedidoCard)
               )}
             </div>
 
@@ -241,6 +419,14 @@ export default function ClientPortalShell({ user, onSignOut }) {
                       </div>
                     ))
                   )}
+
+                  <button
+                    type="button"
+                    style={styles.btnEvidencias}
+                    onClick={handleVerEvidencias}
+                  >
+                    Ver evidencias
+                  </button>
                 </>
               ) : (
                 <p style={{ opacity: 0.7 }}>Sin datos de detalle.</p>
@@ -249,6 +435,16 @@ export default function ClientPortalShell({ user, onSignOut }) {
           </div>
         </>
       )}
+
+      {evidenciasOpen && detalle?.ruta ? (
+        <PortalEvidenciasModal
+          pedido={detalle.ruta}
+          evidencias={evidencias}
+          loading={evidenciasLoading}
+          error={evidenciasError}
+          onClose={cerrarEvidencias}
+        />
+      ) : null}
     </div>
   );
 }
