@@ -12,9 +12,13 @@ import {
   ClientesService,
   CreateClienteDto,
 } from './clientes.service';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtGuard } from '../../common/guards/jwt.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
 
 @Controller('api/clientes')
+@UseGuards(JwtGuard, RolesGuard)
+@Roles('ADMIN', 'OPERADOR', 'CONDUCTOR')
 export class ClientesController {
   constructor(private clientesService: ClientesService) {}
 
@@ -23,7 +27,6 @@ export class ClientesController {
    * Crea un nuevo cliente.
    */
   @Post()
-  @UseGuards(JwtGuard)
   async createCliente(@Body() body: CreateClienteDto) {
     return await this.clientesService.createCliente(body);
   }
@@ -33,7 +36,6 @@ export class ClientesController {
    * Lista todos los clientes, opcionalmente filtrados por búsqueda.
    */
   @Get()
-  @UseGuards(JwtGuard)
   async listClientes(@Query('q') query?: string) {
     return await this.clientesService.listClientes(query);
   }
@@ -43,7 +45,6 @@ export class ClientesController {
    * Obtiene el detalle de un cliente.
    */
   @Get(':id')
-  @UseGuards(JwtGuard)
   async getCliente(@Param('id') id: string) {
     return await this.clientesService.getCliente(id);
   }
@@ -53,7 +54,6 @@ export class ClientesController {
    * Edita un cliente existente.
    */
   @Put(':id')
-  @UseGuards(JwtGuard)
   async updateCliente(@Param('id') id: string, @Body() body: CreateClienteDto) {
     return await this.clientesService.updateCliente(id, body);
   }
@@ -63,7 +63,6 @@ export class ClientesController {
    * Obtiene el historial de despachos de un cliente.
    */
   @Get(':id/despachos')
-  @UseGuards(JwtGuard)
   async getHistorialDespachos(@Param('id') id: string) {
     return await this.clientesService.getHistorialDespachos(id);
   }

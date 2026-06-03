@@ -22,8 +22,8 @@ Crea `app-choferes-logistica/.env` (plantilla: `.env.example`). Ejemplo con **pl
 
 ```env
 EXPO_PUBLIC_API_URL=https://TU-TUNNEL.trycloudflare.com
-EXPO_PUBLIC_DEBUG_EMAIL=test@test.com
-EXPO_PUBLIC_DEBUG_PASSWORD=123456
+EXPO_PUBLIC_DEBUG_EMAIL=conductor1@sistema.cl
+EXPO_PUBLIC_DEBUG_PASSWORD=hash456
 EXPO_PUBLIC_RUTA_ID=UUID_DE_RUTA_DE_PRUEBA
 ```
 
@@ -83,6 +83,6 @@ Opcional: el mismo dominio `trycloudflare.com` puede usarse en `frontend/.env` c
 |----------|-------------|
 | **Network request failed** | `EXPO_PUBLIC_API_URL` (HTTPS, URL actual del túnel, backend encendido). |
 | **HTTP 530** | Túnel cerrado o URL antigua; genera otra URL con `cloudflared` y actualiza `.env`. |
-| **401 Unauthorized** | Misma pareja `DEBUG_EMAIL` / `DEBUG_PASSWORD` que en `backend/.env`; `JWT_SECRET` coherente; borra sesión/token en la app si aplica. |
+| **401 Unauthorized** | Credenciales deben existir en `public.usuarios` (rol CONDUCTOR); `JWT_SECRET` coherente; borra token en AsyncStorage si cambiaste de entorno. |
 | Cambié `.env` y no pasa nada | `npx expo start -c`; las variables se leen al empaquetar. |
 | Sigue usando IP o URL vieja | Limpia caché con `-c`; en Expo Go, borra datos de la app si hace falta. |
