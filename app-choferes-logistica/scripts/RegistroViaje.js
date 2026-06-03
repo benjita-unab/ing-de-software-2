@@ -437,6 +437,12 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
     }
   };
 
+  const handleOpenWaze = useCallback(() => {
+    console.log('Botón Waze presionado');
+  }, []);
+
+
+
   const sortedRegistros = useMemo(() => {
     return [...registros].sort(
       (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
@@ -466,6 +472,14 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
                 Captura directa por tipo de evidencia
               </Text>
             </View>
+
+            <TouchableOpacity
+              style={styles.btnOpenWaze}
+              onPress={handleOpenWaze}
+              accessibilityRole="button"
+            >
+              <Text style={styles.btnOpenWazeText}>Abrir en Waze</Text>
+            </TouchableOpacity>
 
             <Text style={styles.sectionLabel}>Captura rápida</Text>
             <View style={styles.directButtonsGrid}>
@@ -765,6 +779,27 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '700',
     fontSize: 16,
+  },
+  btnOpenWaze: {
+    backgroundColor: '#33c4ff',
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    marginHorizontal: 16,
+    marginTop: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#0ea5e9',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  btnOpenWazeText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 16,
+    letterSpacing: 0.2,
   },
   sectionTitle: {
     fontSize: 18,
