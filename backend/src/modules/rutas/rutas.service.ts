@@ -344,6 +344,17 @@ export class RutasService {
       insert.fecha_estimada_entrega = feEntrega;
     }
 
+    // CA-3: bloquear asignación si la licencia está vencida (misma regla que POST /assign)
+    if (conductor_id) {
+      const licenseValidation =
+        await this.conductoresService.validateDriverLicense(conductor_id);
+      if (!licenseValidation.isValid) {
+        throw new ForbiddenException(
+          `No se puede asignar conductor a la ruta: ${licenseValidation.message}`,
+        );
+      }
+    }
+
     const supabase = this.supabaseConfig.getClient();
 
     const { data: created, error } = await supabase

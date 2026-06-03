@@ -1,11 +1,6 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { getAuthToken, getApiBaseUrl } from "../lib/apiClient";
-
-const DRIVERS_TEMP = [
-  { id: "driver-001", name: "Juan Pérez" },
-  { id: "driver-002", name: "María Gómez" },
-  { id: "driver-003", name: "Carlos Silva" },
-];
+import { obtenerConductoresActivos } from "../lib/rutasService";
 
 const API_BASE_URL = getApiBaseUrl();
 
@@ -99,7 +94,17 @@ const base = {
   },
 };
 
+function formatConductorLabel(conductor) {
+  const rut = conductor.rut || "Sin RUT";
+  const licencia = conductor.licencia_numero
+    ? ` · Lic. ${conductor.licencia_numero}`
+    : "";
+  return `${rut}${licencia}`;
+}
+
 export default function MonitoreoLicencias() {
+  const [conductores, setConductores] = useState([]);
+  const [loadingConductores, setLoadingConductores] = useState(true);
   const [driverId, setDriverId] = useState("");
   const [file, setFile] = useState(null);
   const [expiryDate, setExpiryDate] = useState("");
@@ -108,6 +113,29 @@ export default function MonitoreoLicencias() {
   const [errorText, setErrorText] = useState("");
 
   const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const cargarConductores = async () => {
+      setLoadingConductores(true);
+      const res = await obtenerConductoresActivos();
+      if (cancelled) return;
+
+      if (res.error) {
+        setErrorText(res.error);
+        setConductores([]);
+      } else {
+        setConductores(res.data || []);
+      }
+      setLoadingConductores(false);
+    };
+
+    cargarConductores();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const resetForm = () => {
     setDriverId("");
@@ -144,6 +172,7 @@ export default function MonitoreoLicencias() {
       const formData = new FormData();
       formData.append("file", file);
       formData.append("expiryDate", expiryDate);
+      formData.append("conductorId", driverId);
 
       const response = await fetch(
         `${API_BASE_URL}/api/conductores/upload-license`,
@@ -166,7 +195,7 @@ export default function MonitoreoLicencias() {
       await response.json().catch(() => null);
 
       setSuccessText(
-        "Licencia cargada y registrada correctamente (estado pending_review)."
+        "Licencia cargada correctamente. La vigencia quedó sincronizada en el panel de asignación."
       );
       resetForm();
     } catch (err) {
@@ -198,15 +227,25 @@ export default function MonitoreoLicencias() {
             style={base.select}
             value={driverId}
             onChange={(e) => setDriverId(e.target.value)}
-            disabled={isLoading}
+            disabled={isLoading || loadingConductores}
           >
-            <option value="">-- Selecciona un chofer --</option>
-            {DRIVERS_TEMP.map((driver) => (
-              <option key={driver.id} value={driver.id}>
-                {driver.name}
+            <option value="">
+              {loadingConductores
+                ? "Cargando conductores..."
+                : "-- Selecciona un chofer --"}
+            </option>
+            {conductores.map((conductor) => (
+              <option key={conductor.id} value={conductor.id}>
+                {formatConductorLabel(conductor)}
               </option>
             ))}
           </select>
+
+          {!loadingConductores && conductores.length === 0 && (
+            <p style={{ ...base.messageError, marginTop: "-8px" }}>
+              No hay conductores activos en el sistema.
+            </p>
+          )}
 
           <label htmlFor="licenseFile" style={base.label} className="rrhh-field-label">
             Carga de Documento
@@ -239,7 +278,7 @@ export default function MonitoreoLicencias() {
               ...base.button,
               ...(isLoading ? base.buttonDisabled : {}),
             }}
-            disabled={isLoading}
+            disabled={isLoading || loadingConductores}
           >
             {isLoading ? "Guardando..." : "Guardar"}
           </button>
