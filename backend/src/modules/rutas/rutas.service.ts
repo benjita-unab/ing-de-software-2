@@ -9,6 +9,7 @@ import { SupabaseConfigService } from '../../config/supabase.config';
 import { ConductoresService } from '../conductores/conductores.service';
 import { EmailService } from '../email/email.service';
 import { calcularDistanciaVialGoogle } from './google-routes-distance.helper';
+import { CreateAnomaliaDto } from './dto/create-anomalia.dto';
 
 /** Cuerpo esperado por POST /api/rutas (validación en createRoute). */
 export type CreateRutaDto = {
@@ -411,6 +412,64 @@ export class RutasService {
     }
 
     return created;
+  }
+
+  /**
+   * Registra una anomalía asociada a una ruta.
+   */
+  async createAnomalia(rutaId: string, body: CreateAnomaliaDto) {
+    const rutaUuid = String(rutaId ?? '').trim();
+    if (!rutaUuid) {
+      throw new BadRequestException('ruta_id es obligatorio');
+    }
+
+    const supabase = this.supabaseConfig.getClient();
+
+    const { data: existingRoute, error: routeError } = await supabase
+      .from('rutas')
+      .select('id')
+      .eq('id', rutaUuid)
+      .maybeSingle();
+
+    if (routeError) {
+      console.error('createAnomalia Supabase route check:', routeError);
+      throw new BadRequestException(`Error al validar ruta: ${routeError.message}`);
+    }
+
+    if (!existingRoute) {
+      throw new NotFoundException(`Ruta no encontrada: ${rutaUuid}`);
+    }
+
+    const insertPayload = {
+      ruta_id: rutaUuid,
+      titulo: String(body.titulo).trim(),
+      es_prioritario: body.es_prioritario,
+      descripcion: String(body.descripcion).trim(),
+      foto_url:
+        body.foto_url != null && String(body.foto_url).trim() !== ''
+          ? String(body.foto_url).trim()
+          : null,
+    };
+
+    const { data, error } = await supabase
+      .from('anomalias')
+      .insert([insertPayload])
+      .select('*')
+      .single();
+
+    if (error) {
+      console.error('createAnomalia Supabase:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      throw new BadRequestException(
+        `No se pudo crear la anomalía: ${error.message}${error.hint ? ` (${error.hint})` : ''}`,
+      );
+    }
+
+    return data;
   }
 
   /**
