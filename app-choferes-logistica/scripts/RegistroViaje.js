@@ -11,6 +11,7 @@ import {
   ScrollView,
   Modal,
   Pressable,
+  TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -18,6 +19,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useAutoSyncScheduler } from '../src/hooks/useAutoSyncScheduler';
+import { bffFetch } from '../src/services/bffService';
 import {
   loadMensajeQueue,
   saveMensajeQueue,
@@ -33,6 +35,7 @@ const RECEPCION = 'RECEPCION';
 const ENTREGADO = 'ENTREGADO';
 
 const EVIDENCIA_ADICIONAL = 'EVIDENCIA_ADICIONAL';
+const ANOMALIA = 'ANOMALIA';
 
 const ETAPAS_CANONICAS = [RECEPCION, ENTREGADO, HOJA_DESPACHO, EVIDENCIA_ADICIONAL];
 
@@ -161,6 +164,14 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
   const [isMessagesSyncing, setIsMessagesSyncing] = useState(false);
   const [mensajesQueue, setMensajesQueue] = useState([]);
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [isOptionsMenuOpen, setIsOptionsMenuOpen] = useState(false);
+  const [isAnomaliaModalVisible, setIsAnomaliaModalVisible] = useState(false);
+  const [anomaliaTitulo, setAnomaliaTitulo] = useState('');
+  const [anomaliaDescripcion, setAnomaliaDescripcion] = useState('');
+  const [anomaliaEsPrioritario, setAnomaliaEsPrioritario] = useState(false);
+  const [anomaliaFotoUri, setAnomaliaFotoUri] = useState(null);
+  const [isSendingAnomalia, setIsSendingAnomalia] = useState(false);
+  const [isAnomaliaPhotoMode, setIsAnomaliaPhotoMode] = useState(false);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const cameraRef = useRef(null);
   /** Si no es null, la próxima foto usa esta etapa (extra) sin cambiar el chip seleccionado */
@@ -306,6 +317,7 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
   const cerrarCamara = () => {
     etapaCapturaRef.current = null;
     setIsCameraOpen(false);
+    setIsAnomaliaPhotoMode(false);
   };
 
   /** Abre la cámara para una etapa específica */
@@ -314,6 +326,18 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
     const granted = await ensurePermissions();
     if (!granted) {
       etapaCapturaRef.current = null;
+      return;
+    }
+    setIsCameraOpen(true);
+  };
+
+  const abrirCamaraParaAnomalia = async () => {
+    etapaCapturaRef.current = ANOMALIA;
+    setIsAnomaliaPhotoMode(true);
+    const granted = await ensurePermissions();
+    if (!granted) {
+      etapaCapturaRef.current = null;
+      setIsAnomaliaPhotoMode(false);
       return;
     }
     setIsCameraOpen(true);
@@ -340,6 +364,12 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
           accuracy: Location.Accuracy.Low,
         }),
       ]);
+
+      if (etapa === ANOMALIA) {
+        setAnomaliaFotoUri(newPath);
+        cerrarCamara();
+        return;
+      }
 
       const ruta_id = String(rutaId ?? '').trim();
       const newRecord = {
@@ -437,34 +467,136 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
     }
   };
 
+  const enviarAnomalia = async () => {
+    if (!anomaliaTitulo.trim() || !anomaliaDescripcion.trim()) {
+      Alert.alert('Validación', 'Título y descripción son obligatorios.');
+      return;
+    }
+
+    if (!rutaId || !String(rutaId).trim()) {
+      Alert.alert('Ruta no disponible', 'Debes tener una ruta activa para generar un reporte.');
+      return;
+    }
+
+    setIsSendingAnomalia(true);
+    try {
+      let foto_url;
+      if (anomaliaFotoUri) {
+        const ext = anomaliaFotoUri.split('.').pop()?.split('?')[0]?.toLowerCase() || 'jpg';
+        const fileExtension = ['jpg', 'jpeg', 'png', 'webp'].includes(ext) ? ext : 'jpg';
+        const formData = new FormData();
+        formData.append('file', {
+          uri: anomaliaFotoUri,
+          name: `anomalia_${Date.now()}.${fileExtension}`,
+          type: `image/${fileExtension === 'jpg' ? 'jpeg' : fileExtension}`,
+        });
+        formData.append('bucket', 'fotos_anomalias');
+        formData.append('folder', `anomalias/${rutaId}`);
+
+        const uploadResponse = await bffFetch('/api/storage/upload', {
+          method: 'POST',
+          body: formData,
+        });
+        const uploadPayload = await uploadResponse.json().catch(() => ({}));
+        if (!uploadResponse.ok) {
+          throw new Error(uploadPayload?.error ?? 'No se pudo subir la fotografía.');
+        }
+        foto_url = uploadPayload.publicUrl ?? uploadPayload.filePath;
+      }
+
+      const body = {
+        titulo: anomaliaTitulo.trim(),
+        es_prioritario: anomaliaEsPrioritario,
+        descripcion: anomaliaDescripcion.trim(),
+        ...(foto_url ? { foto_url } : {}),
+      };
+
+      const response = await bffFetch(`/api/rutas/${rutaId}/anomalias`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error ?? 'No se pudo enviar el reporte.');
+      }
+
+      setAnomaliaTitulo('');
+      setAnomaliaDescripcion('');
+      setAnomaliaEsPrioritario(false);
+      setAnomaliaFotoUri(null);
+      setIsAnomaliaModalVisible(false);
+      Alert.alert('Reporte enviado', 'La anomalía se registró correctamente.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'No fue posible enviar el reporte.';
+      Alert.alert('Error', message);
+    } finally {
+      setIsSendingAnomalia(false);
+    }
+  };
+
   const sortedRegistros = useMemo(() => {
     return [...registros].sort(
       (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
     );
   }, [registros]);
 
+  if (isCameraOpen) {
+    return (
+      <SafeAreaView style={styles.cameraScreen}>
+        <View style={styles.cameraContainer}>
+          <CameraView style={styles.camera} facing="back" ref={cameraRef} />
+          <View style={styles.cameraActions}>
+            <TouchableOpacity style={styles.btnSecondary} onPress={cerrarCamara}>
+              <Text style={styles.btnLightText}>Cancelar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.btnCapture} onPress={manejarCapturaFoto} disabled={isCapturing}>
+              {isCapturing ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnLightText}>Capturar</Text>}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {isCameraOpen ? (
-          <View style={styles.cameraContainer}>
-            <CameraView style={styles.camera} facing="back" ref={cameraRef} />
-            <View style={styles.cameraActions}>
-              <TouchableOpacity style={styles.btnSecondary} onPress={cerrarCamara}>
-                <Text style={styles.btnLightText}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.btnCapture} onPress={manejarCapturaFoto} disabled={isCapturing}>
-                {isCapturing ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnLightText}>Capturar</Text>}
-              </TouchableOpacity>
-            </View>
-          </View>
-        ) : (
-          <>
-            <View style={styles.header}>
+          <View style={styles.header}>
+            <View style={styles.headerText}>
               <Text style={styles.title}>Evidencias del viaje</Text>
               <Text style={styles.subtitle}>
                 Captura directa por tipo de evidencia
               </Text>
+            </View>
+
+            <View style={styles.headerActions}>
+                <TouchableOpacity
+                  onPress={() => setIsOptionsMenuOpen((prev) => !prev)}
+                  style={styles.headerMenuButton}
+                  accessibilityRole="button"
+                  accessibilityLabel="Abrir menú de opciones"
+                >
+                  <Text style={styles.headerMenuIcon}>⋮</Text>
+                </TouchableOpacity>
+                {isOptionsMenuOpen ? (
+                  <View style={styles.headerDropdown}>
+                    <TouchableOpacity
+                      style={styles.headerDropdownItem}
+                      onPress={() => {
+                        setIsAnomaliaModalVisible(true);
+                        setIsOptionsMenuOpen(false);
+                      }}
+                      accessibilityRole="button"
+                    >
+                      <Text style={styles.headerDropdownText}>Generar Reporte</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
+              </View>
             </View>
 
             <Text style={styles.sectionLabel}>Captura rápida</Text>
@@ -565,8 +697,6 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
                 </View>
               ))
             )}
-          </>
-        )}
       </ScrollView>
 
       <Modal
@@ -668,6 +798,132 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        visible={isAnomaliaModalVisible && !isCameraOpen}
+        animationType="fade"
+        transparent={false}
+        onRequestClose={() => setIsAnomaliaModalVisible(false)}
+      >
+        <View style={[styles.modalOverlay, styles.modalSolidOverlay]}>
+          <Pressable
+            style={styles.modalBackdrop}
+            onPress={() => setIsAnomaliaModalVisible(false)}
+            accessibilityRole="button"
+            accessibilityLabel="Cerrar modal"
+          />
+          <View
+            style={[
+              styles.modalCard,
+              {
+                marginTop: Math.max(insets.top, 12),
+                marginBottom: Math.max(insets.bottom, 12),
+              },
+            ]}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Reporte de anomalía</Text>
+              <TouchableOpacity
+                onPress={() => setIsAnomaliaModalVisible(false)}
+                style={styles.modalCloseButton}
+                accessibilityRole="button"
+                accessibilityLabel="Cerrar"
+              >
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              style={styles.modalScroll}
+              contentContainerStyle={styles.modalScrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator
+            >
+              <View style={styles.modalSection}>
+                <Text style={styles.sectionTitle}>Título</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Describe brevemente la anomalía"
+                  value={anomaliaTitulo}
+                  onChangeText={setAnomaliaTitulo}
+                  returnKeyType="done"
+                />
+              </View>
+
+              <View style={[styles.modalSection, styles.checkboxRow]}>
+                <TouchableOpacity
+                  style={styles.checkboxContainer}
+                  onPress={() => setAnomaliaEsPrioritario((prev) => !prev)}
+                  accessibilityRole="button"
+                >
+                  <View
+                    style={[
+                      styles.checkboxBox,
+                      anomaliaEsPrioritario && styles.checkboxBoxChecked,
+                    ]}
+                  >
+                    {anomaliaEsPrioritario ? (
+                      <Text style={styles.checkboxCheck}>✓</Text>
+                    ) : null}
+                  </View>
+                  <Text style={styles.checkboxLabel}>Marcar reporte como prioritario</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.modalSection}>
+                <Text style={styles.sectionTitle}>Descripción</Text>
+                <TextInput
+                  style={[styles.modalInput, styles.modalTextArea]}
+                  placeholder="Escribe los detalles de la anomalía"
+                  value={anomaliaDescripcion}
+                  onChangeText={setAnomaliaDescripcion}
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                />
+              </View>
+
+              <View style={styles.modalSection}>
+                <Text style={styles.sectionTitle}>Fotografía</Text>
+                <TouchableOpacity
+                  style={styles.btnAttachPhoto}
+                  onPress={abrirCamaraParaAnomalia}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.btnAttachPhotoText}>
+                    {anomaliaFotoUri ? 'Cambiar fotografía' : 'Adjuntar Fotografía'}
+                  </Text>
+                </TouchableOpacity>
+                {anomaliaFotoUri ? (
+                  <Image source={{ uri: anomaliaFotoUri }} style={styles.anomaliaThumbnail} />
+                ) : null}
+              </View>
+
+              <View style={styles.modalRowButtons}>
+                <TouchableOpacity
+                  style={[styles.btnSecondary, styles.modalButton]}
+                  onPress={() => setIsAnomaliaModalVisible(false)}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.btnLightText}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.btnCapture, styles.modalButton, isSendingAnomalia && styles.btnDisabled]}
+                  onPress={enviarAnomalia}
+                  disabled={isSendingAnomalia}
+                  accessibilityRole="button"
+                >
+                  {isSendingAnomalia ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.btnLightText}>Enviar Reporte</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -680,6 +936,54 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderColor: '#E5EAF2',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  headerText: {
+    flex: 1,
+    paddingRight: 16,
+  },
+  headerActions: {
+    position: 'relative',
+    alignItems: 'flex-end',
+  },
+  headerMenuButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#eef2ff',
+  },
+  headerMenuIcon: {
+    fontSize: 22,
+    color: '#1D2A3A',
+    lineHeight: 24,
+  },
+  headerDropdown: {
+    position: 'absolute',
+    top: 46,
+    right: 0,
+    minWidth: 160,
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 8,
+    zIndex: 100,
+  },
+  headerDropdownItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  headerDropdownText: {
+    fontSize: 14,
+    color: '#0f172a',
   },
   title: { fontSize: 22, fontWeight: '700', color: '#1D2A3A' },
   subtitle: { fontSize: 14, color: '#64748b', marginTop: 6 },
@@ -752,6 +1056,79 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#cbd5e1',
     padding: 18,
+  },
+  modalInput: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: '#0f172a',
+  },
+  modalTextArea: {
+    minHeight: 120,
+    textAlignVertical: 'top',
+  },
+  checkboxRow: {
+    alignItems: 'center',
+  },
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  checkboxBox: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+  },
+  checkboxBoxChecked: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
+  },
+  checkboxCheck: {
+    color: '#fff',
+    fontWeight: '700',
+  },
+  checkboxLabel: {
+    color: '#0f172a',
+    fontSize: 14,
+    flexShrink: 1,
+  },
+  btnAttachPhoto: {
+    backgroundColor: '#eef2ff',
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+  },
+  btnAttachPhotoText: {
+    color: '#2563eb',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  anomaliaThumbnail: {
+    width: '100%',
+    height: 180,
+    marginTop: 12,
+    borderRadius: 14,
+    backgroundColor: '#e2e8f0',
+  },
+  modalRowButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 18,
+    justifyContent: 'space-between',
+  },
+  modalButton: {
+    flex: 1,
   },
   btnGestionEstado: {
     backgroundColor: '#f97316',
@@ -840,6 +1217,7 @@ const styles = StyleSheet.create({
     color: '#475569',
     fontSize: 12,
   },
+  cameraScreen: { flex: 1, backgroundColor: '#000' },
   cameraContainer: { flex: 1, minHeight: 420, backgroundColor: '#000' },
   camera: { flex: 1 },
   cameraActions: {
@@ -869,10 +1247,14 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     backgroundColor: 'rgba(0, 0, 0, 0.45)',
   },
+  modalSolidOverlay: {
+    backgroundColor: '#ffffff',
+  },
   modalBackdrop: {
     ...StyleSheet.absoluteFillObject,
   },
   modalCard: {
+    flex: 1,
     backgroundColor: '#ffffff',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
