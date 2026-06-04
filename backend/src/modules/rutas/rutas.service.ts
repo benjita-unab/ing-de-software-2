@@ -473,6 +473,39 @@ export class RutasService {
   }
 
   /**
+   * Devuelve las anomalías reportadas para una ruta
+   */
+  async getAnomaliasByRuta(rutaId: string) {
+    if (!rutaId) {
+      throw new BadRequestException('rutaId es requerido');
+    }
+
+    const supabase = this.supabaseConfig.getClient();
+
+    const { data, error } = await supabase
+      .from('anomalias')
+      .select(
+        `
+        id,
+        ruta_id,
+        titulo,
+        descripcion,
+        foto_url,
+        es_prioritario,
+        created_at
+      `,
+      )
+      .eq('ruta_id', rutaId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      throw new BadRequestException(`Error al obtener anomalías: ${error.message}`);
+    }
+
+    return data || [];
+  }
+
+  /**
    * Asigna un conductor a una ruta después de validar su licencia
    */
   async assignDriverToRoute(

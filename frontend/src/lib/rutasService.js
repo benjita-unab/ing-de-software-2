@@ -188,6 +188,25 @@ export async function obtenerRutaDetalle(rutaId) {
 }
 
 /**
+ * Obtiene las anomalías reportadas de una ruta.
+ * @param {string} rutaId
+ */
+export async function obtenerAnomaliasRuta(rutaId) {
+  if (!rutaId) {
+    return { data: [], error: "rutaId es requerido" };
+  }
+
+  const res = await apiFetch(`/api/rutas/${rutaId}/anomalias`);
+
+  if (!res.ok) {
+    return { data: [], error: res.error || "Error al obtener anomalías" };
+  }
+
+  const payload = res.data;
+  return { data: Array.isArray(payload) ? payload : payload?.data ?? [], error: null };
+}
+
+/**
  * Cambia el estado de una ruta (incluye desasignar marcando estado).
  * @param {string} rutaId
  * @param {string} estado

@@ -87,6 +87,14 @@ export class RutasController {
     return await this.rutasService.createAnomalia(rutaId, body);
   }
 
+  /**   * GET /api/rutas/:id/anomalias
+   * Obtiene las anomalías reportadas para una ruta.
+   */
+  @Get(':id/anomalias')
+  async getAnomalias(@Param('id') rutaId: string) {
+    return await this.rutasService.getAnomaliasByRuta(rutaId);
+  }
+
   /**   * GET /api/rutas/:id/evidencias
    * Devuelve PDF de comprobante (si existe) y fotos de trazabilidad
    * de la ruta. Usado por la vista Historial.
