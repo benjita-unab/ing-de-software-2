@@ -6,25 +6,24 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useColorScheme,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import RegistroViaje from '../../scripts/RegistroViaje';
 import { BotonCerrarDespacho } from '../../src/components/BotonCerrarDespacho';
+import {
+  ChoferSessionBar,
+  STORAGE_RUTA_ACTIVA_ID,
+} from '../../src/components/ChoferSessionBar';
 import { bffFetch } from '../../src/services/bffService';
 import { TiemposInspeccionBotones } from '../../src/components/TiemposInspeccionBotones';
-
-/** Persistencia local del UUID de ruta elegido por el chofer */
-const STORAGE_RUTA_ACTIVA_ID = 'logitrack_ruta_activa_id';
-
-type RutaApi = {
-  id: string;
-  estado?: string | null;
-  origen?: string | null;
-  destino?: string | null;
-  bultos_despachados?: number | null;
-};
+import { RutaChoferCard } from '../../src/components/RutaChoferCard';
+import {
+  etiquetaRutaAccesibilidad,
+  type RutaListItem,
+} from '../../src/utils/rutaCardFormat';
 
 /** UUID pueden llegar con distinta capitalización desde API vs estado local */
 function mismoId(
@@ -37,7 +36,7 @@ function mismoId(
 }
 
 /** Etiqueta legible para lista de rutas */
-function etiquetaRutaDesdeApi(r: RutaApi): string {
+function etiquetaRutaDesdeApi(r: RutaListItem): string {
   const o = r.origen?.trim() || '—';
   const d = r.destino?.trim() || '—';
   return `${o} → ${d}`;
@@ -59,7 +58,9 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const [todoSincronizado, setTodoSincronizado] = useState(false);
   const [rutaActivaId, setRutaActivaId] = useState<string | null>(null);
-  const [rutasOperativas, setRutasOperativas] = useState<RutaApi[]>([]);
+  const [rutasOperativas, setRutasOperativas] = useState<RutaListItem[]>([]);
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
   const [cargandoRutas, setCargandoRutas] = useState(true);
   const [errorRutas, setErrorRutas] = useState<string | null>(null);
 
@@ -70,6 +71,8 @@ export default function HomeScreen() {
     try {
       const res = await bffFetch('/api/rutas');
       const raw = await res.json().catch(() => null);
+      
+      console.log("RESPUESTA RUTAS:", raw);
       if (!res.ok) {
         const msg =
           raw &&
@@ -83,7 +86,7 @@ export default function HomeScreen() {
             : `Error HTTP ${res.status}`;
         throw new Error(msg || `Error HTTP ${res.status}`);
       }
-      const lista: RutaApi[] = Array.isArray(raw)
+      const lista: RutaListItem[] = Array.isArray(raw)
         ? raw
         : raw && typeof raw === 'object' && Array.isArray((raw as any).data)
         ? (raw as any).data
@@ -184,9 +187,12 @@ export default function HomeScreen() {
 
   if (cargandoRutas) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" />
-        <Text style={styles.hint}>Cargando rutas…</Text>
+      <View style={styles.screenRoot}>
+        <ChoferSessionBar />
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" />
+          <Text style={styles.hint}>Cargando rutas…</Text>
+        </View>
       </View>
     );
   }
@@ -196,9 +202,9 @@ export default function HomeScreen() {
 
   if (debeElegirRuta) {
     const selectorPadBottom = insets.bottom + 96;
-    const selectorPadTop = insets.top + 16;
     return (
       <View style={styles.screenRoot} collapsable={false}>
+        <ChoferSessionBar />
         {errorRutas ? (
           <View style={styles.banner}>
             <Text style={styles.bannerText}>
@@ -207,11 +213,14 @@ export default function HomeScreen() {
           </View>
         ) : null}
         <ScrollView
-          style={styles.selectorScroll}
+          style={[
+            styles.selectorScroll,
+            { backgroundColor: isDark ? '#0A0E1A' : '#F8FAFC' },
+          ]}
           contentContainerStyle={[
             styles.selectorScrollContent,
             {
-              paddingTop: selectorPadTop,
+              paddingTop: 8,
               paddingBottom: selectorPadBottom,
             },
           ]}
@@ -219,25 +228,30 @@ export default function HomeScreen() {
           showsVerticalScrollIndicator
           nestedScrollEnabled
         >
-          <View style={styles.selectorStripInner} collapsable={false}>
-            <Text style={styles.selectorTitle}>Ruta activa — elige una para continuar</Text>
+          <View
+            style={[
+              styles.selectorStripInner,
+              { backgroundColor: isDark ? '#0A0E1A' : '#F8FAFC' },
+            ]}
+            collapsable={false}
+          >
+            <Text
+              style={[
+                styles.selectorTitle,
+                { color: isDark ? '#F8FAFC' : '#0F172A' },
+              ]}
+            >
+              Ruta activa — elige una para continuar
+            </Text>
             {rutasMemo.map((ruta) => {
               const idStr = String(ruta.id);
               return (
-                <Pressable
+                <RutaChoferCard
                   key={idStr}
-                  style={({ pressed }) => [
-                    styles.card,
-                    pressed && styles.cardPressed,
-                  ]}
+                  ruta={ruta}
                   onPress={onPressPorRutaId.get(idStr)!}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Seleccionar ruta ${etiquetaRutaDesdeApi(ruta)}`}
-                  android_ripple={{ color: '#bbdefb' }}
-                >
-                  <Text style={styles.selectorMain}>{etiquetaRutaDesdeApi(ruta)}</Text>
-                  <Text style={styles.selectorMeta}>{ruta.estado ?? ''}</Text>
-                </Pressable>
+                  accessibilityLabel={`Seleccionar ${etiquetaRutaAccesibilidad(ruta)}`}
+                />
               );
             })}
           </View>
@@ -248,14 +262,18 @@ export default function HomeScreen() {
 
   if (!rutaActivaId) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.hint}>Sin ruta para trabajar.</Text>
+      <View style={styles.screenRoot}>
+        <ChoferSessionBar />
+        <View style={styles.centered}>
+          <Text style={styles.hint}>Sin ruta para trabajar.</Text>
+        </View>
       </View>
     );
   }
 
   return (
     <View style={styles.screenRoot} collapsable={false}>
+      <ChoferSessionBar />
       {errorRutas ? (
         <View style={styles.banner}>
           <Text style={styles.bannerText}>
@@ -350,45 +368,26 @@ const styles = StyleSheet.create({
   selectorScroll: {
     flex: 1,
     minHeight: 0,
-    backgroundColor: '#f8fafc',
   },
   selectorScrollContent: {
     flexGrow: 1,
   },
   /** Contenido del selector dentro del ScrollView */
   selectorStripInner: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     paddingTop: 4,
     paddingBottom: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#e2e8f0',
-    backgroundColor: '#f8fafc',
   },
   selectorTitle: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
-    marginBottom: 8,
-    color: '#0f172a',
-  },
-  card: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    marginBottom: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#cbd5e1',
-    backgroundColor: '#fff',
-  },
-  cardSelected: {
-    borderColor: '#1976d2',
-    borderWidth: 2,
-    backgroundColor: '#e3f2fd',
+    marginBottom: 12,
   },
   cardPressed: {
     opacity: 0.92,
   },
-  selectorMain: { fontSize: 15, color: '#0f172a' },
-  selectorMeta: { fontSize: 12, color: '#64748b', marginTop: 2 },
   /** flexShrink + minHeight evitan que el hijo flex:1 tape el selector */
   mainContent: {
     flex: 1,

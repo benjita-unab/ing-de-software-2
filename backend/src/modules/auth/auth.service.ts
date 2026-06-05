@@ -22,6 +22,7 @@ export interface JwtSignPayload {
   email: string;
   role: UserRole;
   clienteId?: string;
+  conductorId?: string;
 }
 
 const ALLOWED_ROLES: UserRole[] = ['ADMIN', 'OPERADOR', 'CONDUCTOR', 'CLIENTE'];
@@ -36,6 +37,7 @@ export class AuthService {
   /**
    * Valida credenciales contra `public.usuarios` y emite JWT firmado con JWT_SECRET.
    * Usuarios CLIENTE deben tener fila en `clientes` con `usuario_id` = `usuarios.id`.
+   * Usuarios CONDUCTOR deben tener fila en `conductores` con `usuario_id` = `usuarios.id` (HU-26).
    */
   async login(
     email: string,
@@ -96,6 +98,19 @@ export class AuthService {
       payload.clienteId = clienteId;
     }
 
+    if (role === 'CONDUCTOR') {
+      const conductorId = await this.resolveConductorIdForUsuario(
+        supabase,
+        usuario.id,
+      );
+      if (!conductorId) {
+        throw new ForbiddenException(
+          'Tu usuario no está vinculado a un conductor. Solicita al administrador que active tu acceso.',
+        );
+      }
+      payload.conductorId = conductorId;
+    }
+
     const accessToken = await this.jwtService.signAsync(payload);
 
     return { accessToken };
@@ -127,5 +142,28 @@ export class AuthService {
     }
 
     return cliente?.id ?? null;
+  }
+
+  /**
+   * Resuelve el conductor asociado al usuario chofer (HU-26).
+   */
+  private async resolveConductorIdForUsuario(
+    supabase: ReturnType<SupabaseConfigService['getClient']>,
+    usuarioId: string,
+  ): Promise<string | null> {
+    const { data: conductores, error } = await supabase
+      .from('conductores')
+      .select('id')
+      .eq('usuario_id', usuarioId);
+
+    const conductorIdSeleccionado = conductores?.[0]?.id ?? null;
+
+    if (error) {
+      throw new InternalServerErrorException(
+        'Error al resolver el conductor asociado al usuario',
+      );
+    }
+
+    return conductorIdSeleccionado;
   }
 }

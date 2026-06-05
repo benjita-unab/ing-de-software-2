@@ -10,6 +10,7 @@ export interface JwtPayload {
   role?: string;
   user_role?: string;
   clienteId?: string;
+  conductorId?: string;
   aud?: string;
   iss?: string;
 }
@@ -19,6 +20,7 @@ export interface AuthenticatedUser {
   email: string;
   role: UserRole | 'user';
   clienteId?: string;
+  conductorId?: string;
   aud?: string;
   iss?: string;
 }
@@ -62,6 +64,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       clienteId:
         typeof payload.clienteId === 'string' && payload.clienteId.trim()
           ? payload.clienteId.trim()
+          : undefined,
+      conductorId:
+        typeof payload.conductorId === 'string' && payload.conductorId.trim()
+          ? payload.conductorId.trim()
           : undefined,
       aud: payload.aud,
       iss: payload.iss,
