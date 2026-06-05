@@ -5,6 +5,7 @@ import {
   estimarFechasEstimadas,
   actualizarFechasEstimadas,
   notificarFechaEstimada,
+  obtenerAnomaliasRuta,
 } from "../lib/rutasService";
 import { useGooglePlacesAutocomplete } from "../hooks/useGooglePlacesAutocomplete";
 
@@ -80,16 +81,6 @@ const base = {
     cursor: "pointer",
     fontSize: "14px",
   },
-  btnWaze: {
-    background: "#33ccff",
-    color: "#0f172a",
-    border: "none",
-    borderRadius: "8px",
-    padding: "8px 12px",
-    fontWeight: 700,
-    cursor: "pointer",
-    fontSize: "12px",
-  },
   btnSecondary: {
     background: "rgba(255,255,255,0.08)",
     color: "#e2e8f0",
@@ -118,6 +109,42 @@ const base = {
   },
   dateField: {
     marginBottom: "8px",
+  },
+  anomalyCard: {
+    padding: "10px",
+    borderRadius: "12px",
+    background: "rgba(255,255,255,0.04)",
+    border: "1px solid rgba(255,255,255,0.12)",
+    marginTop: "10px",
+  },
+  anomalyItem: {
+    padding: "10px",
+    borderRadius: "10px",
+    background: "rgba(255,255,255,0.05)",
+    border: "1px solid rgba(248,113,113,0.2)",
+    marginBottom: "10px",
+  },
+  anomalyTitle: {
+    fontSize: "13px",
+    fontWeight: 700,
+    color: "#f8fafc",
+  },
+  anomalyDescription: {
+    marginTop: "6px",
+    fontSize: "12px",
+    lineHeight: 1.4,
+    color: "#cbd5e1",
+  },
+  anomalyPriorityBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "3px 8px",
+    borderRadius: "999px",
+    background: "rgba(248,113,113,0.18)",
+    color: "#fecaca",
+    fontSize: "11px",
+    fontWeight: 700,
+    marginLeft: "8px",
   },
   dateFieldLabel: {
     display: "block",
@@ -247,13 +274,6 @@ const AYUDA_DISTANCIA_VIAL =
 const ADVERTENCIA_DISTANCIA_VIAL =
   "No se pudo calcular la distancia vial automáticamente. Ingrese la distancia manualmente o revise origen/destino.";
 
-function openWazeNavigation(destinoTexto) {
-  const q = String(destinoTexto || "").trim();
-  if (!q) return;
-  const wazeUrl = `https://waze.com/ul?q=${encodeURIComponent(q)}&navigate=yes&utm_source=logitrack`;
-  window.open(wazeUrl, "_blank", "noopener,noreferrer");
-}
-
 /** datetime-local → ISO (UTC) para el backend */
 function localDatetimeToIso(localVal) {
   if (!localVal || !String(localVal).trim()) return null;
@@ -330,6 +350,7 @@ export default function RutasActivas() {
   const [mensaje, setMensaje] = useState(null);
   const [mensajesRuta, setMensajesRuta] = useState({});
   const [fechasEdit, setFechasEdit] = useState({});
+  const [anomaliasPorRuta, setAnomaliasPorRuta] = useState({});
   const [savingFechasId, setSavingFechasId] = useState(null);
   const [notifyingId, setNotifyingId] = useState(null);
   const [calculandoEstimacion, setCalculandoEstimacion] = useState(false);
@@ -369,6 +390,7 @@ export default function RutasActivas() {
     const res = await apiFetch("/api/rutas");
     if (!res.ok) {
       setRutas([]);
+      setAnomaliasPorRuta({});
       setMensaje({ tipo: "error", texto: res.error || "No se pudieron cargar las rutas." });
       setLoading(false);
       return;
@@ -382,6 +404,19 @@ export default function RutasActivas() {
     });
     setFechasEdit(fechasMap);
     setLoading(false);
+
+    if (lista.length > 0) {
+      const anomaliasMap = {};
+      await Promise.all(
+        lista.map(async (ruta) => {
+          const result = await obtenerAnomaliasRuta(ruta.id);
+          anomaliasMap[ruta.id] = result.data || [];
+        }),
+      );
+      setAnomaliasPorRuta(anomaliasMap);
+    } else {
+      setAnomaliasPorRuta({});
+    }
   }, []);
 
   const cargarListas = useCallback(async () => {
@@ -937,13 +972,6 @@ export default function RutasActivas() {
       </div>
 
       <div style={base.card} className="operator-glass-card">
-        <div style={{ ...base.title, fontSize: "15px" }}>Navegación con Waze</div>
-        <p style={{ ...base.subtitle, marginBottom: 0 }}>
-          Waze se utiliza solo como apoyo para navegación. El seguimiento, evidencias y cierre de despacho se mantienen dentro de LogiTrack.
-        </p>
-      </div>
-
-      <div style={base.card} className="operator-glass-card">
         <div style={{ ...base.title, fontSize: "16px" }}>Rutas registradas</div>
         {loading ? (
           <p style={{ color: "#94a3b8", fontSize: "14px" }}>Cargando rutas…</p>
@@ -961,6 +989,7 @@ export default function RutasActivas() {
                   <th style={base.th}>Conductor / Camión</th>
                   <th style={base.th}>ETA</th>
                   <th style={base.th}>Fechas estimadas</th>
+                  <th style={base.th}>Anomalías</th>
                   <th style={base.th}>Acciones</th>
                 </tr>
               </thead>
@@ -1084,15 +1113,41 @@ export default function RutasActivas() {
                           ? "Enviando…"
                           : "Notificar fecha estimada"}
                       </button>
-                      <button
-                        type="button"
-                        style={base.btnWaze}
-                        onClick={() => openWazeNavigation(ruta.destino)}
-                        disabled={!String(ruta.destino || "").trim()}
-                      >
-                        Abrir en Waze
-                      </button>
                       <MensajeFilaRuta mensaje={mensajesRuta[ruta.id]?.notificar} />
+                    </td>
+                    <td style={base.td}>
+                      {Array.isArray(anomaliasPorRuta[ruta.id]) && anomaliasPorRuta[ruta.id].length > 0 ? (
+                        <div style={base.anomalyCard}>
+                          <div style={{ marginBottom: "8px", fontWeight: 700, color: "#f8fafc" }}>
+                            {anomaliasPorRuta[ruta.id].length} anomalía(s) reportada(s)
+                          </div>
+                          {anomaliasPorRuta[ruta.id].map((anomalia) => (
+                            <div key={anomalia.id} style={base.anomalyItem}>
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+                                <span style={base.anomalyTitle}>{anomalia.titulo || "Sin título"}</span>
+                                {anomalia.es_prioritario && (
+                                  <span style={base.anomalyPriorityBadge}>PRIORITARIO</span>
+                                )}
+                              </div>
+                              <div style={base.anomalyDescription}>{anomalia.descripcion || "Sin descripción"}</div>
+                              {anomalia.foto_url && (
+                                <div style={{ marginTop: "8px" }}>
+                                  <a
+                                    href={anomalia.foto_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{ color: "#60a5fa", fontSize: "12px" }}
+                                  >
+                                    Ver foto relacionada
+                                  </a>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div style={{ color: "#94a3b8", fontSize: "13px" }}>No hay anomalías reportadas</div>
+                      )}
                     </td>
                   </tr>
                 ))}

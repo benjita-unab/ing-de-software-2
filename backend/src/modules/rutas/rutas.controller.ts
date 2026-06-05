@@ -14,6 +14,7 @@ import {
   CreateRutaDto,
   EstimarFechasDto,
 } from './rutas.service';
+import { CreateAnomaliaDto } from './dto/create-anomalia.dto';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/user.decorator';
 import { JwtGuard } from '../../common/guards/jwt.guard';
@@ -77,8 +78,26 @@ export class RutasController {
     return await this.rutasService.getUnassignedRoutes();
   }
 
-  /**
-   * GET /api/rutas/:id/evidencias
+  /**   * POST /api/rutas/:id/anomalias
+   * Registra una anomalía asociada a la ruta.
+   */
+  @Post(':id/anomalias')
+  async createAnomalia(
+    @Param('id') rutaId: string,
+    @Body() body: CreateAnomaliaDto,
+  ) {
+    return await this.rutasService.createAnomalia(rutaId, body);
+  }
+
+  /**   * GET /api/rutas/:id/anomalias
+   * Obtiene las anomalías reportadas para una ruta.
+   */
+  @Get(':id/anomalias')
+  async getAnomalias(@Param('id') rutaId: string) {
+    return await this.rutasService.getAnomaliasByRuta(rutaId);
+  }
+
+  /**   * GET /api/rutas/:id/evidencias
    * Devuelve PDF de comprobante (si existe) y fotos de trazabilidad
    * de la ruta. Usado por la vista Historial.
    */

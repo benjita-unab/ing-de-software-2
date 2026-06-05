@@ -9,6 +9,7 @@ import { SupabaseConfigService } from '../../config/supabase.config';
 import { ConductoresService } from '../conductores/conductores.service';
 import { EmailService } from '../email/email.service';
 import { calcularDistanciaVialGoogle } from './google-routes-distance.helper';
+import { CreateAnomaliaDto } from './dto/create-anomalia.dto';
 
 /** Cuerpo esperado por POST /api/rutas (validación en createRoute). */
 export type CreateRutaDto = {
@@ -344,6 +345,17 @@ export class RutasService {
       insert.fecha_estimada_entrega = feEntrega;
     }
 
+    // CA-3: bloquear asignación si la licencia está vencida (misma regla que POST /assign)
+    if (conductor_id) {
+      const licenseValidation =
+        await this.conductoresService.validateDriverLicense(conductor_id);
+      if (!licenseValidation.isValid) {
+        throw new ForbiddenException(
+          `No se puede asignar conductor a la ruta: ${licenseValidation.message}`,
+        );
+      }
+    }
+
     const supabase = this.supabaseConfig.getClient();
 
     const { data: created, error } = await supabase
@@ -400,6 +412,97 @@ export class RutasService {
     }
 
     return created;
+  }
+
+  /**
+   * Registra una anomalía asociada a una ruta.
+   */
+  async createAnomalia(rutaId: string, body: CreateAnomaliaDto) {
+    const rutaUuid = String(rutaId ?? '').trim();
+    if (!rutaUuid) {
+      throw new BadRequestException('ruta_id es obligatorio');
+    }
+
+    const supabase = this.supabaseConfig.getClient();
+
+    const { data: existingRoute, error: routeError } = await supabase
+      .from('rutas')
+      .select('id')
+      .eq('id', rutaUuid)
+      .maybeSingle();
+
+    if (routeError) {
+      console.error('createAnomalia Supabase route check:', routeError);
+      throw new BadRequestException(`Error al validar ruta: ${routeError.message}`);
+    }
+
+    if (!existingRoute) {
+      throw new NotFoundException(`Ruta no encontrada: ${rutaUuid}`);
+    }
+
+    const insertPayload = {
+      ruta_id: rutaUuid,
+      titulo: String(body.titulo).trim(),
+      es_prioritario: body.es_prioritario,
+      descripcion: String(body.descripcion).trim(),
+      foto_url:
+        body.foto_url != null && String(body.foto_url).trim() !== ''
+          ? String(body.foto_url).trim()
+          : null,
+    };
+
+    const { data, error } = await supabase
+      .from('anomalias')
+      .insert([insertPayload])
+      .select('*')
+      .single();
+
+    if (error) {
+      console.error('createAnomalia Supabase:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      throw new BadRequestException(
+        `No se pudo crear la anomalía: ${error.message}${error.hint ? ` (${error.hint})` : ''}`,
+      );
+    }
+
+    return data;
+  }
+
+  /**
+   * Devuelve las anomalías reportadas para una ruta
+   */
+  async getAnomaliasByRuta(rutaId: string) {
+    if (!rutaId) {
+      throw new BadRequestException('rutaId es requerido');
+    }
+
+    const supabase = this.supabaseConfig.getClient();
+
+    const { data, error } = await supabase
+      .from('anomalias')
+      .select(
+        `
+        id,
+        ruta_id,
+        titulo,
+        descripcion,
+        foto_url,
+        es_prioritario,
+        created_at
+      `,
+      )
+      .eq('ruta_id', rutaId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      throw new BadRequestException(`Error al obtener anomalías: ${error.message}`);
+    }
+
+    return data || [];
   }
 
   /**
