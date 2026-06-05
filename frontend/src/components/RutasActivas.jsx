@@ -81,16 +81,6 @@ const base = {
     cursor: "pointer",
     fontSize: "14px",
   },
-  btnWaze: {
-    background: "#33ccff",
-    color: "#0f172a",
-    border: "none",
-    borderRadius: "8px",
-    padding: "8px 12px",
-    fontWeight: 700,
-    cursor: "pointer",
-    fontSize: "12px",
-  },
   btnSecondary: {
     background: "rgba(255,255,255,0.08)",
     color: "#e2e8f0",
@@ -283,13 +273,6 @@ const AYUDA_DISTANCIA_VIAL =
 
 const ADVERTENCIA_DISTANCIA_VIAL =
   "No se pudo calcular la distancia vial automáticamente. Ingrese la distancia manualmente o revise origen/destino.";
-
-function openWazeNavigation(destinoTexto) {
-  const q = String(destinoTexto || "").trim();
-  if (!q) return;
-  const wazeUrl = `https://waze.com/ul?q=${encodeURIComponent(q)}&navigate=yes&utm_source=logitrack`;
-  window.open(wazeUrl, "_blank", "noopener,noreferrer");
-}
 
 /** datetime-local → ISO (UTC) para el backend */
 function localDatetimeToIso(localVal) {
@@ -989,13 +972,6 @@ export default function RutasActivas() {
       </div>
 
       <div style={base.card} className="operator-glass-card">
-        <div style={{ ...base.title, fontSize: "15px" }}>Navegación con Waze</div>
-        <p style={{ ...base.subtitle, marginBottom: 0 }}>
-          Waze se utiliza solo como apoyo para navegación. El seguimiento, evidencias y cierre de despacho se mantienen dentro de LogiTrack.
-        </p>
-      </div>
-
-      <div style={base.card} className="operator-glass-card">
         <div style={{ ...base.title, fontSize: "16px" }}>Rutas registradas</div>
         {loading ? (
           <p style={{ color: "#94a3b8", fontSize: "14px" }}>Cargando rutas…</p>
@@ -1136,14 +1112,6 @@ export default function RutasActivas() {
                         {notifyingId === ruta.id
                           ? "Enviando…"
                           : "Notificar fecha estimada"}
-                      </button>
-                      <button
-                        type="button"
-                        style={base.btnWaze}
-                        onClick={() => openWazeNavigation(ruta.destino)}
-                        disabled={!String(ruta.destino || "").trim()}
-                      >
-                        Abrir en Waze
                       </button>
                       <MensajeFilaRuta mensaje={mensajesRuta[ruta.id]?.notificar} />
                     </td>
