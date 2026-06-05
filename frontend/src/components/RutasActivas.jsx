@@ -5,6 +5,7 @@ import {
   estimarFechasEstimadas,
   actualizarFechasEstimadas,
   notificarFechaEstimada,
+  obtenerAnomaliasRuta,
 } from "../lib/rutasService";
 import { useGooglePlacesAutocomplete } from "../hooks/useGooglePlacesAutocomplete";
 
@@ -108,6 +109,42 @@ const base = {
   },
   dateField: {
     marginBottom: "8px",
+  },
+  anomalyCard: {
+    padding: "10px",
+    borderRadius: "12px",
+    background: "rgba(255,255,255,0.04)",
+    border: "1px solid rgba(255,255,255,0.12)",
+    marginTop: "10px",
+  },
+  anomalyItem: {
+    padding: "10px",
+    borderRadius: "10px",
+    background: "rgba(255,255,255,0.05)",
+    border: "1px solid rgba(248,113,113,0.2)",
+    marginBottom: "10px",
+  },
+  anomalyTitle: {
+    fontSize: "13px",
+    fontWeight: 700,
+    color: "#f8fafc",
+  },
+  anomalyDescription: {
+    marginTop: "6px",
+    fontSize: "12px",
+    lineHeight: 1.4,
+    color: "#cbd5e1",
+  },
+  anomalyPriorityBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "3px 8px",
+    borderRadius: "999px",
+    background: "rgba(248,113,113,0.18)",
+    color: "#fecaca",
+    fontSize: "11px",
+    fontWeight: 700,
+    marginLeft: "8px",
   },
   dateFieldLabel: {
     display: "block",
@@ -313,6 +350,7 @@ export default function RutasActivas() {
   const [mensaje, setMensaje] = useState(null);
   const [mensajesRuta, setMensajesRuta] = useState({});
   const [fechasEdit, setFechasEdit] = useState({});
+  const [anomaliasPorRuta, setAnomaliasPorRuta] = useState({});
   const [savingFechasId, setSavingFechasId] = useState(null);
   const [notifyingId, setNotifyingId] = useState(null);
   const [calculandoEstimacion, setCalculandoEstimacion] = useState(false);
@@ -352,6 +390,7 @@ export default function RutasActivas() {
     const res = await apiFetch("/api/rutas");
     if (!res.ok) {
       setRutas([]);
+      setAnomaliasPorRuta({});
       setMensaje({ tipo: "error", texto: res.error || "No se pudieron cargar las rutas." });
       setLoading(false);
       return;
@@ -365,6 +404,19 @@ export default function RutasActivas() {
     });
     setFechasEdit(fechasMap);
     setLoading(false);
+
+    if (lista.length > 0) {
+      const anomaliasMap = {};
+      await Promise.all(
+        lista.map(async (ruta) => {
+          const result = await obtenerAnomaliasRuta(ruta.id);
+          anomaliasMap[ruta.id] = result.data || [];
+        }),
+      );
+      setAnomaliasPorRuta(anomaliasMap);
+    } else {
+      setAnomaliasPorRuta({});
+    }
   }, []);
 
   const cargarListas = useCallback(async () => {
@@ -937,6 +989,7 @@ export default function RutasActivas() {
                   <th style={base.th}>Conductor / Camión</th>
                   <th style={base.th}>ETA</th>
                   <th style={base.th}>Fechas estimadas</th>
+                  <th style={base.th}>Anomalías</th>
                   <th style={base.th}>Acciones</th>
                 </tr>
               </thead>
@@ -1061,6 +1114,40 @@ export default function RutasActivas() {
                           : "Notificar fecha estimada"}
                       </button>
                       <MensajeFilaRuta mensaje={mensajesRuta[ruta.id]?.notificar} />
+                    </td>
+                    <td style={base.td}>
+                      {Array.isArray(anomaliasPorRuta[ruta.id]) && anomaliasPorRuta[ruta.id].length > 0 ? (
+                        <div style={base.anomalyCard}>
+                          <div style={{ marginBottom: "8px", fontWeight: 700, color: "#f8fafc" }}>
+                            {anomaliasPorRuta[ruta.id].length} anomalía(s) reportada(s)
+                          </div>
+                          {anomaliasPorRuta[ruta.id].map((anomalia) => (
+                            <div key={anomalia.id} style={base.anomalyItem}>
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+                                <span style={base.anomalyTitle}>{anomalia.titulo || "Sin título"}</span>
+                                {anomalia.es_prioritario && (
+                                  <span style={base.anomalyPriorityBadge}>PRIORITARIO</span>
+                                )}
+                              </div>
+                              <div style={base.anomalyDescription}>{anomalia.descripcion || "Sin descripción"}</div>
+                              {anomalia.foto_url && (
+                                <div style={{ marginTop: "8px" }}>
+                                  <a
+                                    href={anomalia.foto_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{ color: "#60a5fa", fontSize: "12px" }}
+                                  >
+                                    Ver foto relacionada
+                                  </a>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div style={{ color: "#94a3b8", fontSize: "13px" }}>No hay anomalías reportadas</div>
+                      )}
                     </td>
                   </tr>
                 ))}
