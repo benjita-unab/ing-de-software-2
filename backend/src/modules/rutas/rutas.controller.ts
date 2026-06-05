@@ -7,6 +7,7 @@ import {
   Body,
   Param,
   Query,
+  ForbiddenException,
 } from '@nestjs/common';
 import {
   RutasService,
@@ -17,6 +18,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/user.decorator';
 import { JwtGuard } from '../../common/guards/jwt.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import type { AuthenticatedUser } from '../../common/strategies/jwt.strategy';
 
 @Controller('api/rutas')
 @UseGuards(JwtGuard, RolesGuard)
@@ -150,18 +152,34 @@ export class RutasController {
 
   /**
    * GET /api/rutas
-   * Lista rutas con filtros opcionales
+   * Lista rutas con filtros opcionales.
+   * HU-26: CONDUCTOR solo ve rutas con su conductorId (JWT), ignora query conductorId.
    */
   @Get()
   async listRoutes(
+    @CurrentUser() user: AuthenticatedUser,
     @Query('estado') estado?: string,
     @Query('conductorId') conductorId?: string,
     @Query('clienteId') clienteId?: string,
   ) {
-    return await this.rutasService.listRoutes({
+    let effectiveConductorId = conductorId;
+
+    if (user?.role === 'CONDUCTOR') {
+      const scoped = user.conductorId?.trim();
+      if (!scoped) {
+        throw new ForbiddenException(
+          'Sesión de conductor sin vínculo. Vuelve a iniciar sesión.',
+        );
+      }
+      effectiveConductorId = scoped;
+    }
+
+    const filters = {
       estado,
-      conductorId,
+      conductorId: effectiveConductorId,
       clienteId,
-    });
+    };
+
+    return await this.rutasService.listRoutes(filters);
   }
 }
