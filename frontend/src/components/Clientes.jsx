@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { getClientes, getHistorialDespachos } from "../lib/clientesService";
 import FormularioCliente from "./FormularioCliente";
-import PagosCliente from "./PagosCliente";
 
 const styles = {
   container: {
@@ -111,7 +110,6 @@ export default function Clientes() {
   
   const [historialLoading, setHistorialLoading] = useState(false);
   const [historialData, setHistorialData] = useState({});
-  const [tabActiva, setTabActiva] = useState({});
 
   const [modoFormulario, setModoFormulario] = useState(false); // true: creacion o edicion
   const [clienteEditando, setClienteEditando] = useState(null);
@@ -236,29 +234,16 @@ export default function Clientes() {
 
                   <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.1)', margin: '20px 0' }} />
                   
-                  <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
-                    <button 
-                      style={(!tabActiva[cliente.id] || tabActiva[cliente.id] === 'despachos') ? styles.buttonPrimary : styles.buttonSecondary}
-                      onClick={() => setTabActiva({ ...tabActiva, [cliente.id]: 'despachos' })}
-                    >
-                      Historial de Despachos
-                    </button>
-                    <button 
-                      style={tabActiva[cliente.id] === 'pagos' ? styles.buttonPrimary : styles.buttonSecondary}
-                      onClick={() => setTabActiva({ ...tabActiva, [cliente.id]: 'pagos' })}
-                    >
-                      Pagos
-                    </button>
+                  <div style={{ marginBottom: '16px' }}>
+                    <h3 style={{ fontSize: '15px', fontWeight: 'bold', marginBottom: '12px' }}>Historial de Despachos</h3>
                   </div>
 
-                  {(!tabActiva[cliente.id] || tabActiva[cliente.id] === 'despachos') && (
-                    <>
-                      {historialLoading && !historialData[cliente.id] ? (
-                        <p style={{ fontSize: '13px', color: '#94a3b8' }}>Cargando historial...</p>
-                      ) : (!historialData[cliente.id] || historialData[cliente.id].length === 0) ? (
-                        <p style={{ fontSize: '13px', color: '#94a3b8' }}>No hay despachos registrados para este cliente.</p>
-                      ) : (
-                        <table style={styles.historyTable}>
+                  {historialLoading && !historialData[cliente.id] ? (
+                    <p style={{ fontSize: '13px', color: '#94a3b8' }}>Cargando historial...</p>
+                  ) : (!historialData[cliente.id] || historialData[cliente.id].length === 0) ? (
+                    <p style={{ fontSize: '13px', color: '#94a3b8' }}>No hay despachos registrados para este cliente.</p>
+                  ) : (
+                    <table style={styles.historyTable}>
                       <thead>
                         <tr>
                           <th style={styles.th}>Fecha</th>
@@ -284,12 +269,6 @@ export default function Clientes() {
                         ))}
                       </tbody>
                     </table>
-                  )}
-                    </>
-                  )}
-
-                  {tabActiva[cliente.id] === 'pagos' && (
-                    <PagosCliente clienteId={cliente.id} />
                   )}
 
                 </div>

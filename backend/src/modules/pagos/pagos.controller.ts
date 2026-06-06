@@ -3,7 +3,7 @@ import { PagosService } from './pagos.service';
 import { JwtGuard } from '../../common/guards/jwt.guard';
 
 @UseGuards(JwtGuard)
-@Controller('pagos')
+@Controller('api/pagos')
 export class PagosController {
   constructor(private readonly pagosService: PagosService) {}
 
