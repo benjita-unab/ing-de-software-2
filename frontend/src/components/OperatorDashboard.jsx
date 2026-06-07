@@ -16,6 +16,7 @@ import Clientes from "./Clientes";
 import HistorialDespachos from "./HistorialDespachos";
 import { useAlerts } from "../hooks/useAlerts";
 import { useMensajesConductor } from "../hooks/useMensajesConductor";
+import { apiFetch } from "../lib/apiClient";
 
 function playAlarmSound() {
   if (typeof window === 'undefined') return;
@@ -41,7 +42,7 @@ function playAlarmSound() {
 export default function OperatorDashboard({ operator, onSignOut }) {
   const { alerts, loading, acknowledgeAlert, resolveAlert: rawResolveAlert } = useAlerts();
   const { mensajes, rutasMap, loading: mensajesLoading, error: mensajesError, acknowledgeMensaje } = useMensajesConductor();
-  const [activeSection, setActiveSection] = useState("alertas");
+  const [activeSection, setActiveSection] = useState("dashboard");
   const [selectedAlert, setSelectedAlert] = useState(null);
   const [isLightMode, setIsLightMode] = useState(false);
   const playedUrgentIdsRef = useRef(new Set());
@@ -122,6 +123,16 @@ export default function OperatorDashboard({ operator, onSignOut }) {
           onToggleTheme={() => setIsLightMode((prev) => !prev)}
         />
 
+        {/* Resumen KPI operacional (HU-28 / #245) */}
+        {activeSection === "dashboard" && (
+          <div
+            style={{ flex: 1, minHeight: 0, overflow: "auto", padding: "10px" }}
+            className="premium-scroll operator-section"
+          >
+            <DashboardKpiSection />
+          </div>
+        )}
+
         {/* Vista de alertas + panel de detalle (HU-2) */}
         {activeSection === "alertas" && (
           <div style={{ flex: 1, display: "flex", overflow: "hidden", gap: "14px", minHeight: 0 }}>
@@ -184,7 +195,7 @@ export default function OperatorDashboard({ operator, onSignOut }) {
         )}
 
         {/* Sección de RRHH y placeholders para el resto */}
-        {activeSection !== "alertas" && activeSection !== "mensajes" && (
+        {activeSection !== "alertas" && activeSection !== "mensajes" && activeSection !== "dashboard" && (
           <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
             {activeSection === "rrhh" ? (
               <div style={{ padding: "10px", height: "100%", overflow: "auto" }} className="premium-scroll operator-section">
@@ -227,6 +238,10 @@ export default function OperatorDashboard({ operator, onSignOut }) {
           50%       { box-shadow: 0 0 32px #ff1744aa, 0 2px 8px #0008; }
         }
 
+        @keyframes dashboardSpin {
+          to { transform: rotate(360deg); }
+        }
+
         ::-webkit-scrollbar { width: 5px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #1f2362; border-radius: 8px; }
@@ -248,6 +263,7 @@ export default function OperatorDashboard({ operator, onSignOut }) {
 // ─── TopBar ─────────────────────────────────────────────────────────────────
 function TopBar({ urgentCount, hasUnreadEmergencies, section, operator, onNavigate, onSignOut, isLightMode, onToggleTheme }) {
   const SECTION_LABELS = {
+    dashboard: "Resumen",
     alertas: "Alertas",
     asignacion: "Asignar",
     clientes: "Clientes",
@@ -258,7 +274,7 @@ function TopBar({ urgentCount, hasUnreadEmergencies, section, operator, onNaviga
     camiones: "Flota",
     mensajes: "Mensajes",
   };
-  const TOP_LINKS = ["alertas", "asignacion", "rutas", "despachos", "historial", "clientes", "rrhh", "camiones", "mensajes"];
+  const TOP_LINKS = ["dashboard", "alertas", "asignacion", "rutas", "despachos", "historial", "clientes", "rrhh", "camiones", "mensajes"];
 
   return (
     <header
@@ -414,6 +430,203 @@ function TopBar({ urgentCount, hasUnreadEmergencies, section, operator, onNaviga
         </button>
       </div>
     </header>
+  );
+}
+
+// ─── KPI Dashboard (HU-28 / #245) ───────────────────────────────────────────
+const DASHBOARD_KPI_ITEMS = [
+  { key: "rutasActivas", label: "Rutas activas", icon: "🚛", accent: "#4cc9f0" },
+  { key: "rutasCompletadas", label: "Rutas completadas", icon: "✅", accent: "#22c55e" },
+  { key: "rutasPendientes", label: "Rutas pendientes", icon: "⏳", accent: "#f59e0b" },
+  { key: "rutasConAlertas", label: "Rutas con alertas", icon: "🚨", accent: "#f72585" },
+  { key: "rutasAtrasadas", label: "Rutas atrasadas", icon: "⚠️", accent: "#ef4444" },
+  { key: "sla", label: "SLA entregas", icon: "📊", accent: "#a855f7", isPercent: true },
+  { key: "anomaliasPrioritarias", label: "Anomalías prioritarias", icon: "🔍", accent: "#fb923c" },
+];
+
+function formatKpiValue(key, value, isPercent) {
+  if (value == null || Number.isNaN(Number(value))) return "—";
+  if (isPercent) {
+    const n = Number(value);
+    return `${Number.isInteger(n) ? n : n.toFixed(1)}%`;
+  }
+  return String(value);
+}
+
+function DashboardKpiSection() {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [dashboardData, setDashboardData] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchDashboardResumen() {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const result = await apiFetch("/api/dashboard/resumen");
+        if (cancelled) return;
+
+        if (!result.ok) {
+          throw new Error(
+            result.error ||
+              result.data?.message ||
+              `No se pudo cargar el resumen (HTTP ${result.status})`,
+          );
+        }
+
+        setDashboardData(result.data ?? null);
+      } catch (err) {
+        if (!cancelled) {
+          setDashboardData(null);
+          setError(err?.message || "Error al cargar el resumen operacional.");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    fetchDashboardResumen();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <div style={{ maxWidth: "1200px", margin: "0 auto", width: "100%" }}>
+      <div style={{ marginBottom: "18px" }}>
+        <h2
+          style={{
+            margin: 0,
+            fontSize: "20px",
+            fontWeight: 800,
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
+          }}
+        >
+          Resumen operacional
+        </h2>
+        <p
+          style={{
+            margin: "8px 0 0",
+            fontSize: "13px",
+            color: "rgba(226,232,240,0.75)",
+            lineHeight: 1.5,
+          }}
+        >
+          Indicadores en tiempo real de rutas, entregas e incidencias.
+        </p>
+      </div>
+
+      {loading && <DashboardKpiSpinner />}
+
+      {!loading && error && (
+        <div
+          style={{
+            padding: "14px 16px",
+            borderRadius: "12px",
+            background: "rgba(239,68,68,0.12)",
+            border: "1px solid rgba(248,113,113,0.45)",
+            color: "#fecaca",
+            fontSize: "14px",
+            marginBottom: "16px",
+          }}
+          role="alert"
+        >
+          {error}
+        </div>
+      )}
+
+      {!loading && !error && dashboardData && (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+            gap: "14px",
+          }}
+        >
+          {DASHBOARD_KPI_ITEMS.map(({ key, label, icon, accent, isPercent }) => (
+            <div
+              key={key}
+              className="premium-card"
+              style={{
+                padding: "18px 16px",
+                borderRadius: "16px",
+                border: `1px solid ${accent}44`,
+                background: `linear-gradient(145deg, rgba(8,8,12,0.85), ${accent}14)`,
+                boxShadow: `0 8px 24px ${accent}22`,
+                minHeight: "120px",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "space-between",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontSize: "22px" }} aria-hidden="true">
+                  {icon}
+                </span>
+                <span
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    letterSpacing: "0.06em",
+                    textTransform: "uppercase",
+                    color: "rgba(226,232,240,0.8)",
+                    lineHeight: 1.3,
+                  }}
+                >
+                  {label}
+                </span>
+              </div>
+              <div
+                style={{
+                  fontSize: "32px",
+                  fontWeight: 800,
+                  color: accent,
+                  marginTop: "12px",
+                  lineHeight: 1,
+                }}
+              >
+                {formatKpiValue(key, dashboardData[key], isPercent)}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DashboardKpiSpinner() {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "48px 20px",
+        gap: "14px",
+      }}
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <div
+        style={{
+          width: "40px",
+          height: "40px",
+          borderRadius: "50%",
+          border: "3px solid rgba(76,201,240,0.25)",
+          borderTopColor: "#4cc9f0",
+          animation: "dashboardSpin 0.8s linear infinite",
+        }}
+      />
+      <p style={{ margin: 0, fontSize: "14px", color: "rgba(226,232,240,0.75)" }}>
+        Cargando indicadores...
+      </p>
+    </div>
   );
 }
 
