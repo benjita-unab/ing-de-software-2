@@ -27,6 +27,7 @@ import HistorialDespachos from "./HistorialDespachos";
 import { useAlerts } from "../hooks/useAlerts";
 import { useMensajesConductor } from "../hooks/useMensajesConductor";
 import { apiFetch } from "../lib/apiClient";
+import { getClientes } from "../lib/clientesService";
 
 ChartJS.register(
   ArcElement,
@@ -475,6 +476,79 @@ function TopBar({ urgentCount, hasUnreadEmergencies, section, operator, onNaviga
 }
 
 // ─── KPI Dashboard (HU-28 / #245) ───────────────────────────────────────────
+const DASHBOARD_ESTADO_OPTIONS = [
+  { value: "", label: "Todos los estados" },
+  { value: "PENDIENTE", label: "Pendiente" },
+  { value: "ASIGNADO", label: "Asignado" },
+  { value: "EN_CAMINO_ORIGEN", label: "En camino origen" },
+  { value: "EN_CARGA", label: "En carga" },
+  { value: "EN_TRANSITO", label: "En tránsito" },
+  { value: "EN_DESTINO", label: "En destino" },
+  { value: "ENTREGADO", label: "Entregado" },
+  { value: "CANCELADO", label: "Cancelado" },
+];
+
+const EMPTY_DASHBOARD_FILTERS = {
+  clienteId: "",
+  estado: "",
+  desde: "",
+  hasta: "",
+};
+
+function buildDashboardResumenUrl(filters) {
+  const params = new URLSearchParams();
+  if (filters.clienteId?.trim()) params.set("clienteId", filters.clienteId.trim());
+  if (filters.estado?.trim()) params.set("estado", filters.estado.trim());
+  if (filters.desde?.trim()) params.set("desde", filters.desde.trim());
+  if (filters.hasta?.trim()) params.set("hasta", filters.hasta.trim());
+  const qs = params.toString();
+  return qs ? `/api/dashboard/resumen?${qs}` : "/api/dashboard/resumen";
+}
+
+const dashboardFilterStyles = {
+  bar: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
+    gap: "12px",
+    marginBottom: "18px",
+    padding: "16px",
+    borderRadius: "16px",
+    border: "1px solid rgba(76,201,240,0.22)",
+    background: "rgba(8,8,12,0.72)",
+  },
+  label: {
+    display: "block",
+    fontSize: "10px",
+    fontWeight: 700,
+    letterSpacing: "0.06em",
+    textTransform: "uppercase",
+    color: "rgba(226,232,240,0.75)",
+    marginBottom: "6px",
+  },
+  input: {
+    width: "100%",
+    padding: "10px 12px",
+    borderRadius: "10px",
+    border: "1px solid rgba(255,255,255,0.15)",
+    background: "rgba(15,23,42,0.95)",
+    color: "#f8fafc",
+    fontSize: "13px",
+    boxSizing: "border-box",
+  },
+  clearBtn: {
+    alignSelf: "end",
+    padding: "10px 14px",
+    borderRadius: "10px",
+    border: "1px solid rgba(255,255,255,0.18)",
+    background: "rgba(255,255,255,0.06)",
+    color: "rgba(226,232,240,0.9)",
+    fontSize: "12px",
+    fontWeight: 700,
+    cursor: "pointer",
+    letterSpacing: "0.04em",
+  },
+};
+
 const DASHBOARD_KPI_ITEMS = [
   { key: "rutasActivas", label: "Rutas activas", icon: "🚛", accent: "#4cc9f0" },
   { key: "rutasCompletadas", label: "Rutas completadas", icon: "✅", accent: "#22c55e" },
@@ -501,6 +575,32 @@ function DashboardKpiSection() {
   const [chartsLoading, setChartsLoading] = useState(true);
   const [chartsError, setChartsError] = useState(null);
   const [chartsData, setChartsData] = useState(null);
+  const [filters, setFilters] = useState(EMPTY_DASHBOARD_FILTERS);
+  const [clientes, setClientes] = useState([]);
+  const [clientesLoading, setClientesLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadClientes() {
+      setClientesLoading(true);
+      try {
+        const data = await getClientes();
+        if (!cancelled) {
+          setClientes(Array.isArray(data) ? data : []);
+        }
+      } catch {
+        if (!cancelled) setClientes([]);
+      } finally {
+        if (!cancelled) setClientesLoading(false);
+      }
+    }
+
+    loadClientes();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -510,7 +610,7 @@ function DashboardKpiSection() {
       setError(null);
 
       try {
-        const result = await apiFetch("/api/dashboard/resumen");
+        const result = await apiFetch(buildDashboardResumenUrl(filters));
         if (cancelled) return;
 
         if (!result.ok) {
@@ -531,6 +631,15 @@ function DashboardKpiSection() {
         if (!cancelled) setLoading(false);
       }
     }
+
+    fetchDashboardResumen();
+    return () => {
+      cancelled = true;
+    };
+  }, [filters]);
+
+  useEffect(() => {
+    let cancelled = false;
 
     async function fetchDashboardGraficos() {
       setChartsLoading(true);
@@ -559,12 +668,23 @@ function DashboardKpiSection() {
       }
     }
 
-    fetchDashboardResumen();
     fetchDashboardGraficos();
     return () => {
       cancelled = true;
     };
   }, []);
+
+  const hasActiveFilters = Boolean(
+    filters.clienteId || filters.estado || filters.desde || filters.hasta,
+  );
+
+  const updateFilter = (key, value) => {
+    setFilters((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const clearFilters = () => {
+    setFilters(EMPTY_DASHBOARD_FILTERS);
+  };
 
   return (
     <div style={{ maxWidth: "1200px", margin: "0 auto", width: "100%" }}>
@@ -591,6 +711,15 @@ function DashboardKpiSection() {
           Indicadores en tiempo real de rutas, entregas e incidencias.
         </p>
       </div>
+
+      <DashboardFiltersBar
+        filters={filters}
+        clientes={clientes}
+        clientesLoading={clientesLoading}
+        hasActiveFilters={hasActiveFilters}
+        onFilterChange={updateFilter}
+        onClearFilters={clearFilters}
+      />
 
       {loading && <DashboardKpiSpinner />}
 
@@ -675,6 +804,98 @@ function DashboardKpiSection() {
           chartsData={chartsData}
         />
       )}
+    </div>
+  );
+}
+
+function DashboardFiltersBar({
+  filters,
+  clientes,
+  clientesLoading,
+  hasActiveFilters,
+  onFilterChange,
+  onClearFilters,
+}) {
+  return (
+    <div className="premium-card" style={dashboardFilterStyles.bar}>
+      <div>
+        <label htmlFor="dashboard-filter-cliente" style={dashboardFilterStyles.label}>
+          Cliente
+        </label>
+        <select
+          id="dashboard-filter-cliente"
+          value={filters.clienteId}
+          onChange={(e) => onFilterChange("clienteId", e.target.value)}
+          style={dashboardFilterStyles.input}
+          disabled={clientesLoading}
+        >
+          <option value="">
+            {clientesLoading ? "Cargando clientes..." : "Todos los clientes"}
+          </option>
+          {clientes.map((cliente) => (
+            <option key={cliente.id} value={cliente.id}>
+              {cliente.nombre || cliente.id}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label htmlFor="dashboard-filter-estado" style={dashboardFilterStyles.label}>
+          Estado
+        </label>
+        <select
+          id="dashboard-filter-estado"
+          value={filters.estado}
+          onChange={(e) => onFilterChange("estado", e.target.value)}
+          style={dashboardFilterStyles.input}
+        >
+          {DASHBOARD_ESTADO_OPTIONS.map((opt) => (
+            <option key={opt.value || "all"} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label htmlFor="dashboard-filter-desde" style={dashboardFilterStyles.label}>
+          Fecha desde
+        </label>
+        <input
+          id="dashboard-filter-desde"
+          type="date"
+          value={filters.desde}
+          onChange={(e) => onFilterChange("desde", e.target.value)}
+          style={dashboardFilterStyles.input}
+        />
+      </div>
+
+      <div>
+        <label htmlFor="dashboard-filter-hasta" style={dashboardFilterStyles.label}>
+          Fecha hasta
+        </label>
+        <input
+          id="dashboard-filter-hasta"
+          type="date"
+          value={filters.hasta}
+          onChange={(e) => onFilterChange("hasta", e.target.value)}
+          style={dashboardFilterStyles.input}
+        />
+      </div>
+
+      <button
+        type="button"
+        onClick={onClearFilters}
+        disabled={!hasActiveFilters}
+        style={{
+          ...dashboardFilterStyles.clearBtn,
+          opacity: hasActiveFilters ? 1 : 0.45,
+          cursor: hasActiveFilters ? "pointer" : "not-allowed",
+        }}
+      >
+        Limpiar filtros
+      </button>
     </div>
   );
 }

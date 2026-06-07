@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   InternalServerErrorException,
 } from '@nestjs/common';
@@ -14,6 +15,12 @@ const ESTADOS_RUTA_ACTIVA = [
   'EN_DESTINO',
 ] as const;
 
+const ESTADOS_RUTA_VALIDOS = [
+  ...ESTADOS_RUTA_ACTIVA,
+  'ENTREGADO',
+  'CANCELADO',
+] as const;
+
 export type DashboardResumen = {
   rutasActivas: number;
   rutasCompletadas: number;
@@ -22,6 +29,13 @@ export type DashboardResumen = {
   rutasAtrasadas: number;
   sla: number;
   anomaliasPrioritarias: number;
+};
+
+export type DashboardResumenFilters = {
+  clienteId?: string;
+  estado?: string;
+  desde?: string;
+  hasta?: string;
 };
 
 export type RutasPorEstadoItem = {
@@ -67,11 +81,56 @@ type EntregaSlaRow = {
   rutas: RutaPlazoRow | RutaPlazoRow[] | null;
 };
 
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SupabaseQuery = any;
+
 @Injectable()
 export class DashboardService {
   constructor(private readonly supabaseConfig: SupabaseConfigService) {}
 
-  async getResumen(): Promise<DashboardResumen> {
+  parseResumenFilters(raw: DashboardResumenFilters = {}): DashboardResumenFilters {
+    const clienteId = raw.clienteId?.trim() || undefined;
+
+    const estadoRaw = raw.estado?.trim().toUpperCase() || undefined;
+    if (
+      estadoRaw &&
+      !(ESTADOS_RUTA_VALIDOS as readonly string[]).includes(estadoRaw)
+    ) {
+      throw new BadRequestException(
+        `Estado inválido. Valores permitidos: ${ESTADOS_RUTA_VALIDOS.join(', ')}`,
+      );
+    }
+
+    const desde = DashboardService.parseDateOnly(raw.desde);
+    const hasta = DashboardService.parseDateOnly(raw.hasta);
+
+    if (raw.desde?.trim() && !desde) {
+      throw new BadRequestException(
+        'Parámetro desde inválido. Use formato YYYY-MM-DD.',
+      );
+    }
+    if (raw.hasta?.trim() && !hasta) {
+      throw new BadRequestException(
+        'Parámetro hasta inválido. Use formato YYYY-MM-DD.',
+      );
+    }
+    if (desde && hasta && desde > hasta) {
+      throw new BadRequestException('desde no puede ser posterior a hasta.');
+    }
+
+    return {
+      clienteId,
+      estado: estadoRaw,
+      desde: desde ?? undefined,
+      hasta: hasta ?? undefined,
+    };
+  }
+
+  async getResumen(
+    rawFilters: DashboardResumenFilters = {},
+  ): Promise<DashboardResumen> {
+    const filters = this.parseResumenFilters(rawFilters);
     const supabase = this.supabaseConfig.getClient();
 
     const [
@@ -83,13 +142,13 @@ export class DashboardService {
       sla,
       anomaliasPrioritarias,
     ] = await Promise.all([
-      this.countRutasActivas(supabase),
-      this.countRutasByEstado(supabase, 'ENTREGADO'),
-      this.countRutasByEstado(supabase, 'PENDIENTE'),
-      this.countRutasConAlertas(supabase),
-      this.countRutasAtrasadas(supabase),
-      this.calcularSla(supabase),
-      this.countAnomaliasPrioritarias(supabase),
+      this.countRutasActivas(supabase, filters),
+      this.countRutasByEstado(supabase, 'ENTREGADO', filters),
+      this.countRutasByEstado(supabase, 'PENDIENTE', filters),
+      this.countRutasConAlertas(supabase, filters),
+      this.countRutasAtrasadas(supabase, filters),
+      this.calcularSla(supabase, filters),
+      this.countAnomaliasPrioritarias(supabase, filters),
     ]);
 
     return {
@@ -112,6 +171,52 @@ export class DashboardService {
     ]);
 
     return { rutasPorEstado, entregasPorDia };
+  }
+
+  private applyRutaTableFilters(
+    query: SupabaseQuery,
+    filters: DashboardResumenFilters,
+    opts?: { skipEstado?: boolean },
+  ): SupabaseQuery {
+    let next = query;
+
+    if (filters.clienteId) {
+      next = next.eq('cliente_id', filters.clienteId);
+    }
+    if (filters.estado && !opts?.skipEstado) {
+      next = next.eq('estado', filters.estado);
+    }
+    if (filters.desde) {
+      next = next.gte('created_at', `${filters.desde}T00:00:00.000Z`);
+    }
+    if (filters.hasta) {
+      next = next.lte('created_at', `${filters.hasta}T23:59:59.999Z`);
+    }
+
+    return next;
+  }
+
+  private applyRutaJoinFilters(
+    query: SupabaseQuery,
+    filters: DashboardResumenFilters,
+    prefix = 'rutas',
+  ): SupabaseQuery {
+    let next = query;
+
+    if (filters.clienteId) {
+      next = next.eq(`${prefix}.cliente_id`, filters.clienteId);
+    }
+    if (filters.estado) {
+      next = next.eq(`${prefix}.estado`, filters.estado);
+    }
+    if (filters.desde) {
+      next = next.gte(`${prefix}.created_at`, `${filters.desde}T00:00:00.000Z`);
+    }
+    if (filters.hasta) {
+      next = next.lte(`${prefix}.created_at`, `${filters.hasta}T23:59:59.999Z`);
+    }
+
+    return next;
   }
 
   private async buildRutasPorEstado(
@@ -146,7 +251,11 @@ export class DashboardService {
   ): (typeof ESTADOS_GRAFICO_RUTAS)[number] | null {
     if (!estado) return null;
     const upper = String(estado).trim().toUpperCase();
-    if (ESTADOS_GRAFICO_RUTAS.includes(upper as (typeof ESTADOS_GRAFICO_RUTAS)[number])) {
+    if (
+      ESTADOS_GRAFICO_RUTAS.includes(
+        upper as (typeof ESTADOS_GRAFICO_RUTAS)[number],
+      )
+    ) {
       return upper as (typeof ESTADOS_GRAFICO_RUTAS)[number];
     }
     if ((ESTADOS_EN_TRANSITO as readonly string[]).includes(upper)) {
@@ -176,7 +285,9 @@ export class DashboardService {
     const conteo = new Map<string, number>(dias.map((fecha) => [fecha, 0]));
 
     for (const row of data ?? []) {
-      const fecha = DashboardService.toDateOnly(String(row.fecha_entrega_real ?? ''));
+      const fecha = DashboardService.toDateOnly(
+        String(row.fecha_entrega_real ?? ''),
+      );
       if (!fecha || !conteo.has(fecha)) continue;
       conteo.set(fecha, (conteo.get(fecha) ?? 0) + 1);
     }
@@ -200,11 +311,16 @@ export class DashboardService {
 
   private async countRutasActivas(
     supabase: ReturnType<SupabaseConfigService['getClient']>,
+    filters: DashboardResumenFilters,
   ): Promise<number> {
-    const { count, error } = await supabase
+    let query = supabase
       .from('rutas')
       .select('*', { count: 'exact', head: true })
       .in('estado', [...ESTADOS_RUTA_ACTIVA]);
+
+    query = this.applyRutaTableFilters(query, filters);
+
+    const { count, error } = await query;
 
     if (error) {
       throw new InternalServerErrorException(
@@ -217,16 +333,25 @@ export class DashboardService {
 
   private async countRutasByEstado(
     supabase: ReturnType<SupabaseConfigService['getClient']>,
-    estado: string,
+    kpiEstado: string,
+    filters: DashboardResumenFilters,
   ): Promise<number> {
-    const { count, error } = await supabase
+    if (filters.estado && filters.estado !== kpiEstado) {
+      return 0;
+    }
+
+    let query = supabase
       .from('rutas')
       .select('*', { count: 'exact', head: true })
-      .eq('estado', estado);
+      .eq('estado', kpiEstado);
+
+    query = this.applyRutaTableFilters(query, filters, { skipEstado: true });
+
+    const { count, error } = await query;
 
     if (error) {
       throw new InternalServerErrorException(
-        `Error al contar rutas (${estado}): ${error.message}`,
+        `Error al contar rutas (${kpiEstado}): ${error.message}`,
       );
     }
 
@@ -235,12 +360,17 @@ export class DashboardService {
 
   private async countRutasConAlertas(
     supabase: ReturnType<SupabaseConfigService['getClient']>,
+    filters: DashboardResumenFilters,
   ): Promise<number> {
-    const { data, error } = await supabase
+    let query = supabase
       .from('incidencias')
-      .select('ruta_id')
+      .select('ruta_id, rutas!inner(id, cliente_id, estado, created_at)')
       .in('tipo', ['ALERTA', 'EMERGENCIA'])
       .not('ruta_id', 'is', null);
+
+    query = this.applyRutaJoinFilters(query, filters);
+
+    const { data, error } = await query;
 
     if (error) {
       throw new InternalServerErrorException(
@@ -259,11 +389,16 @@ export class DashboardService {
 
   private async countRutasAtrasadas(
     supabase: ReturnType<SupabaseConfigService['getClient']>,
+    filters: DashboardResumenFilters,
   ): Promise<number> {
-    const { data, error } = await supabase
+    let query = supabase
       .from('rutas')
       .select('fecha_estimada_fin, fecha_estimada_entrega, eta')
       .in('estado', [...ESTADOS_RUTA_ACTIVA]);
+
+    query = this.applyRutaTableFilters(query, filters);
+
+    const { data, error } = await query;
 
     if (error) {
       throw new InternalServerErrorException(
@@ -281,14 +416,21 @@ export class DashboardService {
 
   private async calcularSla(
     supabase: ReturnType<SupabaseConfigService['getClient']>,
+    filters: DashboardResumenFilters,
   ): Promise<number> {
-    const { data, error } = await supabase
+    if (filters.estado && filters.estado !== 'ENTREGADO') {
+      return 0;
+    }
+
+    let query = supabase
       .from('entregas')
       .select(
         `
         fecha_entrega_real,
         rutas!inner (
           estado,
+          cliente_id,
+          created_at,
           fecha_estimada_fin,
           fecha_estimada_entrega,
           eta
@@ -297,6 +439,23 @@ export class DashboardService {
       )
       .eq('rutas.estado', 'ENTREGADO')
       .not('fecha_entrega_real', 'is', null);
+
+    query = this.applyRutaJoinFilters(query, filters);
+
+    if (filters.desde) {
+      query = query.gte(
+        'fecha_entrega_real',
+        `${filters.desde}T00:00:00.000Z`,
+      );
+    }
+    if (filters.hasta) {
+      query = query.lte(
+        'fecha_entrega_real',
+        `${filters.hasta}T23:59:59.999Z`,
+      );
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       throw new InternalServerErrorException(
@@ -323,16 +482,24 @@ export class DashboardService {
 
     if (conPlazo === 0) return 0;
 
-    return Math.round((100 * aTiempo) / conPlazo * 100) / 100;
+    return Math.round(((100 * aTiempo) / conPlazo) * 100) / 100;
   }
 
   private async countAnomaliasPrioritarias(
     supabase: ReturnType<SupabaseConfigService['getClient']>,
+    filters: DashboardResumenFilters,
   ): Promise<number> {
-    const { count, error } = await supabase
+    let query = supabase
       .from('anomalias')
-      .select('*', { count: 'exact', head: true })
+      .select('id, rutas!inner(id, cliente_id, estado, created_at)', {
+        count: 'exact',
+        head: true,
+      })
       .eq('es_prioritario', true);
+
+    query = this.applyRutaJoinFilters(query, filters);
+
+    const { count, error } = await query;
 
     if (error) {
       throw new InternalServerErrorException(
@@ -358,7 +525,9 @@ export class DashboardService {
     return null;
   }
 
-  private static parseDateOnly(value: string | null | undefined): string | null {
+  private static parseDateOnly(
+    value: string | null | undefined,
+  ): string | null {
     if (value == null || String(value).trim() === '') return null;
     const s = String(value).trim();
     if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
