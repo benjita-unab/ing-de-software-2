@@ -4,7 +4,17 @@
 // Estructura: Topbar horizontal | Cola de Alertas | Panel de Detalle
 // ─────────────────────────────────────────────────────────────────────────────
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
+import {
+  Chart as ChartJS,
+  ArcElement,
+  Tooltip,
+  Legend,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+} from "chart.js";
+import { Pie, Bar } from "react-chartjs-2";
 import AlertQueue from "./AlertQueue";
 import AlertDetailPanel from "./AlertDetailPanel";
 import MensajesConductor from "./MensajesConductor";
@@ -17,6 +27,37 @@ import HistorialDespachos from "./HistorialDespachos";
 import { useAlerts } from "../hooks/useAlerts";
 import { useMensajesConductor } from "../hooks/useMensajesConductor";
 import { apiFetch } from "../lib/apiClient";
+
+ChartJS.register(
+  ArcElement,
+  Tooltip,
+  Legend,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+);
+
+const CHART_ESTADO_COLORS = {
+  PENDIENTE: "#f59e0b",
+  ASIGNADO: "#4cc9f0",
+  EN_TRANSITO: "#a855f7",
+  ENTREGADO: "#22c55e",
+  CANCELADO: "#64748b",
+};
+
+const CHART_ESTADO_LABELS = {
+  PENDIENTE: "Pendiente",
+  ASIGNADO: "Asignado",
+  EN_TRANSITO: "En tránsito",
+  ENTREGADO: "Entregado",
+  CANCELADO: "Cancelado",
+};
+
+function formatChartDate(isoDate) {
+  if (!isoDate) return "";
+  const [, m, d] = String(isoDate).split("-");
+  return `${d}/${m}`;
+}
 
 function playAlarmSound() {
   if (typeof window === 'undefined') return;
@@ -457,6 +498,9 @@ function DashboardKpiSection() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [dashboardData, setDashboardData] = useState(null);
+  const [chartsLoading, setChartsLoading] = useState(true);
+  const [chartsError, setChartsError] = useState(null);
+  const [chartsData, setChartsData] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -488,7 +532,35 @@ function DashboardKpiSection() {
       }
     }
 
+    async function fetchDashboardGraficos() {
+      setChartsLoading(true);
+      setChartsError(null);
+
+      try {
+        const result = await apiFetch("/api/dashboard/graficos");
+        if (cancelled) return;
+
+        if (!result.ok) {
+          throw new Error(
+            result.error ||
+              result.data?.message ||
+              `No se pudieron cargar los gráficos (HTTP ${result.status})`,
+          );
+        }
+
+        setChartsData(result.data ?? null);
+      } catch (err) {
+        if (!cancelled) {
+          setChartsData(null);
+          setChartsError(err?.message || "Error al cargar los gráficos.");
+        }
+      } finally {
+        if (!cancelled) setChartsLoading(false);
+      }
+    }
+
     fetchDashboardResumen();
+    fetchDashboardGraficos();
     return () => {
       cancelled = true;
     };
@@ -595,11 +667,215 @@ function DashboardKpiSection() {
           ))}
         </div>
       )}
+
+      {!loading && !error && dashboardData && (
+        <DashboardChartsPanel
+          chartsLoading={chartsLoading}
+          chartsError={chartsError}
+          chartsData={chartsData}
+        />
+      )}
     </div>
   );
 }
 
-function DashboardKpiSpinner() {
+function DashboardChartsPanel({ chartsLoading, chartsError, chartsData }) {
+  const rutasChart = useMemo(() => {
+    const items = chartsData?.rutasPorEstado ?? [];
+    return {
+      labels: items.map(
+        (item) => CHART_ESTADO_LABELS[item.estado] ?? item.estado,
+      ),
+      datasets: [
+        {
+          data: items.map((item) => item.cantidad),
+          backgroundColor: items.map(
+            (item) => CHART_ESTADO_COLORS[item.estado] ?? "#94a3b8",
+          ),
+          borderColor: "rgba(8,8,12,0.9)",
+          borderWidth: 2,
+        },
+      ],
+    };
+  }, [chartsData]);
+
+  const entregasChart = useMemo(() => {
+    const items = chartsData?.entregasPorDia ?? [];
+    return {
+      labels: items.map((item) => formatChartDate(item.fecha)),
+      datasets: [
+        {
+          label: "Entregas",
+          data: items.map((item) => item.cantidad),
+          backgroundColor: "rgba(76, 201, 240, 0.55)",
+          borderColor: "#4cc9f0",
+          borderWidth: 1,
+          borderRadius: 8,
+        },
+      ],
+    };
+  }, [chartsData]);
+
+  const pieOptions = useMemo(
+    () => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: "bottom",
+          labels: {
+            color: "rgba(226,232,240,0.85)",
+            padding: 14,
+            font: { size: 11, family: "'Inter', sans-serif" },
+          },
+        },
+        tooltip: {
+          backgroundColor: "rgba(8,8,12,0.92)",
+          titleColor: "#fff",
+          bodyColor: "rgba(226,232,240,0.9)",
+          borderColor: "rgba(76,201,240,0.35)",
+          borderWidth: 1,
+        },
+      },
+    }),
+    [],
+  );
+
+  const barOptions = useMemo(
+    () => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: "rgba(8,8,12,0.92)",
+          titleColor: "#fff",
+          bodyColor: "rgba(226,232,240,0.9)",
+          borderColor: "rgba(76,201,240,0.35)",
+          borderWidth: 1,
+        },
+      },
+      scales: {
+        x: {
+          ticks: { color: "rgba(226,232,240,0.75)", font: { size: 11 } },
+          grid: { color: "rgba(255,255,255,0.06)" },
+        },
+        y: {
+          beginAtZero: true,
+          ticks: {
+            color: "rgba(226,232,240,0.75)",
+            font: { size: 11 },
+            stepSize: 1,
+            precision: 0,
+          },
+          grid: { color: "rgba(255,255,255,0.06)" },
+        },
+      },
+    }),
+    [],
+  );
+
+  return (
+    <div style={{ marginTop: "28px" }}>
+      <h3
+        style={{
+          margin: "0 0 14px",
+          fontSize: "14px",
+          fontWeight: 800,
+          letterSpacing: "0.06em",
+          textTransform: "uppercase",
+          color: "rgba(226,232,240,0.9)",
+        }}
+      >
+        Gráficos
+      </h3>
+
+      {chartsLoading && <DashboardKpiSpinner message="Cargando gráficos..." />}
+
+      {!chartsLoading && chartsError && (
+        <div
+          style={{
+            padding: "14px 16px",
+            borderRadius: "12px",
+            background: "rgba(239,68,68,0.12)",
+            border: "1px solid rgba(248,113,113,0.45)",
+            color: "#fecaca",
+            fontSize: "14px",
+          }}
+          role="alert"
+        >
+          {chartsError}
+        </div>
+      )}
+
+      {!chartsLoading && !chartsError && chartsData && (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+            gap: "14px",
+          }}
+        >
+          <div
+            className="premium-card"
+            style={{
+              padding: "18px 16px 12px",
+              borderRadius: "16px",
+              border: "1px solid rgba(76,201,240,0.25)",
+              background: "rgba(8,8,12,0.72)",
+              minHeight: "340px",
+            }}
+          >
+            <p
+              style={{
+                margin: "0 0 12px",
+                fontSize: "12px",
+                fontWeight: 700,
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+                color: "rgba(226,232,240,0.8)",
+              }}
+            >
+              Distribución de rutas por estado
+            </p>
+            <div style={{ height: "260px" }}>
+              <Pie data={rutasChart} options={pieOptions} />
+            </div>
+          </div>
+
+          <div
+            className="premium-card"
+            style={{
+              padding: "18px 16px 12px",
+              borderRadius: "16px",
+              border: "1px solid rgba(76,201,240,0.25)",
+              background: "rgba(8,8,12,0.72)",
+              minHeight: "340px",
+            }}
+          >
+            <p
+              style={{
+                margin: "0 0 12px",
+                fontSize: "12px",
+                fontWeight: 700,
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+                color: "rgba(226,232,240,0.8)",
+              }}
+            >
+              Entregas por día (últimos 7 días)
+            </p>
+            <div style={{ height: "260px" }}>
+              <Bar data={entregasChart} options={barOptions} />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DashboardKpiSpinner({ message = "Cargando indicadores..." }) {
   return (
     <div
       style={{
@@ -624,7 +900,7 @@ function DashboardKpiSpinner() {
         }}
       />
       <p style={{ margin: 0, fontSize: "14px", color: "rgba(226,232,240,0.75)" }}>
-        Cargando indicadores...
+        {message}
       </p>
     </div>
   );

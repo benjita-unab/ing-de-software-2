@@ -18,4 +18,13 @@ export class DashboardController {
   async getResumen() {
     return await this.dashboardService.getResumen();
   }
+
+  /**
+   * GET /api/dashboard/graficos
+   * Datos para gráficos del dashboard operador (HU-28 #246).
+   */
+  @Get('graficos')
+  async getGraficos() {
+    return await this.dashboardService.getGraficos();
+  }
 }

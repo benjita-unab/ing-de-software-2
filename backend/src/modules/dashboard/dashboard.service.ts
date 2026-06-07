@@ -24,6 +24,38 @@ export type DashboardResumen = {
   anomaliasPrioritarias: number;
 };
 
+export type RutasPorEstadoItem = {
+  estado: string;
+  cantidad: number;
+};
+
+export type EntregasPorDiaItem = {
+  fecha: string;
+  cantidad: number;
+};
+
+export type DashboardGraficos = {
+  rutasPorEstado: RutasPorEstadoItem[];
+  entregasPorDia: EntregasPorDiaItem[];
+};
+
+/** Estados expuestos en el gráfico de distribución (HU-28 #246). */
+const ESTADOS_GRAFICO_RUTAS = [
+  'PENDIENTE',
+  'ASIGNADO',
+  'EN_TRANSITO',
+  'ENTREGADO',
+  'CANCELADO',
+] as const;
+
+/** Estados operativos en tránsito agrupados bajo EN_TRANSITO. */
+const ESTADOS_EN_TRANSITO = [
+  'EN_CAMINO_ORIGEN',
+  'EN_CARGA',
+  'EN_TRANSITO',
+  'EN_DESTINO',
+] as const;
+
 type RutaPlazoRow = {
   fecha_estimada_fin: string | null;
   fecha_estimada_entrega: string | null;
@@ -69,6 +101,101 @@ export class DashboardService {
       sla,
       anomaliasPrioritarias,
     };
+  }
+
+  async getGraficos(): Promise<DashboardGraficos> {
+    const supabase = this.supabaseConfig.getClient();
+
+    const [rutasPorEstado, entregasPorDia] = await Promise.all([
+      this.buildRutasPorEstado(supabase),
+      this.buildEntregasPorDia(supabase),
+    ]);
+
+    return { rutasPorEstado, entregasPorDia };
+  }
+
+  private async buildRutasPorEstado(
+    supabase: ReturnType<SupabaseConfigService['getClient']>,
+  ): Promise<RutasPorEstadoItem[]> {
+    const { data, error } = await supabase.from('rutas').select('estado');
+
+    if (error) {
+      throw new InternalServerErrorException(
+        `Error al obtener distribución de rutas: ${error.message}`,
+      );
+    }
+
+    const conteo = new Map<string, number>(
+      ESTADOS_GRAFICO_RUTAS.map((estado) => [estado, 0]),
+    );
+
+    for (const row of data ?? []) {
+      const agrupado = DashboardService.mapEstadoGrafico(row.estado);
+      if (!agrupado) continue;
+      conteo.set(agrupado, (conteo.get(agrupado) ?? 0) + 1);
+    }
+
+    return ESTADOS_GRAFICO_RUTAS.map((estado) => ({
+      estado,
+      cantidad: conteo.get(estado) ?? 0,
+    }));
+  }
+
+  private static mapEstadoGrafico(
+    estado: string | null | undefined,
+  ): (typeof ESTADOS_GRAFICO_RUTAS)[number] | null {
+    if (!estado) return null;
+    const upper = String(estado).trim().toUpperCase();
+    if (ESTADOS_GRAFICO_RUTAS.includes(upper as (typeof ESTADOS_GRAFICO_RUTAS)[number])) {
+      return upper as (typeof ESTADOS_GRAFICO_RUTAS)[number];
+    }
+    if ((ESTADOS_EN_TRANSITO as readonly string[]).includes(upper)) {
+      return 'EN_TRANSITO';
+    }
+    return null;
+  }
+
+  private async buildEntregasPorDia(
+    supabase: ReturnType<SupabaseConfigService['getClient']>,
+  ): Promise<EntregasPorDiaItem[]> {
+    const dias = DashboardService.lastNDays(7);
+    const desde = dias[0];
+
+    const { data, error } = await supabase
+      .from('entregas')
+      .select('fecha_entrega_real')
+      .gte('fecha_entrega_real', `${desde}T00:00:00.000Z`)
+      .not('fecha_entrega_real', 'is', null);
+
+    if (error) {
+      throw new InternalServerErrorException(
+        `Error al obtener entregas por día: ${error.message}`,
+      );
+    }
+
+    const conteo = new Map<string, number>(dias.map((fecha) => [fecha, 0]));
+
+    for (const row of data ?? []) {
+      const fecha = DashboardService.toDateOnly(String(row.fecha_entrega_real ?? ''));
+      if (!fecha || !conteo.has(fecha)) continue;
+      conteo.set(fecha, (conteo.get(fecha) ?? 0) + 1);
+    }
+
+    return dias.map((fecha) => ({
+      fecha,
+      cantidad: conteo.get(fecha) ?? 0,
+    }));
+  }
+
+  private static lastNDays(n: number): string[] {
+    const dias: string[] = [];
+    const hoy = new Date();
+    for (let i = n - 1; i >= 0; i -= 1) {
+      const d = new Date(hoy);
+      d.setUTCDate(hoy.getUTCDate() - i);
+      dias.push(d.toISOString().slice(0, 10));
+    }
+    return dias;
   }
 
   private async countRutasActivas(
