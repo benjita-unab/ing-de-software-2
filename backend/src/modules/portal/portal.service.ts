@@ -14,6 +14,8 @@ import type {
   PortalPedidoListItemDto,
   PortalPedidoListResponseDto,
   PortalRutaDetalleDto,
+  PortalIncidenciaDto,
+  PortalMensajeDto,
 } from './dto/portal-pedido.dto';
 
 @Injectable()
@@ -102,6 +104,22 @@ export class PortalService {
           url_pdf,
           observaciones,
           created_at
+        ),
+        incidencias (
+          id,
+          tipo_incidencia,
+          descripcion,
+          estado,
+          severidad,
+          created_at
+        ),
+        mensajes_conductor (
+          id,
+          mensaje,
+          tipo,
+          prioridad,
+          timestamp_evento,
+          created_at
         )
       `,
       )
@@ -116,6 +134,8 @@ export class PortalService {
     const historialRaw = this.normalizeRelation(row.historial_estados);
     const entregasRaw = this.normalizeRelation(row.entregas);
     const guiasRaw = this.normalizeRelation(row.guias_despacho);
+    const incidenciasRaw = this.normalizeRelation(row.incidencias);
+    const mensajesRaw = this.normalizeRelation(row.mensajes_conductor);
 
     historialRaw.sort((a, b) =>
       String(a.created_at || '').localeCompare(String(b.created_at || '')),
@@ -126,6 +146,8 @@ export class PortalService {
       historial_estados: historialRaw.map((h) => this.mapHistorial(h)),
       entregas: entregasRaw.map((e) => this.mapEntrega(e)),
       guias_despacho: guiasRaw.map((g) => this.mapGuia(g)),
+      incidencias: incidenciasRaw.map((i) => this.mapIncidencia(i)),
+      mensajes: mensajesRaw.map((m) => this.mapMensaje(m)),
     };
   }
 
@@ -246,6 +268,28 @@ export class PortalService {
       estado_recepcion: (row.estado_recepcion as string) ?? null,
       url_pdf: (row.url_pdf as string) ?? null,
       observaciones: (row.observaciones as string) ?? null,
+      created_at: (row.created_at as string) ?? null,
+    };
+  }
+
+  private mapIncidencia(row: Record<string, unknown>): PortalIncidenciaDto {
+    return {
+      id: String(row.id),
+      tipo_incidencia: (row.tipo_incidencia as string) ?? null,
+      descripcion: (row.descripcion as string) ?? null,
+      estado: (row.estado as string) ?? null,
+      severidad: (row.severidad as string) ?? null,
+      created_at: (row.created_at as string) ?? null,
+    };
+  }
+
+  private mapMensaje(row: Record<string, unknown>): PortalMensajeDto {
+    return {
+      id: String(row.id),
+      mensaje: String(row.mensaje ?? ''),
+      tipo: (row.tipo as string) ?? null,
+      prioridad: (row.prioridad as string) ?? null,
+      timestamp_evento: (row.timestamp_evento as string) ?? null,
       created_at: (row.created_at as string) ?? null,
     };
   }
