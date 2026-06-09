@@ -1,50 +1,44 @@
-import React, { useMemo, useState } from 'react';
-import { groupMensajesByRuta, sortMensajes } from '../hooks/useMensajesConductor';
+import React, { useMemo, useState } from "react";
+import { Search, MessageSquare, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { groupMensajesByRuta, sortMensajes } from "../hooks/useMensajesConductor";
+import Badge from "./ui/Badge";
+import Spinner from "./ui/Spinner";
+import EmptyState from "./ui/EmptyState";
 
 function formatTimestamp(value) {
-  if (!value) return '—';
+  if (!value) return "—";
   try {
-    const date = new Date(value);
-    return date.toLocaleString('es-CL', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
+    return new Date(value).toLocaleString("es-CL", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
     });
   } catch {
-    return '—';
+    return "—";
   }
 }
 
-function getPrioridadColor(prioridad) {
-  return prioridad === 'ALTA' ? '#dc2626' : '#3b82f6';
-}
-
-function getPrioridadLabel(prioridad) {
-  return prioridad === 'ALTA' ? 'ALTA' : 'NORMAL';
-}
-
-const PLACEHOLDER_GUION = '—';
+const PLACEHOLDER_GUION = "—";
 
 function esTextoVacio(valor) {
-  const t = String(valor ?? '').trim();
+  const t = String(valor ?? "").trim();
   return !t || t === PLACEHOLDER_GUION;
 }
 
-/** Título legible del grupo; nunca devuelve "— → —". */
 function tituloGrupoRuta(rutaId, rutasMap = {}) {
   const ruta = rutasMap[rutaId] || {};
-  const origen = String(ruta.origen ?? '').trim();
-  const destino = String(ruta.destino ?? '').trim();
+  const origen = String(ruta.origen ?? "").trim();
+  const destino = String(ruta.destino ?? "").trim();
 
   if (!esTextoVacio(origen) && !esTextoVacio(destino)) {
     return `${origen} → ${destino}`;
   }
 
   const cliente = String(
-    ruta.clientes?.nombre ?? ruta.cliente?.nombre ?? ruta.cliente_nombre ?? '',
+    ruta.clientes?.nombre ?? ruta.cliente?.nombre ?? ruta.cliente_nombre ?? "",
   ).trim();
   if (!esTextoVacio(cliente) && !esTextoVacio(destino)) {
     return `${cliente} → ${destino}`;
@@ -53,20 +47,26 @@ function tituloGrupoRuta(rutaId, rutasMap = {}) {
   if (!esTextoVacio(destino)) return destino;
   if (!esTextoVacio(origen)) return origen;
 
-  const nombre = String(ruta.nombre ?? '').trim();
+  const nombre = String(ruta.nombre ?? "").trim();
   if (!esTextoVacio(nombre)) return nombre;
 
-  const id = String(rutaId ?? '').trim();
-  if (id && id !== 'SIN_RUTA') {
+  const id = String(rutaId ?? "").trim();
+  if (id && id !== "SIN_RUTA") {
     return `Ruta ${id.substring(0, 8)}`;
   }
 
-  return 'Ruta sin identificar';
+  return "Ruta sin identificar";
 }
 
-export default function MensajesConductor({ mensajes, rutasMap = {}, loading, error, acknowledgeMensaje }) {
-  const [searchRuta, setSearchRuta] = useState('');
-  const [expandedRoutes, setExpandedRoutes] = useState(() => new Set());
+export default function MensajesConductor({
+  mensajes,
+  rutasMap = {},
+  loading,
+  error,
+  acknowledgeMensaje,
+}) {
+  const [searchRuta, setSearchRuta] = useState("");
+  const [selectedRouteId, setSelectedRouteId] = useState(null);
 
   const mensajesOrdenados = useMemo(() => sortMensajes(mensajes), [mensajes]);
   const routeGroups = useMemo(() => {
@@ -77,6 +77,8 @@ export default function MensajesConductor({ mensajes, rutasMap = {}, loading, er
     }));
   }, [mensajesOrdenados, rutasMap, searchRuta]);
 
+  const selectedRoute = routeGroups.find((r) => r.rutaId === selectedRouteId) ?? null;
+
   const handleAcknowledge = async (mensajeId) => {
     const res = await acknowledgeMensaje(mensajeId);
     if (!res.ok) {
@@ -84,342 +86,139 @@ export default function MensajesConductor({ mensajes, rutasMap = {}, loading, er
     }
   };
 
-  const toggleRoute = (rutaId) => {
-    setExpandedRoutes((prev) => {
-      const next = new Set(prev);
-      if (next.has(rutaId)) {
-        next.delete(rutaId);
-      } else {
-        next.add(rutaId);
-      }
-      return next;
-    });
-  };
-
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: '16px' }} className="mensajes-panel">
-      <div
-        className="operator-glass-card mensajes-header-card"
-        style={{
-          borderRadius: '16px',
-          background: 'rgba(8,8,12,0.72)',
-          border: '1px solid rgba(255,255,255,0.12)',
-          padding: '16px 20px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '12px',
-          backdropFilter: 'blur(8px)',
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'flex-start' }}>
-          <div>
-            <h2 className="mensajes-title" style={{ margin: 0, fontSize: '16px', color: '#fff' }}>
-              Mensajes del conductor
-            </h2>
-            <p className="mensajes-subtitle" style={{ margin: '6px 0 0', color: 'rgba(226,232,240,0.75)', fontSize: '13px', maxWidth: '620px' }}>
-              Estados rápidos enviados desde la app móvil. Actualización automática cada 10 segundos.
-            </p>
-          </div>
-          <div style={{ flex: '0 0 320px', minWidth: 0 }}>
-            <label htmlFor="ruta-search" className="mensajes-field-label" style={{ display: 'block', marginBottom: '6px', color: 'rgba(226,232,240,0.9)', fontSize: '12px' }}>
-              Buscar rutas por nombre o ID de ruta
-            </label>
-            <input
-              id="ruta-search"
-              type="text"
-              value={searchRuta}
-              onChange={(event) => setSearchRuta(event.target.value)}
-              placeholder="Ej: 5a8c3d2f-..."
-              className="mensajes-search-input"
-              style={{
-                width: '100%',
-                borderRadius: '12px',
-                border: '1px solid rgba(255,255,255,0.15)',
-                background: 'rgba(15,23,42,0.65)',
-                color: '#f8fafc',
-                padding: '10px 14px',
-                fontSize: '13px',
-                boxSizing: 'border-box',
-              }}
+    <div className="lt-mensajes-split">
+      <aside className="lt-mensajes-conversations">
+        <div className="lt-mensajes-conversations__search">
+          <Search size={14} className="lt-search-icon" />
+          <input
+            id="ruta-search"
+            type="text"
+            className="lt-input"
+            value={searchRuta}
+            onChange={(e) => setSearchRuta(e.target.value)}
+            placeholder="Buscar por ruta o ID..."
+          />
+        </div>
+
+        {loading && mensajes.length === 0 && (
+          <Spinner message="Cargando mensajes..." />
+        )}
+
+        {error && (
+          <div className="lt-alert-banner lt-alert-banner--error">{error}</div>
+        )}
+
+        <div className="lt-mensajes-conversations__list lt-scroll">
+          {routeGroups.length === 0 && !loading ? (
+            <EmptyState
+              icon={MessageSquare}
+              title="Sin conversaciones"
+              description="No hay mensajes para la ruta indicada."
             />
-          </div>
-        </div>
-      </div>
-
-      {loading && mensajes.length === 0 && (
-        <div
-          style={{
-            padding: '20px',
-            textAlign: 'center',
-            color: '#bfc7e4',
-            fontSize: '13px',
-          }}
-        >
-          Cargando mensajes...
-        </div>
-      )}
-
-      {error && (
-        <div
-          style={{
-            padding: '12px 16px',
-            borderRadius: '8px',
-            background: 'rgba(220, 38, 38, 0.1)',
-            border: '1px solid rgba(220, 38, 38, 0.3)',
-            color: '#fca5a5',
-            fontSize: '13px',
-          }}
-        >
-          {error}
-        </div>
-      )}
-
-      <div
-        className="operator-glass-card mensajes-list-card"
-        style={{
-          borderRadius: '16px',
-          overflow: 'hidden',
-          border: '1px solid rgba(255,255,255,0.12)',
-          background: 'rgba(8,8,12,0.72)',
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          minHeight: 0,
-          backdropFilter: 'blur(8px)',
-        }}
-      >
-        {routeGroups.length === 0 && !loading ? (
-          <div
-            style={{
-              padding: '20px',
-              textAlign: 'center',
-              color: '#8b92b8',
-              fontSize: '13px',
-            }}
-          >
-            No hay mensajes para la ruta indicada.
-          </div>
-        ) : (
-          <div style={{ overflowY: 'auto', flex: 1, minHeight: 0, padding: '12px' }}>
-            {routeGroups.map((route) => {
-              const isOpen = expandedRoutes.has(route.rutaId);
-              return (
-                <div
-                  key={route.rutaId}
-                  className="mensajes-route-card operator-glass-card"
-                  style={{
-                    marginBottom: '14px',
-                    borderRadius: '18px',
-                    overflow: 'hidden',
-                    border: '1px solid rgba(255,255,255,0.12)',
-                    background: 'rgba(15,23,42,0.55)',
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => toggleRoute(route.rutaId)}
-                    style={{
-                      width: '100%',
-                      border: 'none',
-                      background: 'transparent',
-                      textAlign: 'left',
-                      padding: '18px 20px',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      cursor: 'pointer',
-                      color: '#fff',
-                    }}
-                  >
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: 0 }}>
-                      <span style={{ fontSize: '14px', fontWeight: 700, letterSpacing: '0.02em' }}>
-                        {route.rutaLabel}
-                      </span>
-                      <span style={{ fontSize: '12px', color: '#94a3b8' }}>
-                        {route.mensajes.length} mensaje{route.mensajes.length !== 1 ? 's' : ''}
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
-                      {route.hasUrgent && (
-                        <span
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            padding: '6px 10px',
-                            borderRadius: '999px',
-                            background: 'rgba(220, 38, 38, 0.16)',
-                            color: '#fee2e2',
-                            fontWeight: 700,
-                            fontSize: '12px',
-                          }}
-                        >
-                          🚨 EMERGENCIA
-                        </span>
-                      )}
-                      <span style={{ color: '#94a3b8', fontSize: '12px' }}>
-                        {isOpen ? '▲' : '▼'}
-                      </span>
-                    </div>
-                  </button>
-
-                  {isOpen && (
-                    <div className="mensajes-route-body" style={{ padding: '0 16px 18px', background: 'rgba(15,23,42,0.35)' }}>
-                      <div style={{ overflowX: 'auto' }}>
-                        <table
-                          className="mensajes-table"
-                          style={{
-                            width: '100%',
-                            borderCollapse: 'collapse',
-                            fontSize: '13px',
-                          }}
-                        >
-                          <thead>
-                            <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-                              <th
-                                style={{
-                                  padding: '12px 14px',
-                                  textAlign: 'left',
-                                  color: '#bfc7e4',
-                                  fontWeight: '600',
-                                }}
-                              >
-                                Mensaje
-                              </th>
-                              <th
-                                style={{
-                                  padding: '12px 14px',
-                                  textAlign: 'left',
-                                  color: '#bfc7e4',
-                                  fontWeight: '600',
-                                }}
-                              >
-                                Fecha y Hora
-                              </th>
-                              <th
-                                style={{
-                                  padding: '12px 14px',
-                                  textAlign: 'center',
-                                  color: '#bfc7e4',
-                                  fontWeight: '600',
-                                }}
-                              >
-                                Prioridad
-                              </th>
-                              <th
-                                style={{
-                                  padding: '12px 14px',
-                                  textAlign: 'center',
-                                  color: '#bfc7e4',
-                                  fontWeight: '600',
-                                }}
-                              >
-                                Acción
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {route.mensajes.map((mensaje) => {
-                              const isUrgentUnack = mensaje.prioridad === 'ALTA' && !mensaje.acknowledged;
-                              return (
-                                <tr
-                                  key={mensaje.id}
-                                  style={{
-                                    borderBottom: '1px solid rgba(255,255,255,0.06)',
-                                    background: isUrgentUnack
-                                      ? 'rgba(220, 38, 38, 0.18)'
-                                      : mensaje.prioridad === 'ALTA'
-                                      ? 'rgba(220, 38, 38, 0.06)'
-                                      : 'transparent',
-                                    animation: isUrgentUnack ? 'pulse-red 1.5s infinite' : 'none',
-                                    transition: 'background 0.2s',
-                                  }}
-                                >
-                                  <td style={{ padding: '12px 14px', color: '#e2e8f0' }}>
-                                    {mensaje.mensaje || '—'}
-                                  </td>
-                                  <td style={{ padding: '12px 14px', color: '#bfc7e4' }}>
-                                    {formatTimestamp(mensaje.timestamp_evento)}
-                                  </td>
-                                  <td style={{ padding: '12px 14px', textAlign: 'center' }}>
-                                    <span
-                                      style={{
-                                        display: 'inline-block',
-                                        padding: '4px 10px',
-                                        borderRadius: '6px',
-                                        background: getPrioridadColor(mensaje.prioridad),
-                                        color: '#fff',
-                                        fontSize: '11px',
-                                        fontWeight: '600',
-                                        letterSpacing: '0.05em',
-                                      }}
-                                    >
-                                      {getPrioridadLabel(mensaje.prioridad)}
-                                    </span>
-                                  </td>
-                                  <td style={{ padding: '12px 14px', textAlign: 'center' }}>
-                                    {mensaje.prioridad === 'ALTA' ? (
-                                      !mensaje.acknowledged ? (
-                                        <button
-                                          onClick={() => handleAcknowledge(mensaje.id)}
-                                          style={{
-                                            background: '#22c55e',
-                                            color: '#fff',
-                                            border: 'none',
-                                            borderRadius: '6px',
-                                            padding: '6px 12px',
-                                            fontSize: '11px',
-                                            fontWeight: '600',
-                                            cursor: 'pointer',
-                                            transition: 'opacity 0.2s',
-                                          }}
-                                          onMouseEnter={(e) => {
-                                            e.currentTarget.style.opacity = '0.8';
-                                          }}
-                                          onMouseLeave={(e) => {
-                                            e.currentTarget.style.opacity = '1';
-                                          }}
-                                        >
-                                          Confirmar
-                                        </button>
-                                      ) : (
-                                        <span style={{ fontSize: '11px', color: '#94a3b8' }}>
-                                          ✓ Notificado
-                                        </span>
-                                      )
-                                    ) : null}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
+          ) : (
+            routeGroups.map((route) => (
+              <button
+                key={route.rutaId}
+                type="button"
+                className={`lt-mensajes-conv-item ${selectedRouteId === route.rutaId ? "lt-mensajes-conv-item--active" : ""} ${route.hasUrgent ? "lt-mensajes-conv-item--urgent" : ""}`}
+                onClick={() => setSelectedRouteId(route.rutaId)}
+              >
+                <div className="lt-mensajes-conv-item__title">{route.rutaLabel}</div>
+                <div className="lt-mensajes-conv-item__meta">
+                  <span>{route.mensajes.length} mensaje{route.mensajes.length !== 1 ? "s" : ""}</span>
+                  {route.hasUrgent && (
+                    <Badge variant="danger" showDot={false}>Emergencia</Badge>
                   )}
                 </div>
-              );
-            })}
-          </div>
+              </button>
+            ))
+          )}
+        </div>
+      </aside>
+
+      <div className="lt-mensajes-detail">
+        {!selectedRoute ? (
+          <EmptyState
+            icon={MessageSquare}
+            title="Selecciona una conversación"
+            description="Elige una ruta a la izquierda para ver los mensajes del conductor."
+          />
+        ) : (
+          <>
+            <div className="lt-mensajes-detail__header">
+              <div>
+                <h3 className="lt-mensajes-detail__title">{selectedRoute.rutaLabel}</h3>
+                <p className="lt-mensajes-detail__sub">
+                  {selectedRoute.mensajes.length} mensaje{selectedRoute.mensajes.length !== 1 ? "s" : ""}
+                  {selectedRoute.hasUrgent && " · contiene emergencias"}
+                </p>
+              </div>
+              {selectedRoute.hasUrgent && (
+                <Badge variant="danger" showDot={false}>
+                  <AlertTriangle size={12} />
+                  Urgente
+                </Badge>
+              )}
+            </div>
+
+            <div className="lt-table-wrap lt-mensajes-detail__table">
+              <table className="lt-table">
+                <thead>
+                  <tr>
+                    <th>Mensaje</th>
+                    <th>Fecha y hora</th>
+                    <th>Prioridad</th>
+                    <th>Acción</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedRoute.mensajes.map((mensaje) => {
+                    const isUrgentUnack =
+                      mensaje.prioridad === "ALTA" && !mensaje.acknowledged;
+                    return (
+                      <tr
+                        key={mensaje.id}
+                        className={isUrgentUnack ? "lt-table__row--urgent" : undefined}
+                      >
+                        <td>{mensaje.mensaje || "—"}</td>
+                        <td>{formatTimestamp(mensaje.timestamp_evento)}</td>
+                        <td>
+                          <Badge variant={mensaje.prioridad === "ALTA" ? "danger" : "info"}>
+                            {mensaje.prioridad === "ALTA" ? "ALTA" : "NORMAL"}
+                          </Badge>
+                        </td>
+                        <td>
+                          {mensaje.prioridad === "ALTA" ? (
+                            !mensaje.acknowledged ? (
+                              <button
+                                type="button"
+                                className="lt-btn lt-btn--primary"
+                                onClick={() => handleAcknowledge(mensaje.id)}
+                              >
+                                Confirmar
+                              </button>
+                            ) : (
+                              <span className="lt-mensajes-ack">
+                                <CheckCircle2 size={12} />
+                                Notificado
+                              </span>
+                            )
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <p className="lt-mensajes-polling">Actualización automática cada 10 segundos</p>
+          </>
         )}
       </div>
-
-      <div
-        style={{
-          fontSize: '12px',
-          color: '#64748b',
-          textAlign: 'center',
-        }}
-      >
-        ↻ Polling automático cada 10 segundos
-      </div>
-
-      <style>{`
-        @keyframes pulse-red {
-          0%, 100% { background-color: rgba(220, 38, 38, 0.18); }
-          50% { background-color: rgba(220, 38, 38, 0.38); }
-        }
-      `}</style>
     </div>
   );
 }

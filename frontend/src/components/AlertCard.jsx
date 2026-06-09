@@ -1,27 +1,39 @@
-// src/components/AlertCard.jsx
 import React, { useState } from "react";
+import { MapPin, User, Truck, Clock, CheckCircle, ExternalLink } from "lucide-react";
+import Badge from "./ui/Badge";
 
-const PRIORITY_CONFIG = {
-  CRITICA: { label: "CRÍTICA",  bg: "#1a0000", border: "#ff1744", badgeBg: "#ff1744", badgeText: "#fff", pulse: true,  icon: "🚨" },
-  ALTA:    { label: "ALTA",     bg: "#1a0800", border: "#ff6d00", badgeBg: "#ff6d00", badgeText: "#fff", pulse: true,  icon: "⚠️" },
-  NORMAL:  { label: "NORMAL",   bg: "#0d1a2e", border: "#1565c0", badgeBg: "#1565c0", badgeText: "#fff", pulse: false, icon: "ℹ️" },
-  BAJA:    { label: "BAJA",     bg: "#0d1a0d", border: "#2e7d32", badgeBg: "#2e7d32", badgeText: "#fff", pulse: false, icon: "📋" },
+const PRIORITY_VARIANT = {
+  CRITICA: { variant: "danger", cardClass: "lt-alert-card--critical" },
+  ALTA: { variant: "warning", cardClass: "lt-alert-card--high" },
+  NORMAL: { variant: "info", cardClass: "lt-alert-card--normal" },
+  BAJA: { variant: "muted", cardClass: "lt-alert-card--low" },
+};
+
+const STATUS_VARIANT = {
+  PENDIENTE: "warning",
+  EN_GESTION: "accent",
+  RESUELTA: "success",
+};
+
+const STATUS_LABEL = {
+  PENDIENTE: "Pendiente",
+  EN_GESTION: "En gestión",
+  RESUELTA: "Resuelta",
 };
 
 const ALERT_TYPE_LABELS = {
-  DESVIO_RUTA:  "Desvío de Ruta",
+  DESVIO_RUTA: "Desvío de Ruta",
   BOTON_PANICO: "Botón de Pánico",
-  ANOMALIA:     "Anomalía en Ruta",
-  MANTENCION:   "Mantención Requerida",
-  ALERTA:       "Alerta Identificada",
-  NORMAL:       "Incidencia Normal",
-  EMERGENCIA:   "Emergencia Grave",
+  ANOMALIA: "Anomalía en Ruta",
+  MANTENCION: "Mantención Requerida",
+  ALERTA: "Alerta Identificada",
+  NORMAL: "Incidencia Normal",
+  EMERGENCIA: "Emergencia Grave",
 };
 
 function formatTimestamp(ts) {
   if (!ts) return "—";
-  const d = new Date(ts);
-  return d.toLocaleString("es-CL", {
+  return new Date(ts).toLocaleString("es-CL", {
     day: "2-digit", month: "2-digit", year: "numeric",
     hour: "2-digit", minute: "2-digit", second: "2-digit",
   });
@@ -30,15 +42,16 @@ function formatTimestamp(ts) {
 function timeAgo(ts) {
   if (!ts) return "";
   const diff = Math.floor((Date.now() - new Date(ts)) / 1000);
-  if (diff < 60)   return `hace ${diff}s`;
+  if (diff < 60) return `hace ${diff}s`;
   if (diff < 3600) return `hace ${Math.floor(diff / 60)}m`;
   return `hace ${Math.floor(diff / 3600)}h`;
 }
 
-// Genera enlace a Google Maps sin API key (CA-2 placeholder de ubicación)
 function buildMapsLink(alert) {
   if (alert.lat && alert.lng) return `https://www.google.com/maps?q=${alert.lat},${alert.lng}`;
-  if (alert.last_location_label) return `https://www.google.com/maps/search/${encodeURIComponent(alert.last_location_label)}`;
+  if (alert.last_location_label) {
+    return `https://www.google.com/maps/search/${encodeURIComponent(alert.last_location_label)}`;
+  }
   return null;
 }
 
@@ -51,13 +64,14 @@ export default function AlertCard({
   isSelected = false,
 }) {
   const [isAcknowledging, setIsAcknowledging] = useState(false);
-  const [isResolving, setIsResolving]         = useState(false);
-  const [ackError, setAckError]               = useState(null);
-  const [resolveError, setResolveError]       = useState(null);
+  const [isResolving, setIsResolving] = useState(false);
+  const [ackError, setAckError] = useState(null);
+  const [resolveError, setResolveError] = useState(null);
 
-  const cfg       = PRIORITY_CONFIG[alert.priority] ?? PRIORITY_CONFIG.NORMAL;
+  const cfg = PRIORITY_VARIANT[alert.priority] ?? PRIORITY_VARIANT.NORMAL;
   const isPending = alert.status === "PENDIENTE";
   const isManaging = alert.status === "EN_GESTION";
+  const mapsLink = buildMapsLink(alert);
 
   async function handleAcknowledge() {
     setAckError(null);
@@ -85,156 +99,91 @@ export default function AlertCard({
     }
   }
 
-  const mapsLink = buildMapsLink(alert);
-
   return (
     <div
-      className="alert-card"
+      className={`lt-alert-card ${cfg.cardClass} ${isSelected ? "lt-alert-card--selected" : ""}`}
       onClick={() => onSelect?.(alert)}
-      style={{
-        background: isSelected ? `${cfg.border}18` : cfg.bg,
-        border: isSelected ? `2px solid ${cfg.border}` : `2px solid ${isSelected ? cfg.border : cfg.border + "88"}`,
-        borderRadius: "12px",
-        padding: "16px 20px",
-        marginBottom: "10px",
-        position: "relative",
-        boxShadow: isSelected
-          ? `0 0 24px ${cfg.border}88, 0 2px 8px #0008`
-          : cfg.pulse ? `0 0 18px ${cfg.border}55, 0 2px 8px #0008` : "0 2px 8px #0008",
-        animation: cfg.pulse && isPending && !isSelected ? "pulseCard 2s infinite" : "none",
-        transition: "all 0.25s ease",
-        cursor: "pointer",
-        outline: isSelected ? `1px solid ${cfg.border}55` : "none",
-        outlineOffset: "2px",
-      }}
     >
-      {/* ── Badge de prioridad + tipo ── */}
-      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px", flexWrap: "wrap" }}>
-        <span style={{
-          background: cfg.badgeBg, color: cfg.badgeText, fontSize: "11px",
-          fontWeight: 700, padding: "3px 10px", borderRadius: "20px",
-          letterSpacing: "0.08em", fontFamily: "'DM Mono', monospace",
-        }}>
-          {cfg.icon} {cfg.label}
-        </span>
-        <span style={{
-          background: "#ffffff15", color: "#ccc", fontSize: "11px",
-          padding: "3px 10px", borderRadius: "20px", fontFamily: "'DM Mono', monospace",
-        }}>
+      <div className="lt-alert-card__meta">
+        <Badge variant={cfg.variant}>{alert.priority}</Badge>
+        <Badge variant="muted" showDot={false}>
           {ALERT_TYPE_LABELS[alert.alert_type] ?? alert.alert_type}
-        </span>
-        <span style={{
-          marginLeft: "auto", fontSize: "11px", padding: "3px 10px", borderRadius: "20px", fontWeight: 600,
-          background: isPending ? "#ff174422" : isManaging ? "#ff6d0022" : "#ffffff15",
-          color: isPending ? "#ff6b6b" : isManaging ? "#ffb347" : "#aaa",
-          border: `1px solid ${isPending ? "#ff174455" : isManaging ? "#ff6d0055" : "#ffffff22"}`,
-        }}>
-          {isPending ? "⏳ Pendiente" : isManaging ? "🔧 En Gestión" : "✅ Resuelta"}
+        </Badge>
+        <span style={{ marginLeft: "auto" }}>
+          <Badge variant={STATUS_VARIANT[alert.status] || "muted"}>
+            {STATUS_LABEL[alert.status] ?? alert.status}
+          </Badge>
         </span>
       </div>
 
-      {/* ── Datos del conductor y vehículo ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 16px", marginBottom: "14px" }}>
-        <DataRow icon="👤" label="Conductor"       value={alert.driver_name ?? "—"} />
-        <DataRow icon="🚛" label="Patente"         value={alert.vehicle_plate ?? "—"} highlight />
-        <DataRow icon="📍" label="Última posición" value={alert.last_location_label ?? (alert.lat != null && alert.lng != null ? `${Number(alert.lat).toFixed(5)}, ${Number(alert.lng).toFixed(5)}` : "Sin datos")} />
-        <DataRow icon="🕐" label="Evento"          value={`${formatTimestamp(alert.created_at)} (${timeAgo(alert.created_at)})`} />
+      <div className="lt-alert-card__grid">
+        <Field icon={User} label="Conductor" value={alert.driver_name ?? "—"} />
+        <Field icon={Truck} label="Patente" value={alert.vehicle_plate ?? "—"} highlight />
+        <Field
+          icon={MapPin}
+          label="Ubicación"
+          value={
+            alert.last_location_label ??
+            (alert.lat != null && alert.lng != null
+              ? `${Number(alert.lat).toFixed(5)}, ${Number(alert.lng).toFixed(5)}`
+              : "Sin datos")
+          }
+        />
+        <Field
+          icon={Clock}
+          label="Evento"
+          value={`${formatTimestamp(alert.created_at)} (${timeAgo(alert.created_at)})`}
+        />
         {alert.acknowledged_by && (
-          <DataRow icon="✅" label="Acusado por" value={`${alert.acknowledged_by} — ${formatTimestamp(alert.acknowledged_at)}`} />
+          <Field icon={CheckCircle} label="Acusado por" value={`${alert.acknowledged_by} — ${formatTimestamp(alert.acknowledged_at)}`} />
         )}
       </div>
 
-      {/* ── Descripción ── */}
       {alert.description && (
-        <p style={{
-          color: "#ccc", fontSize: "13px", margin: "0 0 14px",
-          padding: "10px 12px", background: "#ffffff08",
-          borderRadius: "8px", borderLeft: `3px solid ${cfg.border}`, lineHeight: 1.5,
-        }}>
-          {alert.description}
-        </p>
+        <p className="lt-alert-card__desc">{alert.description}</p>
       )}
 
-      {/* ── Acciones ── */}
-      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }} onClick={(e) => e.stopPropagation()}>
-        {/* Enlace directo a Google Maps — CA-2 (placeholder sin GPS) */}
+      <div className="lt-alert-card__actions" onClick={(e) => e.stopPropagation()}>
         {mapsLink && (
-          <a
-            href={mapsLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={mapsLinkBtnStyle}
-            title="Ver ubicación en Google Maps"
-          >
-            🗺️ Ver Ubicación
+          <a href={mapsLink} target="_blank" rel="noopener noreferrer" className="lt-btn lt-btn--secondary">
+            <ExternalLink size={13} />
+            Ver ubicación
           </a>
         )}
         {isPending && (
-          <button onClick={handleAcknowledge} disabled={isAcknowledging} style={btnStyle("#b71c1c")}>
-            {isAcknowledging ? "Procesando..." : "✔ Acuse de Recibo"}
+          <button type="button" onClick={handleAcknowledge} disabled={isAcknowledging} className="lt-btn lt-btn--primary">
+            {isAcknowledging ? "Procesando..." : "Acuse de recibo"}
           </button>
         )}
         {isManaging && (
-          <button onClick={handleResolve} disabled={isResolving} style={btnStyle("#1b5e20")}>
-            {isResolving ? "Procesando..." : "✅ Marcar Resuelta"}
+          <button type="button" onClick={handleResolve} disabled={isResolving} className="lt-btn lt-btn--primary">
+            {isResolving ? "Procesando..." : "Marcar resuelta"}
           </button>
         )}
-        <button onClick={() => onSelect?.(alert)} style={btnStyle("#1a2a3a")}>
-          {isSelected ? "✦ Seleccionada" : "Ver Detalle →"}
+        <button type="button" onClick={() => onSelect?.(alert)} className="lt-btn lt-btn--ghost">
+          {isSelected ? "Seleccionada" : "Ver detalle"}
         </button>
       </div>
+
       {(ackError || resolveError) && (
-        <p
-          role="alert"
-          style={{
-            margin: "10px 0 0",
-            padding: "8px 10px",
-            fontSize: "12px",
-            color: "#ffcdd2",
-            background: "#b71c1c33",
-            borderRadius: "8px",
-            border: "1px solid #ff525280",
-          }}
-        >
+        <div className="lt-alert-banner lt-alert-banner--error" role="alert" style={{ marginTop: 10 }}>
           {ackError || resolveError}
-        </p>
+        </div>
       )}
     </div>
   );
 }
 
-function DataRow({ icon, label, value, highlight }) {
+function Field({ icon: Icon, label, value, highlight }) {
   return (
     <div>
-      <div style={{ fontSize: "10px", color: "#888", marginBottom: "2px", fontFamily: "'DM Mono', monospace" }}>
-        {icon} {label.toUpperCase()}
+      <div className="lt-alert-card__field-label">
+        <Icon size={10} style={{ display: "inline", marginRight: 4, verticalAlign: -1 }} />
+        {label}
       </div>
-      <div style={{
-        fontSize: "13px",
-        color: highlight ? "#fff" : "#ddd",
-        fontWeight: highlight ? 700 : 400,
-        fontFamily: highlight ? "'DM Mono', monospace" : "inherit",
-        letterSpacing: highlight ? "0.05em" : "normal",
-      }}>
+      <div className={`lt-alert-card__field-value ${highlight ? "lt-alert-card__field-value--mono" : ""}`}>
         {value}
       </div>
     </div>
   );
 }
-
-function btnStyle(bg) {
-  return {
-    background: bg, color: "#fff", border: "none", borderRadius: "8px",
-    padding: "8px 14px", fontSize: "12px", fontWeight: 600,
-    cursor: "pointer", transition: "background 0.2s", fontFamily: "inherit",
-  };
-}
-
-const mapsLinkBtnStyle = {
-  display: "inline-flex", alignItems: "center",
-  background: "#1565c022", color: "#64b5f6",
-  border: "1px solid #1565c055", borderRadius: "8px",
-  padding: "7px 13px", fontSize: "12px", fontWeight: 600,
-  textDecoration: "none", cursor: "pointer",
-  transition: "background 0.2s", fontFamily: "inherit",
-};
