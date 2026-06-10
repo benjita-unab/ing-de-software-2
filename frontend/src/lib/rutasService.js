@@ -446,3 +446,56 @@ export async function obtenerEstadoLicencia(conductorId) {
     },
   };
 }
+
+/**
+ * HU-37: métricas operacionales y pago de un conductor por período.
+ * @param {string} conductorId
+ * @param {{ periodo?: string, fechaInicio?: string, fechaFin?: string }} [filtros]
+ */
+export async function obtenerMetricasPagoConductor(conductorId, filtros = {}) {
+  if (!conductorId) {
+    return { data: null, error: "conductorId es requerido" };
+  }
+
+  const params = new URLSearchParams();
+  if (filtros.periodo) params.set("periodo", filtros.periodo);
+  if (filtros.fechaInicio) params.set("fechaInicio", filtros.fechaInicio);
+  if (filtros.fechaFin) params.set("fechaFin", filtros.fechaFin);
+
+  const qs = params.toString();
+  const path = qs
+    ? `/api/conductores/${conductorId}/metricas-pago?${qs}`
+    : `/api/conductores/${conductorId}/metricas-pago`;
+
+  const res = await apiFetch(path);
+
+  if (!res.ok) {
+    return { data: null, error: res.error || "Error al obtener métricas de pago" };
+  }
+
+  return { data: res.data?.data ?? res.data };
+}
+
+/**
+ * HU-37 CA-08: comparativa de rendimiento entre conductores activos.
+ * @param {{ periodo?: string, fechaInicio?: string, fechaFin?: string }} [filtros]
+ */
+export async function obtenerComparativaMetricasPago(filtros = {}) {
+  const params = new URLSearchParams();
+  if (filtros.periodo) params.set("periodo", filtros.periodo);
+  if (filtros.fechaInicio) params.set("fechaInicio", filtros.fechaInicio);
+  if (filtros.fechaFin) params.set("fechaFin", filtros.fechaFin);
+
+  const qs = params.toString();
+  const path = qs
+    ? `/api/conductores/metricas-pago/comparativa?${qs}`
+    : "/api/conductores/metricas-pago/comparativa";
+
+  const res = await apiFetch(path);
+
+  if (!res.ok) {
+    return { data: null, error: res.error || "Error al obtener comparativa" };
+  }
+
+  return { data: res.data?.data ?? res.data };
+}
