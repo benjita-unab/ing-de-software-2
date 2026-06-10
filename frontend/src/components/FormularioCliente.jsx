@@ -1,63 +1,11 @@
 import React, { useRef, useState, useEffect } from "react";
+import { X } from "lucide-react";
 import { formatRut } from "../lib/formatRut";
 import { useGooglePlacesAutocomplete } from "../hooks/useGooglePlacesAutocomplete";
 import { loadGoogleMaps } from "../lib/googleMapsLoader";
 import SelectorCoordenadas from "./SelectorCoordenadas";
 import { createCliente, updateCliente } from "../lib/clientesService";
-
-const base = {
-  container: {
-    background: "rgba(8,8,12,0.72)",
-    border: "1px solid rgba(255,255,255,0.12)",
-    borderRadius: "16px",
-    padding: "20px",
-    marginBottom: "20px",
-    boxShadow: "0 10px 30px rgba(0,0,0,0.45)",
-    backdropFilter: "blur(8px)",
-    color: "#fff",
-    fontFamily: "'Inter', 'Poppins', sans-serif",
-  },
-  title: {
-    fontSize: "16px",
-    fontWeight: 600,
-    color: "#60A5FA",
-    marginBottom: "16px",
-  },
-  label: {
-    display: "block",
-    fontSize: "13px",
-    color: "#94A3B8",
-    marginBottom: "8px",
-    fontWeight: 500,
-  },
-  input: {
-    width: "100%",
-    padding: "10px 12px",
-    borderRadius: "10px",
-    border: "1px solid rgba(255,255,255,0.15)",
-    background: "rgba(15,23,42,0.65)",
-    color: "#F8FAFC",
-    marginBottom: "14px",
-    outline: "none",
-    fontSize: "13px",
-    fontFamily: "inherit",
-    boxSizing: "border-box"
-  },
-  button: {
-    padding: "10px 16px",
-    background: "#0EA5E9",
-    color: "#fff",
-    border: "none",
-    borderRadius: "8px",
-    fontSize: "13px",
-    fontWeight: 600,
-    cursor: "pointer",
-    transition: "all 0.2s ease",
-    fontFamily: "inherit",
-    width: "100%",
-    marginTop: "16px"
-  }
-};
+import Card from "./ui/Card";
 
 export default function FormularioCliente({ onGuardado, clienteInicial = null, onCancel }) {
   const direccionInputRef = useRef(null);
@@ -66,8 +14,8 @@ export default function FormularioCliente({ onGuardado, clienteInicial = null, o
     rut: "",
     telefono: "",
     direccion: "",
-    latitud: -33.4489, // Default Santiago
-    longitud: -70.6693
+    latitud: -33.4489,
+    longitud: -70.6693,
   });
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -120,18 +68,14 @@ export default function FormularioCliente({ onGuardado, clienteInicial = null, o
             longitud: location.lng(),
           }));
         }
-      }
+      },
     );
   };
 
   const formatTelefono = (value) => {
     let numbers = value.replace(/\D/g, "");
-    if (numbers.startsWith("56")) {
-      numbers = numbers.slice(2);
-    }
-    if (numbers.length > 9) {
-      numbers = numbers.slice(0, 9);
-    }
+    if (numbers.startsWith("56")) numbers = numbers.slice(2);
+    if (numbers.length > 9) numbers = numbers.slice(0, 9);
     if (numbers.length === 0) return "";
     if (numbers.length <= 1) return `+56 ${numbers}`;
     if (numbers.length <= 5) return `+56 ${numbers.slice(0, 1)} ${numbers.slice(1)}`;
@@ -142,8 +86,7 @@ export default function FormularioCliente({ onGuardado, clienteInicial = null, o
     e.preventDefault();
     setLoading(true);
     setErrorMsg("");
-    
-    // CA-6 Validaciones de campos obligatorios
+
     if (!formData.nombre.trim()) {
       setErrorMsg("El campo 'Nombre Cliente o Empresa' es obligatorio.");
       setLoading(false);
@@ -156,8 +99,6 @@ export default function FormularioCliente({ onGuardado, clienteInicial = null, o
     }
 
     try {
-      // La tabla `clientes` NO tiene columnas latitud/longitud,
-      // por lo que solo enviamos las columnas reales del schema.
       const payload = {
         nombre: formData.nombre,
         rut: formData.rut,
@@ -165,7 +106,7 @@ export default function FormularioCliente({ onGuardado, clienteInicial = null, o
         direccion: formData.direccion,
       };
 
-      if (clienteInicial && clienteInicial.id) {
+      if (clienteInicial?.id) {
         await updateCliente(clienteInicial.id, payload);
         alert("✅ Cliente actualizado exitosamente");
       } else {
@@ -180,10 +121,10 @@ export default function FormularioCliente({ onGuardado, clienteInicial = null, o
           longitud: -70.6693,
         });
       }
-      
+
       if (onGuardado) onGuardado();
     } catch (err) {
-      alert("❌ " + err.message);
+      alert(`❌ ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -205,96 +146,98 @@ export default function FormularioCliente({ onGuardado, clienteInicial = null, o
   };
 
   return (
-    <div style={base.container} className="client-form-card operator-glass-card">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        <div style={{...base.title, marginBottom: 0}} className="client-form-title">
-          {clienteInicial ? "✏️ Editar Cliente" : "👤 Registrar Nuevo Cliente"}
-        </div>
+    <Card className="lt-module-card">
+      <div className="lt-clientes-form-header">
+        <h3 className="lt-module-card__title">
+          {clienteInicial ? "Editar cliente" : "Registrar nuevo cliente"}
+        </h3>
         {onCancel && (
-          <button type="button" onClick={onCancel} style={{ background: 'transparent', border: 'none', color: '#94A3B8', cursor: 'pointer', fontSize: '14px' }}>
-            ✖ Cerrar
+          <button type="button" className="lt-btn lt-btn--ghost" onClick={onCancel}>
+            <X size={14} />
+            Cerrar
           </button>
         )}
       </div>
 
       {errorMsg && (
-        <div style={{ background: 'rgba(239, 68, 68, 0.2)', border: '1px solid rgba(239, 68, 68, 0.5)', color: '#FCA5A5', padding: '10px', borderRadius: '8px', marginBottom: '16px', fontSize: '13px' }}>
-          ⚠️ {errorMsg}
-        </div>
+        <div className="lt-alert-banner lt-alert-banner--error">{errorMsg}</div>
       )}
 
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column' }}>
-        
-        <label style={base.label} className="client-form-label">Nombre Cliente o Empresa</label>
-        <input 
-          style={base.input}
-          placeholder="Ej: Logística SpA" 
-          value={formData.nombre}
-          onChange={(e) => setFormData({...formData, nombre: e.target.value})}
-          required
-        />
+      <form onSubmit={handleSubmit}>
+        <div className="lt-field-group">
+          <label className="lt-label">Nombre cliente o empresa</label>
+          <input
+            className="lt-input"
+            placeholder="Ej: Logística SpA"
+            value={formData.nombre}
+            onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+            required
+          />
+        </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-          <div>
-            <label style={base.label} className="client-form-label">RUT</label>
-            <input 
-              style={base.input}
-              placeholder="Ej: 76.000.000-K" 
+        <div className="lt-form-grid">
+          <div className="lt-field-group">
+            <label className="lt-label">RUT</label>
+            <input
+              className="lt-input"
+              placeholder="Ej: 76.000.000-K"
               value={formData.rut}
-              onChange={(e) => {
-                const formattedRut = formatRut(e.target.value);
-                setFormData({...formData, rut: formattedRut});
-              }}
+              onChange={(e) => setFormData({ ...formData, rut: formatRut(e.target.value) })}
             />
           </div>
-          <div>
-            <label style={base.label} className="client-form-label">Teléfono</label>
-            <input 
-              style={base.input}
-              placeholder="+56 9 1234 5678" 
+          <div className="lt-field-group">
+            <label className="lt-label">Teléfono</label>
+            <input
+              className="lt-input"
+              placeholder="+56 9 1234 5678"
               value={formData.telefono}
-              onChange={(e) => {
-                const formattedPhone = formatTelefono(e.target.value);
-                setFormData({...formData, telefono: formattedPhone});
-              }}
+              onChange={(e) =>
+                setFormData({ ...formData, telefono: formatTelefono(e.target.value) })
+              }
             />
           </div>
         </div>
 
-        <label style={base.label} className="client-form-label">Dirección Base</label>
-        {mapsError && (
-          <div style={{ color: "#fca5a5", fontSize: "11px", marginBottom: "8px" }}>
-            {mapsError}
-          </div>
-        )}
-        <input 
-          ref={direccionInputRef}
-          style={base.input}
-          placeholder="Escribe y selecciona una dirección sugerida..." 
-          value={formData.direccion}
-          onChange={(e) => setFormData({...formData, direccion: e.target.value})}
-          onBlur={(e) => geocodeDireccion(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              geocodeDireccion(formData.direccion);
-            }
-          }}
-          autoComplete="off"
-        />
+        <div className="lt-field-group">
+          <label className="lt-label">Dirección base</label>
+          {mapsError && (
+            <div className="lt-alert-banner lt-alert-banner--warning">{mapsError}</div>
+          )}
+          <input
+            ref={direccionInputRef}
+            className="lt-input"
+            placeholder="Escribe y selecciona una dirección sugerida..."
+            value={formData.direccion}
+            onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
+            onBlur={(e) => geocodeDireccion(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                geocodeDireccion(formData.direccion);
+              }
+            }}
+            autoComplete="off"
+          />
+        </div>
 
-        <label style={base.label} className="client-form-label">Ubicación Exacta de Entrega</label>
-        <SelectorCoordenadas 
-          latInicial={formData.latitud} 
-          lngInicial={formData.longitud} 
-          onSelectUbicacion={handleCoordenadas}
-          onAddressResolved={handleAddressResolved}
-        />
+        <div className="lt-field-group">
+          <label className="lt-label">Ubicación exacta de entrega</label>
+          <SelectorCoordenadas
+            latInicial={formData.latitud}
+            lngInicial={formData.longitud}
+            onSelectUbicacion={handleCoordenadas}
+            onAddressResolved={handleAddressResolved}
+          />
+        </div>
 
-        <button type="submit" style={{...base.button, opacity: loading ? 0.7 : 1}} disabled={loading}>
-          {loading ? "Guardando..." : "💾 Guardar Cliente"}
+        <button
+          type="submit"
+          className="lt-btn lt-btn--primary lt-btn--full"
+          disabled={loading}
+        >
+          {loading ? "Guardando..." : "Guardar cliente"}
         </button>
       </form>
-    </div>
+    </Card>
   );
 }

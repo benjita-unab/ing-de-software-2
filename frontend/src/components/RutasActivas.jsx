@@ -5,238 +5,25 @@ import {
   estimarFechasEstimadas,
   actualizarFechasEstimadas,
   notificarFechaEstimada,
+  obtenerAnomaliasRuta,
 } from "../lib/rutasService";
 import { useGooglePlacesAutocomplete } from "../hooks/useGooglePlacesAutocomplete";
+import Badge from "./ui/Badge";
+import Spinner from "./ui/Spinner";
 
-const base = {
-  container: {
-    minHeight: "100%",
-    background: "transparent",
-    color: "#fff",
-    padding: "10px",
-    fontFamily: "'Inter', 'Poppins', sans-serif",
-    overflow: "auto",
-  },
-  card: {
-    background: "rgba(8,8,12,0.72)",
-    border: "1px solid rgba(255,255,255,0.12)",
-    borderRadius: "16px",
-    padding: "18px",
-    marginBottom: "14px",
-    boxShadow: "0 10px 30px rgba(0,0,0,0.45)",
-    backdropFilter: "blur(8px)",
-  },
-  title: {
-    fontSize: "18px",
-    fontWeight: 800,
-    color: "#fff",
-    marginBottom: "8px",
-    letterSpacing: "0.06em",
-  },
-  subtitle: {
-    fontSize: "13px",
-    color: "rgba(226,232,240,0.75)",
-    marginBottom: "16px",
-    lineHeight: 1.5,
-  },
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
-    marginTop: "12px",
-  },
-  th: {
-    textAlign: "left",
-    padding: "10px 8px",
-    borderBottom: "1px solid rgba(255,255,255,0.12)",
-    color: "rgba(255,255,255,0.75)",
-    fontSize: "12px",
-    fontWeight: 600,
-    background: "rgba(255,255,255,0.03)",
-  },
-  td: {
-    padding: "12px 8px",
-    borderBottom: "1px solid rgba(255,255,255,0.08)",
-    fontSize: "14px",
-    color: "#e2e8f0",
-    verticalAlign: "top",
-  },
-  badge: {
-    display: "inline-block",
-    padding: "4px 8px",
-    borderRadius: "6px",
-    fontSize: "11px",
-    fontWeight: 600,
-    background: "rgba(58,12,163,0.45)",
-    color: "#ffffff",
-    border: "1px solid rgba(76,201,240,0.35)",
-  },
-  btnPrimary: {
-    background: "linear-gradient(135deg, #2563eb, #7c3aed)",
-    color: "#fff",
-    border: "none",
-    borderRadius: "10px",
-    padding: "10px 18px",
-    fontWeight: 700,
-    cursor: "pointer",
-    fontSize: "14px",
-  },
-  btnWaze: {
-    background: "#33ccff",
-    color: "#0f172a",
-    border: "none",
-    borderRadius: "8px",
-    padding: "8px 12px",
-    fontWeight: 700,
-    cursor: "pointer",
-    fontSize: "12px",
-  },
-  btnSecondary: {
-    background: "rgba(255,255,255,0.08)",
-    color: "#e2e8f0",
-    border: "1px solid rgba(255,255,255,0.2)",
-    borderRadius: "8px",
-    padding: "6px 10px",
-    fontWeight: 600,
-    cursor: "pointer",
-    fontSize: "11px",
-    marginTop: "6px",
-    display: "block",
-    width: "100%",
-  },
-  btnNotify: {
-    background: "linear-gradient(135deg, #059669, #10b981)",
-    color: "#fff",
-    border: "none",
-    borderRadius: "8px",
-    padding: "6px 10px",
-    fontWeight: 700,
-    cursor: "pointer",
-    fontSize: "11px",
-    marginTop: "6px",
-    display: "block",
-    width: "100%",
-  },
-  dateField: {
-    marginBottom: "8px",
-  },
-  dateFieldLabel: {
-    display: "block",
-    fontSize: "11px",
-    fontWeight: 600,
-    color: "rgba(226,232,240,0.85)",
-    marginBottom: "4px",
-  },
-  dateInput: {
-    width: "100%",
-    padding: "6px 8px",
-    borderRadius: "6px",
-    border: "1px solid rgba(255,255,255,0.15)",
-    background: "rgba(15,23,42,0.65)",
-    color: "#f8fafc",
-    fontSize: "12px",
-    boxSizing: "border-box",
-  },
-  label: {
-    display: "block",
-    fontSize: "12px",
-    fontWeight: 600,
-    color: "rgba(226,232,240,0.9)",
-    marginBottom: "6px",
-    marginTop: "10px",
-  },
-  input: {
-    width: "100%",
-    padding: "10px 12px",
-    borderRadius: "10px",
-    border: "1px solid rgba(255,255,255,0.15)",
-    background: "rgba(15,23,42,0.65)",
-    color: "#f8fafc",
-    fontSize: "14px",
-    boxSizing: "border-box",
-  },
-  select: {
-    width: "100%",
-    padding: "10px 12px",
-    borderRadius: "10px",
-    border: "1px solid rgba(255,255,255,0.15)",
-    background: "rgba(15,23,42,0.95)",
-    color: "#f8fafc",
-    fontSize: "14px",
-  },
-  formGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
-    gap: "12px 16px",
-    marginTop: "8px",
-  },
-  alertOk: {
-    padding: "10px 14px",
-    borderRadius: "10px",
-    background: "rgba(34,197,94,0.15)",
-    border: "1px solid rgba(34,197,94,0.45)",
-    color: "#86efac",
-    fontSize: "13px",
-    marginBottom: "12px",
-  },
-  alertErr: {
-    padding: "10px 14px",
-    borderRadius: "10px",
-    background: "rgba(239,68,68,0.12)",
-    border: "1px solid rgba(248,113,113,0.45)",
-    color: "#fecaca",
-    fontSize: "13px",
-    marginBottom: "12px",
-  },
-  alertOkRow: {
-    padding: "8px 10px",
-    borderRadius: "8px",
-    background: "rgba(34,197,94,0.15)",
-    border: "1px solid rgba(34,197,94,0.45)",
-    color: "#86efac",
-    fontSize: "11px",
-    marginTop: "8px",
-    lineHeight: 1.4,
-  },
-  alertErrRow: {
-    padding: "8px 10px",
-    borderRadius: "8px",
-    background: "rgba(239,68,68,0.12)",
-    border: "1px solid rgba(248,113,113,0.45)",
-    color: "#fecaca",
-    fontSize: "11px",
-    marginTop: "8px",
-    lineHeight: 1.4,
-  },
-  alertWarnRow: {
-    padding: "8px 10px",
-    borderRadius: "8px",
-    background: "rgba(234,179,8,0.12)",
-    border: "1px solid rgba(250,204,21,0.45)",
-    color: "#fde68a",
-    fontSize: "11px",
-    marginTop: "8px",
-    lineHeight: 1.4,
-  },
-  alertWarn: {
-    padding: "10px 14px",
-    borderRadius: "10px",
-    background: "rgba(234,179,8,0.12)",
-    border: "1px solid rgba(250,204,21,0.45)",
-    color: "#fde68a",
-    fontSize: "13px",
-    marginBottom: "12px",
-  },
-};
+function mensajeFilaClass(tipo) {
+  if (tipo === "ok") return "lt-alert-banner lt-alert-banner--success";
+  if (tipo === "warn") return "lt-alert-banner lt-alert-banner--warning";
+  return "lt-alert-banner lt-alert-banner--error";
+}
 
 function MensajeFilaRuta({ mensaje }) {
   if (!mensaje?.texto) return null;
-  const style =
-    mensaje.tipo === "ok"
-      ? base.alertOkRow
-      : mensaje.tipo === "warn"
-        ? base.alertWarnRow
-        : base.alertErrRow;
-  return <div style={style}>{mensaje.texto}</div>;
+  return (
+    <div className={mensajeFilaClass(mensaje.tipo)} role="status" style={{ marginTop: 8, marginBottom: 0 }}>
+      {mensaje.texto}
+    </div>
+  );
 }
 
 const FECHAS_VACIAS = { inicio: "", fin: "", entrega: "" };
@@ -246,13 +33,6 @@ const AYUDA_DISTANCIA_VIAL =
 
 const ADVERTENCIA_DISTANCIA_VIAL =
   "No se pudo calcular la distancia vial automáticamente. Ingrese la distancia manualmente o revise origen/destino.";
-
-function openWazeNavigation(destinoTexto) {
-  const q = String(destinoTexto || "").trim();
-  if (!q) return;
-  const wazeUrl = `https://waze.com/ul?q=${encodeURIComponent(q)}&navigate=yes&utm_source=logitrack`;
-  window.open(wazeUrl, "_blank", "noopener,noreferrer");
-}
 
 /** datetime-local → ISO (UTC) para el backend */
 function localDatetimeToIso(localVal) {
@@ -318,6 +98,20 @@ function mensajeEstimacionOk(data) {
   return `Estimación lista (${km} km, ref. ${ref}). Revise y guarde.`;
 }
 
+function estadoBadgeVariant(estado) {
+  const e = String(estado || "").toUpperCase();
+  if (["ENTREGADO", "COMPLETADO"].includes(e)) return "success";
+  if (["CANCELADO", "CANCELADA"].includes(e)) return "danger";
+  if (["EN_TRANSITO", "EN_DESTINO", "ASIGNADO", "EN_CARGA", "EN_CAMINO_ORIGEN"].includes(e)) return "accent";
+  if (e === "PENDIENTE") return "warning";
+  return "muted";
+}
+
+function estadoLabel(estado) {
+  if (!estado) return "—";
+  return String(estado).replace(/_/g, " ");
+}
+
 export default function RutasActivas() {
   const [rutas, setRutas] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -330,6 +124,7 @@ export default function RutasActivas() {
   const [mensaje, setMensaje] = useState(null);
   const [mensajesRuta, setMensajesRuta] = useState({});
   const [fechasEdit, setFechasEdit] = useState({});
+  const [anomaliasPorRuta, setAnomaliasPorRuta] = useState({});
   const [savingFechasId, setSavingFechasId] = useState(null);
   const [notifyingId, setNotifyingId] = useState(null);
   const [calculandoEstimacion, setCalculandoEstimacion] = useState(false);
@@ -369,6 +164,7 @@ export default function RutasActivas() {
     const res = await apiFetch("/api/rutas");
     if (!res.ok) {
       setRutas([]);
+      setAnomaliasPorRuta({});
       setMensaje({ tipo: "error", texto: res.error || "No se pudieron cargar las rutas." });
       setLoading(false);
       return;
@@ -382,6 +178,19 @@ export default function RutasActivas() {
     });
     setFechasEdit(fechasMap);
     setLoading(false);
+
+    if (lista.length > 0) {
+      const anomaliasMap = {};
+      await Promise.all(
+        lista.map(async (ruta) => {
+          const result = await obtenerAnomaliasRuta(ruta.id);
+          anomaliasMap[ruta.id] = result.data || [];
+        }),
+      );
+      setAnomaliasPorRuta(anomaliasMap);
+    } else {
+      setAnomaliasPorRuta({});
+    }
   }, []);
 
   const cargarListas = useCallback(async () => {
@@ -566,15 +375,26 @@ export default function RutasActivas() {
       return;
     }
 
+    if (!form.conductorId.trim()) {
+      setSaving(false);
+      setMensaje({ tipo: "error", texto: "Debe seleccionar un conductor." });
+      return;
+    }
+
+    if (!form.camionId.trim()) {
+      setSaving(false);
+      setMensaje({ tipo: "error", texto: "Debe seleccionar un camión." });
+      return;
+    }
+
     const payload = {
       cliente_id: form.clienteId.trim(),
       origen: form.origen.trim(),
       destino: form.destino.trim(),
       bultos_despachados: bultosDespachosValue,
+      conductor_id: form.conductorId.trim(),
+      camion_id: form.camionId.trim(),
     };
-
-    if (form.conductorId.trim()) payload.conductor_id = form.conductorId.trim();
-    if (form.camionId.trim()) payload.camion_id = form.camionId.trim();
 
     const fi = localDatetimeToIso(form.fechaInicio);
     const eta = localDatetimeToIso(form.eta);
@@ -702,24 +522,28 @@ export default function RutasActivas() {
   };
 
   return (
-    <div style={base.container} className="premium-scroll operator-section">
-      <div style={base.card} className="operator-glass-card">
-        <div style={base.title}>Gestión de rutas</div>
-        <p style={base.subtitle}>
+    <div className="lt-module-inner">
+      <div className="lt-card lt-module-card">
+        <h3 className="lt-module-card__title">Gestión de rutas</h3>
+        <p className="lt-module-card__subtitle">
           Creá y consultá rutas operativas. El seguimiento y las evidencias siguen siendo responsabilidad de LogiTrack (app móvil y trazabilidad).
         </p>
 
         {mensaje?.tipo === "ok" && (
-          <div style={base.alertOk}>{mensaje.texto}</div>
+          <div className="lt-alert-banner lt-alert-banner--success" role="status">
+            {mensaje.texto}
+          </div>
         )}
         {mensaje?.tipo === "error" && (
-          <div style={base.alertErr}>{mensaje.texto}</div>
+          <div className="lt-alert-banner lt-alert-banner--error" role="alert">
+            {mensaje.texto}
+          </div>
         )}
 
-        <div style={{ marginBottom: "16px" }}>
+        <div className="lt-form-actions" style={{ marginTop: 0 }}>
           <button
             type="button"
-            style={base.btnPrimary}
+            className="lt-btn lt-btn--primary"
             onClick={() => {
               setShowForm((v) => !v);
               setMensaje(null);
@@ -732,15 +556,18 @@ export default function RutasActivas() {
         {showForm && (
           <form
             onSubmit={enviarFormulario}
-            className="rutas-nueva-form operator-glass-card"
-            style={{ ...base.card, padding: "16px", marginBottom: "16px", overflow: "visible" }}
+            className="lt-card rutas-nueva-form"
+            style={{ marginTop: 16, marginBottom: 16, overflow: "visible" }}
           >
-            <div style={{ fontWeight: 700, marginBottom: "8px", color: "#e2e8f0" }}>Nueva ruta</div>
-            <div style={base.formGrid}>
-              <div>
-                <label style={base.label}>Cliente *</label>
+            <div className="lt-module-card__title" style={{ marginBottom: 12 }}>
+              Nueva ruta
+            </div>
+            <div className="lt-form-grid">
+              <div className="lt-field-group">
+                <label className="lt-label" htmlFor="ruta-cliente">Cliente *</label>
                 <select
-                  style={base.select}
+                  id="ruta-cliente"
+                  className="lt-select"
                   required
                   value={form.clienteId}
                   onChange={(e) => actualizarCampo("clienteId", e.target.value)}
@@ -754,15 +581,17 @@ export default function RutasActivas() {
                   ))}
                 </select>
               </div>
-              <div>
-                <label style={base.label}>Conductor (opcional)</label>
+              <div className="lt-field-group">
+                <label className="lt-label" htmlFor="ruta-conductor">Conductor *</label>
                 <select
-                  style={base.select}
+                  id="ruta-conductor"
+                  className="lt-select"
+                  required
                   value={form.conductorId}
                   onChange={(e) => actualizarCampo("conductorId", e.target.value)}
                   disabled={listsLoading}
                 >
-                  <option value="">—</option>
+                  <option value="">Seleccionar conductor…</option>
                   {conductores.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.rut || c.id}
@@ -770,15 +599,17 @@ export default function RutasActivas() {
                   ))}
                 </select>
               </div>
-              <div>
-                <label style={base.label}>Camión (opcional)</label>
+              <div className="lt-field-group">
+                <label className="lt-label" htmlFor="ruta-camion">Camión *</label>
                 <select
-                  style={base.select}
+                  id="ruta-camion"
+                  className="lt-select"
+                  required
                   value={form.camionId}
                   onChange={(e) => actualizarCampo("camionId", e.target.value)}
                   disabled={listsLoading}
                 >
-                  <option value="">—</option>
+                  <option value="">Seleccionar camión…</option>
                   {camiones.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.patente || c.id} {c.estado ? `(${c.estado})` : ""}
@@ -786,16 +617,17 @@ export default function RutasActivas() {
                   ))}
                 </select>
               </div>
-              <div style={{ gridColumn: "1 / -1" }}>
-                <label style={base.label}>Origen *</label>
+              <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
+                <label className="lt-label" htmlFor="ruta-origen">Origen *</label>
                 {mapsError && (
-                  <div style={{ color: "#fca5a5", fontSize: "11px", marginBottom: "6px" }}>
+                  <div className="lt-alert-banner lt-alert-banner--error" role="alert" style={{ marginBottom: 8 }}>
                     {mapsError}
                   </div>
                 )}
                 <input
+                  id="ruta-origen"
                   ref={origenInputRef}
-                  style={base.input}
+                  className="lt-input"
                   required
                   autoComplete="off"
                   value={form.origen}
@@ -803,11 +635,12 @@ export default function RutasActivas() {
                   placeholder="Escribe y selecciona una dirección sugerida…"
                 />
               </div>
-              <div style={{ gridColumn: "1 / -1" }}>
-                <label style={base.label}>Destino *</label>
+              <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
+                <label className="lt-label" htmlFor="ruta-destino">Destino *</label>
                 <input
+                  id="ruta-destino"
                   ref={destinoInputRef}
-                  style={base.input}
+                  className="lt-input"
                   required
                   autoComplete="off"
                   value={form.destino}
@@ -815,28 +648,31 @@ export default function RutasActivas() {
                   placeholder="Escribe y selecciona una dirección sugerida…"
                 />
               </div>
-              <div>
-                <label style={base.label}>Fecha inicio (opcional)</label>
+              <div className="lt-field-group">
+                <label className="lt-label" htmlFor="ruta-fecha-inicio">Fecha inicio (opcional)</label>
                 <input
-                  style={base.input}
+                  id="ruta-fecha-inicio"
+                  className="lt-input"
                   type="datetime-local"
                   value={form.fechaInicio}
                   onChange={(e) => actualizarCampo("fechaInicio", e.target.value)}
                 />
               </div>
-              <div>
-                <label style={base.label}>ETA (opcional)</label>
+              <div className="lt-field-group">
+                <label className="lt-label" htmlFor="ruta-eta">ETA (opcional)</label>
                 <input
-                  style={base.input}
+                  id="ruta-eta"
+                  className="lt-input"
                   type="datetime-local"
                   value={form.eta}
                   onChange={(e) => actualizarCampo("eta", e.target.value)}
                 />
               </div>
-              <div>
-                <label style={base.label}>Cantidad de Bultos a Despachar *</label>
+              <div className="lt-field-group">
+                <label className="lt-label" htmlFor="ruta-bultos">Cantidad de Bultos a Despachar *</label>
                 <input
-                  style={base.input}
+                  id="ruta-bultos"
+                  className="lt-input"
                   type="number"
                   min="1"
                   required
@@ -845,13 +681,14 @@ export default function RutasActivas() {
                   placeholder="Ej: 25"
                 />
               </div>
-              <div style={{ gridColumn: "1 / -1" }}>
-                <label style={base.label}>Distancia vial calculada (km)</label>
-                <p style={{ ...base.subtitle, marginTop: 0, marginBottom: "8px", fontSize: "12px" }}>
+              <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
+                <label className="lt-label" htmlFor="ruta-distancia">Distancia vial calculada (km)</label>
+                <p className="lt-module-card__subtitle" style={{ marginTop: 0, marginBottom: 8 }}>
                   {AYUDA_DISTANCIA_VIAL}
                 </p>
                 <input
-                  style={base.input}
+                  id="ruta-distancia"
+                  className="lt-input"
                   type="number"
                   min="0"
                   step="0.1"
@@ -860,22 +697,14 @@ export default function RutasActivas() {
                   placeholder="Vacío = calcular por carretera con origen y destino"
                 />
               </div>
-              <div style={{ gridColumn: "1 / -1" }}>
-                <div
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: "10px",
-                    alignItems: "center",
-                    marginTop: "8px",
-                  }}
-                >
-                  <span style={{ fontWeight: 700, color: "#e2e8f0", fontSize: "13px" }}>
+              <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
+                <div className="lt-form-actions" style={{ marginTop: 0, flexWrap: "wrap" }}>
+                  <span className="lt-module-card__title" style={{ marginBottom: 0, fontSize: 13 }}>
                     Fechas estimadas de entrega
                   </span>
                   <button
                     type="button"
-                    style={base.btnSecondary}
+                    className="lt-btn lt-btn--secondary"
                     disabled={calculandoEstimacion || saving}
                     onClick={calcularDistanciaYFechasForm}
                   >
@@ -885,41 +714,37 @@ export default function RutasActivas() {
                   </button>
                 </div>
                 {form.advertenciaEstimacion && (
-                  <div style={{ ...base.alertWarn, marginTop: "10px" }}>
+                  <div className="lt-alert-banner lt-alert-banner--warning" role="alert" style={{ marginTop: 10 }}>
                     {form.advertenciaEstimacion}
                   </div>
                 )}
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
-                    gap: "10px",
-                    marginTop: "10px",
-                  }}
-                >
-                  <div style={base.dateField}>
-                    <label style={base.dateFieldLabel}>Inicio rango estimado</label>
+                <div className="lt-form-grid lt-form-grid--3" style={{ marginTop: 10 }}>
+                  <div className="lt-field-group">
+                    <label className="lt-label" htmlFor="ruta-fecha-est-inicio">Inicio rango estimado</label>
                     <input
+                      id="ruta-fecha-est-inicio"
                       type="date"
-                      style={base.dateInput}
+                      className="lt-input"
                       value={form.fechasEstimadas.inicio}
                       onChange={(e) => actualizarFechaForm("inicio", e.target.value)}
                     />
                   </div>
-                  <div style={base.dateField}>
-                    <label style={base.dateFieldLabel}>Fin rango estimado</label>
+                  <div className="lt-field-group">
+                    <label className="lt-label" htmlFor="ruta-fecha-est-fin">Fin rango estimado</label>
                     <input
+                      id="ruta-fecha-est-fin"
                       type="date"
-                      style={base.dateInput}
+                      className="lt-input"
                       value={form.fechasEstimadas.fin}
                       onChange={(e) => actualizarFechaForm("fin", e.target.value)}
                     />
                   </div>
-                  <div style={base.dateField}>
-                    <label style={base.dateFieldLabel}>Día estimado de entrega</label>
+                  <div className="lt-field-group">
+                    <label className="lt-label" htmlFor="ruta-fecha-est-entrega">Día estimado de entrega</label>
                     <input
+                      id="ruta-fecha-est-entrega"
                       type="date"
-                      style={base.dateInput}
+                      className="lt-input"
                       value={form.fechasEstimadas.entrega}
                       onChange={(e) => actualizarFechaForm("entrega", e.target.value)}
                     />
@@ -927,8 +752,8 @@ export default function RutasActivas() {
                 </div>
               </div>
             </div>
-            <div style={{ marginTop: "18px", display: "flex", gap: "12px", alignItems: "center" }}>
-              <button type="submit" style={base.btnPrimary} disabled={saving || listsLoading}>
+            <div className="lt-form-actions">
+              <button type="submit" className="lt-btn lt-btn--primary" disabled={saving || listsLoading}>
                 {saving ? "Guardando…" : "Guardar ruta"}
               </button>
             </div>
@@ -936,53 +761,49 @@ export default function RutasActivas() {
         )}
       </div>
 
-      <div style={base.card} className="operator-glass-card">
-        <div style={{ ...base.title, fontSize: "15px" }}>Navegación con Waze</div>
-        <p style={{ ...base.subtitle, marginBottom: 0 }}>
-          Waze se utiliza solo como apoyo para navegación. El seguimiento, evidencias y cierre de despacho se mantienen dentro de LogiTrack.
-        </p>
-      </div>
-
-      <div style={base.card} className="operator-glass-card">
-        <div style={{ ...base.title, fontSize: "16px" }}>Rutas registradas</div>
+      <div className="lt-card lt-module-card">
+        <h3 className="lt-module-card__title">Rutas registradas</h3>
         {loading ? (
-          <p style={{ color: "#94a3b8", fontSize: "14px" }}>Cargando rutas…</p>
+          <Spinner message="Cargando rutas…" />
         ) : rutas.length === 0 ? (
-          <p style={{ color: "#94a3b8", fontSize: "14px" }}>No hay rutas para mostrar. Cree una con el botón superior.</p>
+          <div className="lt-empty">No hay rutas para mostrar. Cree una con el botón superior.</div>
         ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={base.table}>
+          <div className="lt-table-wrap">
+            <table className="lt-table">
               <thead>
                 <tr>
-                  <th style={base.th}>Origen</th>
-                  <th style={base.th}>Destino</th>
-                  <th style={base.th}>Cliente</th>
-                  <th style={base.th}>Estado</th>
-                  <th style={base.th}>Conductor / Camión</th>
-                  <th style={base.th}>ETA</th>
-                  <th style={base.th}>Fechas estimadas</th>
-                  <th style={base.th}>Acciones</th>
+                  <th>Origen</th>
+                  <th>Destino</th>
+                  <th>Cliente</th>
+                  <th>Estado</th>
+                  <th>Conductor / Camión</th>
+                  <th>ETA</th>
+                  <th>Fechas estimadas</th>
+                  <th>Anomalías</th>
+                  <th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {rutas.map((ruta) => (
                   <tr key={ruta.id}>
-                    <td style={base.td}>{ruta.origen || "—"}</td>
-                    <td style={base.td}>{ruta.destino || "—"}</td>
-                    <td style={base.td}>{ruta.clientes?.nombre || "—"}</td>
-                    <td style={base.td}>
-                      <span style={base.badge}>{ruta.estado || "—"}</span>
+                    <td>{ruta.origen || "—"}</td>
+                    <td>{ruta.destino || "—"}</td>
+                    <td>{ruta.clientes?.nombre || "—"}</td>
+                    <td>
+                      <Badge variant={estadoBadgeVariant(ruta.estado)}>
+                        {estadoLabel(ruta.estado)}
+                      </Badge>
                     </td>
-                    <td style={base.td}>
+                    <td>
                       <div>{ruta.conductores?.rut || "—"}</div>
-                      <div style={{ fontSize: "12px", color: "#94a3b8", marginTop: "4px" }}>
+                      <div className="lt-list-item__sub" style={{ marginTop: 4 }}>
                         {ruta.camiones?.patente || "—"}
                       </div>
                     </td>
-                    <td style={base.td}>{fmtDate(ruta.eta)}</td>
-                    <td style={base.td}>
-                      <div style={base.dateField}>
-                        <label style={base.dateFieldLabel} htmlFor={`distancia-${ruta.id}`}>
+                    <td>{fmtDate(ruta.eta)}</td>
+                    <td>
+                      <div className="lt-field-group">
+                        <label className="lt-label" htmlFor={`distancia-${ruta.id}`}>
                           Distancia vial calculada (km)
                         </label>
                         <input
@@ -990,7 +811,7 @@ export default function RutasActivas() {
                           type="number"
                           min="0"
                           step="0.1"
-                          style={base.dateInput}
+                          className="lt-input"
                           value={(fechasEdit[ruta.id] || fechasFromRuta(ruta)).distanciaKm}
                           onChange={(e) =>
                             actualizarFechaRuta(ruta.id, "distanciaKm", e.target.value)
@@ -1000,7 +821,8 @@ export default function RutasActivas() {
                       </div>
                       <button
                         type="button"
-                        style={{ ...base.btnSecondary, marginTop: 0, marginBottom: "8px" }}
+                        className="lt-btn lt-btn--secondary lt-btn--full"
+                        style={{ marginBottom: 8 }}
                         disabled={calculandoEstimacionRutaId === ruta.id}
                         onClick={() => calcularDistanciaYFechasRuta(ruta)}
                       >
@@ -1009,42 +831,42 @@ export default function RutasActivas() {
                           : "Calcular distancia y fechas"}
                       </button>
                       <MensajeFilaRuta mensaje={mensajesRuta[ruta.id]?.estimacion} />
-                      <div style={base.dateField}>
-                        <label style={base.dateFieldLabel} htmlFor={`fecha-inicio-${ruta.id}`}>
+                      <div className="lt-field-group">
+                        <label className="lt-label" htmlFor={`fecha-inicio-${ruta.id}`}>
                           Inicio rango estimado
                         </label>
                         <input
                           id={`fecha-inicio-${ruta.id}`}
                           type="date"
-                          style={base.dateInput}
+                          className="lt-input"
                           value={(fechasEdit[ruta.id] || fechasFromRuta(ruta)).inicio}
                           onChange={(e) =>
                             actualizarFechaRuta(ruta.id, "inicio", e.target.value)
                           }
                         />
                       </div>
-                      <div style={base.dateField}>
-                        <label style={base.dateFieldLabel} htmlFor={`fecha-fin-${ruta.id}`}>
+                      <div className="lt-field-group">
+                        <label className="lt-label" htmlFor={`fecha-fin-${ruta.id}`}>
                           Fin rango estimado
                         </label>
                         <input
                           id={`fecha-fin-${ruta.id}`}
                           type="date"
-                          style={base.dateInput}
+                          className="lt-input"
                           value={(fechasEdit[ruta.id] || fechasFromRuta(ruta)).fin}
                           onChange={(e) =>
                             actualizarFechaRuta(ruta.id, "fin", e.target.value)
                           }
                         />
                       </div>
-                      <div style={base.dateField}>
-                        <label style={base.dateFieldLabel} htmlFor={`fecha-entrega-${ruta.id}`}>
+                      <div className="lt-field-group">
+                        <label className="lt-label" htmlFor={`fecha-entrega-${ruta.id}`}>
                           Día estimado de entrega
                         </label>
                         <input
                           id={`fecha-entrega-${ruta.id}`}
                           type="date"
-                          style={base.dateInput}
+                          className="lt-input"
                           value={(fechasEdit[ruta.id] || fechasFromRuta(ruta)).entrega}
                           onChange={(e) =>
                             actualizarFechaRuta(ruta.id, "entrega", e.target.value)
@@ -1053,7 +875,7 @@ export default function RutasActivas() {
                       </div>
                       <button
                         type="button"
-                        style={base.btnSecondary}
+                        className="lt-btn lt-btn--secondary lt-btn--full"
                         disabled={savingFechasId === ruta.id}
                         onClick={() => guardarFechasRuta(ruta.id)}
                       >
@@ -1061,22 +883,15 @@ export default function RutasActivas() {
                       </button>
                       <MensajeFilaRuta mensaje={mensajesRuta[ruta.id]?.fechas} />
                       {ruta.notificacion_fecha_estimada_enviada_at && (
-                        <div
-                          style={{
-                            fontSize: "10px",
-                            color: "#86efac",
-                            marginTop: "4px",
-                          }}
-                        >
-                          Notificado:{" "}
-                          {fmtDate(ruta.notificacion_fecha_estimada_enviada_at)}
-                        </div>
+                        <p className="lt-list-item__sub" style={{ marginTop: 4 }}>
+                          Notificado: {fmtDate(ruta.notificacion_fecha_estimada_enviada_at)}
+                        </p>
                       )}
                     </td>
-                    <td style={base.td}>
+                    <td>
                       <button
                         type="button"
-                        style={base.btnNotify}
+                        className="lt-btn lt-btn--success lt-btn--full"
                         disabled={notifyingId === ruta.id}
                         onClick={() => enviarNotificacionRuta(ruta.id)}
                       >
@@ -1084,15 +899,49 @@ export default function RutasActivas() {
                           ? "Enviando…"
                           : "Notificar fecha estimada"}
                       </button>
-                      <button
-                        type="button"
-                        style={base.btnWaze}
-                        onClick={() => openWazeNavigation(ruta.destino)}
-                        disabled={!String(ruta.destino || "").trim()}
-                      >
-                        Abrir en Waze
-                      </button>
                       <MensajeFilaRuta mensaje={mensajesRuta[ruta.id]?.notificar} />
+                    </td>
+                    <td>
+                      {Array.isArray(anomaliasPorRuta[ruta.id]) && anomaliasPorRuta[ruta.id].length > 0 ? (
+                        <div className="lt-card" style={{ padding: 10 }}>
+                          <div className="lt-list-item__title" style={{ marginBottom: 8 }}>
+                            {anomaliasPorRuta[ruta.id].length} anomalía(s) reportada(s)
+                          </div>
+                          {anomaliasPorRuta[ruta.id].map((anomalia) => (
+                            <div
+                              key={anomalia.id}
+                              className={`lt-alert-card ${anomalia.es_prioritario ? "lt-alert-card--critical" : "lt-alert-card--normal"}`}
+                              style={{ marginBottom: 8 }}
+                            >
+                              <div className="lt-list-item__row">
+                                <span className="lt-list-item__title">
+                                  {anomalia.titulo || "Sin título"}
+                                </span>
+                                {anomalia.es_prioritario && (
+                                  <Badge variant="danger">PRIORITARIO</Badge>
+                                )}
+                              </div>
+                              <p className="lt-alert-card__desc" style={{ marginBottom: anomalia.foto_url ? 8 : 0 }}>
+                                {anomalia.descripcion || "Sin descripción"}
+                              </p>
+                              {anomalia.foto_url && (
+                                <a
+                                  href={anomalia.foto_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="lt-btn lt-btn--ghost"
+                                >
+                                  Ver foto relacionada
+                                </a>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="lt-empty" style={{ padding: 12, minHeight: 0 }}>
+                          No hay anomalías reportadas
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}

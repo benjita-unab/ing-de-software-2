@@ -1,31 +1,58 @@
-// src/components/MapView.jsx
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
+import { MapPin, Radio, Loader2 } from "lucide-react";
 import { isGoogleMapsConfigured, loadGoogleMaps } from "../lib/googleMapsLoader";
+import EmptyState from "./ui/EmptyState";
 
-const DEFAULT_CENTER = { lat: -33.4489, lng: -70.6693 };
-const DEFAULT_ZOOM   = 11;
+/** Centro regional: Santiago · Valparaíso · Viña del Mar */
+const REGION_CENTER = { lat: -33.12, lng: -71.35 };
+const REGION_ZOOM = 8;
+const MAX_ROUTE_ZOOM = 14;
 
-export default function MapView({ alerts, focusedAlert }) {
-  const mapRef       = useRef(null);
+export default function MapView({
+  alerts = [],
+  mapRoutes = [],
+  vehicleMarkers = [],
+  selectedRouteId = null,
+  focusedRoute = null,
+  isDark = false,
+  onRouteSelect,
+  overlay,
+}) {
+  const wrapperRef = useRef(null);
+  const mapRef = useRef(null);
   const googleMapRef = useRef(null);
-  const markersRef   = useRef({});
-  const [mapLoaded, setMapLoaded] = useState(false);
-  const [mapError, setMapError]   = useState(false);
+  const alertMarkersRef = useRef({});
+  const routeMarkersRef = useRef({});
+  const vehicleMarkersRef = useRef({});
+  const polylinesRef = useRef({});
+  const endpointMarkersRef = useRef({});
+  const [apiState, setApiState] = useState("loading");
+  const [errorMessage, setErrorMessage] = useState("");
+
+  const triggerResize = useCallback(() => {
+    if (!googleMapRef.current || !window.google?.maps?.event) return;
+    window.google.maps.event.trigger(googleMapRef.current, "resize");
+  }, []);
 
   useEffect(() => {
     if (!isGoogleMapsConfigured()) {
-      setMapError(true);
+      setApiState("error");
+      setErrorMessage("REACT_APP_GOOGLE_MAPS_API_KEY no está configurada en el archivo .env del frontend.");
       return;
     }
 
     let cancelled = false;
+    setApiState("loading");
 
-    loadGoogleMaps({ libraries: ["maps"] })
+    loadGoogleMaps()
       .then(() => {
-        if (!cancelled) setMapLoaded(true);
+        if (!cancelled) setApiState("ready");
       })
-      .catch(() => {
-        if (!cancelled) setMapError(true);
+      .catch((err) => {
+        if (!cancelled) {
+          setApiState("error");
+          setErrorMessage(err?.message || "No se pudo cargar Google Maps.");
+        }
       });
 
     return () => {
@@ -34,115 +61,360 @@ export default function MapView({ alerts, focusedAlert }) {
   }, []);
 
   useEffect(() => {
-    if (!mapLoaded || !mapRef.current || googleMapRef.current) return;
-    googleMapRef.current = new window.google.maps.Map(mapRef.current, {
-      center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM,
-      mapTypeId: "roadmap", styles: DARK_MAP_STYLE,
-      disableDefaultUI: false, zoomControl: true,
-      mapTypeControl: false, streetViewControl: false, fullscreenControl: true,
-    });
-  }, [mapLoaded]);
+    if (apiState !== "ready" || !mapRef.current) return;
+
+    if (!googleMapRef.current) {
+      googleMapRef.current = new window.google.maps.Map(mapRef.current, {
+        center: REGION_CENTER,
+        zoom: REGION_ZOOM,
+        mapTypeId: "roadmap",
+        styles: isDark ? DARK_MAP_STYLE : LIGHT_MAP_STYLE,
+        disableDefaultUI: false,
+        zoomControl: true,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: true,
+      });
+
+      requestAnimationFrame(() => triggerResize());
+    }
+  }, [apiState, isDark, triggerResize]);
 
   useEffect(() => {
-    if (!googleMapRef.current || !mapLoaded) return;
+    if (!googleMapRef.current || apiState !== "ready") return;
+    googleMapRef.current.setOptions({
+      styles: isDark ? DARK_MAP_STYLE : LIGHT_MAP_STYLE,
+    });
+    triggerResize();
+  }, [isDark, apiState, triggerResize]);
+
+  useEffect(() => {
+    if (!wrapperRef.current || apiState !== "ready") return;
+    const observer = new ResizeObserver(() => triggerResize());
+    observer.observe(wrapperRef.current);
+    return () => observer.disconnect();
+  }, [apiState, triggerResize]);
+
+  /* ── Alert markers ── */
+  useEffect(() => {
+    if (!googleMapRef.current || apiState !== "ready") return;
     const activeIds = new Set();
 
     alerts.forEach((alert) => {
       if (!alert.lat || !alert.lng) return;
-      activeIds.add(String(alert.id));
-      const position   = { lat: alert.lat, lng: alert.lng };
+      const key = `alert-${alert.id}`;
+      activeIds.add(key);
+      const position = { lat: Number(alert.lat), lng: Number(alert.lng) };
       const isCritical = ["CRITICA", "ALTA"].includes(alert.priority);
 
-      if (markersRef.current[alert.id]) {
-        markersRef.current[alert.id].setPosition(position);
+      if (alertMarkersRef.current[key]) {
+        alertMarkersRef.current[key].setPosition(position);
+        alertMarkersRef.current[key].setIcon(buildAlertIcon(isCritical));
       } else {
         const marker = new window.google.maps.Marker({
-          position, map: googleMapRef.current,
+          position,
+          map: googleMapRef.current,
           title: `${alert.driver_name} — ${alert.vehicle_plate}`,
-          icon: {
-            path: window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
-            scale: isCritical ? 8 : 6,
-            fillColor: isCritical ? "#ff1744" : "#1565c0",
-            fillOpacity: 1, strokeColor: "#fff", strokeWeight: 2,
-          },
+          icon: buildAlertIcon(isCritical),
+          zIndex: isCritical ? 300 : 200,
           animation: isCritical ? window.google.maps.Animation.BOUNCE : null,
         });
-
         const infoWindow = new window.google.maps.InfoWindow({
-          content: buildInfoWindowContent(alert),
+          content: buildAlertInfoContent(alert),
         });
-        marker.addListener("click", () => {
-          infoWindow.open(googleMapRef.current, marker);
-        });
-        markersRef.current[alert.id] = marker;
+        marker.addListener("click", () => infoWindow.open(googleMapRef.current, marker));
+        alertMarkersRef.current[key] = marker;
       }
     });
 
-    Object.keys(markersRef.current).forEach((id) => {
-      if (!activeIds.has(id)) {
-        markersRef.current[id].setMap(null);
-        delete markersRef.current[id];
+    Object.keys(alertMarkersRef.current).forEach((key) => {
+      if (!activeIds.has(key)) {
+        alertMarkersRef.current[key].setMap(null);
+        delete alertMarkersRef.current[key];
       }
     });
-  }, [alerts, mapLoaded]);
+  }, [alerts, apiState]);
 
+  /* ── Route polylines + endpoint markers ── */
   useEffect(() => {
-    if (!focusedAlert || !googleMapRef.current || !mapLoaded) return;
-    if (!focusedAlert.lat || !focusedAlert.lng) return;
+    if (!googleMapRef.current || apiState !== "ready") return;
+    const activePolyIds = new Set();
+    const activeEndpointIds = new Set();
 
-    googleMapRef.current.panTo({ lat: focusedAlert.lat, lng: focusedAlert.lng });
-    googleMapRef.current.setZoom(15);
+    mapRoutes.forEach((route) => {
+      const isSelected = route.id === selectedRouteId;
+      const strokeColor = route.hasAlert ? "#ef4444" : isSelected ? "#5b4fd4" : "#7c6cf6";
 
-    const marker = markersRef.current[focusedAlert.id];
-    if (marker) {
-      marker.setAnimation(window.google.maps.Animation.BOUNCE);
-      setTimeout(() => marker.setAnimation(null), 3000);
+      if (route.hasPolyline) {
+        activePolyIds.add(route.id);
+        const path = [route.origenCoords, route.destinoCoords];
+
+        if (polylinesRef.current[route.id]) {
+          polylinesRef.current[route.id].setPath(path);
+          polylinesRef.current[route.id].setOptions({
+            strokeColor,
+            strokeWeight: isSelected ? 5 : 3,
+            zIndex: isSelected ? 50 : 10,
+          });
+        } else {
+          polylinesRef.current[route.id] = new window.google.maps.Polyline({
+            path,
+            geodesic: true,
+            strokeColor,
+            strokeOpacity: 0.9,
+            strokeWeight: isSelected ? 5 : 3,
+            map: googleMapRef.current,
+            zIndex: isSelected ? 50 : 10,
+          });
+          polylinesRef.current[route.id].addListener("click", () => {
+            onRouteSelect?.(route.id);
+          });
+        }
+
+        ["origen", "destino"].forEach((kind) => {
+          const coords = kind === "origen" ? route.origenCoords : route.destinoCoords;
+          if (!coords) return;
+          const eid = `${route.id}-${kind}`;
+          activeEndpointIds.add(eid);
+          const color = kind === "origen" ? "#34d399" : "#60a5fa";
+
+          if (endpointMarkersRef.current[eid]) {
+            endpointMarkersRef.current[eid].setPosition(coords);
+          } else {
+            endpointMarkersRef.current[eid] = new window.google.maps.Marker({
+              position: coords,
+              map: googleMapRef.current,
+              icon: buildDotIcon(color, kind === "origen" ? 7 : 6),
+              title: kind === "origen" ? route.origen : route.destino,
+              zIndex: 80,
+            });
+            endpointMarkersRef.current[eid].addListener("click", () => {
+              onRouteSelect?.(route.id);
+            });
+          }
+        });
+      }
+
+      if (route.markerCoords && !route.vehicleGps) {
+        activeEndpointIds.add(`route-${route.id}`);
+        const mid = `route-${route.id}`;
+        if (routeMarkersRef.current[mid]) {
+          routeMarkersRef.current[mid].setPosition(route.markerCoords);
+          routeMarkersRef.current[mid].setIcon(buildRouteIcon(route.hasAlert, isSelected));
+        } else {
+          const marker = new window.google.maps.Marker({
+            position: route.markerCoords,
+            map: googleMapRef.current,
+            icon: buildRouteIcon(route.hasAlert, isSelected),
+            title: `${route.patente || "Ruta"} — ${route.origen}`,
+            zIndex: isSelected ? 120 : 90,
+          });
+          marker.addListener("click", () => onRouteSelect?.(route.id));
+          routeMarkersRef.current[mid] = marker;
+        }
+      } else if (routeMarkersRef.current[`route-${route.id}`]) {
+        routeMarkersRef.current[`route-${route.id}`].setMap(null);
+        delete routeMarkersRef.current[`route-${route.id}`];
+      }
+    });
+
+    Object.keys(polylinesRef.current).forEach((id) => {
+      if (!activePolyIds.has(id)) {
+        polylinesRef.current[id].setMap(null);
+        delete polylinesRef.current[id];
+      }
+    });
+
+    Object.keys(endpointMarkersRef.current).forEach((id) => {
+      if (!activeEndpointIds.has(id)) {
+        endpointMarkersRef.current[id].setMap(null);
+        delete endpointMarkersRef.current[id];
+      }
+    });
+
+    Object.keys(routeMarkersRef.current).forEach((id) => {
+      if (!activeEndpointIds.has(id)) {
+        routeMarkersRef.current[id].setMap(null);
+        delete routeMarkersRef.current[id];
+      }
+    });
+  }, [mapRoutes, selectedRouteId, apiState, onRouteSelect]);
+
+  /* ── Vehicle markers ── */
+  useEffect(() => {
+    if (!googleMapRef.current || apiState !== "ready") return;
+    const activeIds = new Set();
+
+    vehicleMarkers.forEach((v) => {
+      if (!v.position) return;
+      activeIds.add(v.id);
+      const isSelected = v.routeId === selectedRouteId;
+
+      if (vehicleMarkersRef.current[v.id]) {
+        vehicleMarkersRef.current[v.id].setPosition(v.position);
+        vehicleMarkersRef.current[v.id].setIcon(buildVehicleIcon(v.hasAlert, isSelected));
+        vehicleMarkersRef.current[v.id].setZIndex(isSelected ? 150 : 100);
+      } else {
+        const marker = new window.google.maps.Marker({
+          position: v.position,
+          map: googleMapRef.current,
+          icon: buildVehicleIcon(v.hasAlert, isSelected),
+          title: v.patente,
+          zIndex: isSelected ? 150 : 100,
+        });
+        marker.addListener("click", () => onRouteSelect?.(v.routeId));
+        vehicleMarkersRef.current[v.id] = marker;
+      }
+    });
+
+    Object.keys(vehicleMarkersRef.current).forEach((id) => {
+      if (!activeIds.has(id)) {
+        vehicleMarkersRef.current[id].setMap(null);
+        delete vehicleMarkersRef.current[id];
+      }
+    });
+  }, [vehicleMarkers, selectedRouteId, apiState, onRouteSelect]);
+
+  /* ── Vista regional cuando no hay ruta seleccionada ── */
+  useEffect(() => {
+    if (!googleMapRef.current || apiState !== "ready") return;
+    if (selectedRouteId) return;
+
+    googleMapRef.current.setCenter(REGION_CENTER);
+    googleMapRef.current.setZoom(REGION_ZOOM);
+  }, [selectedRouteId, apiState]);
+
+  /* ── Encuadrar ruta seleccionada (origen, destino, GPS) ── */
+  useEffect(() => {
+    if (!focusedRoute || !googleMapRef.current || apiState !== "ready") return;
+
+    const bounds = new window.google.maps.LatLngBounds();
+    let hasPoint = false;
+
+    if (focusedRoute.origenCoords) {
+      bounds.extend(focusedRoute.origenCoords);
+      hasPoint = true;
     }
-  }, [focusedAlert, mapLoaded]);
+    if (focusedRoute.destinoCoords) {
+      bounds.extend(focusedRoute.destinoCoords);
+      hasPoint = true;
+    }
+    if (focusedRoute.vehicleGps) {
+      bounds.extend(focusedRoute.vehicleGps);
+      hasPoint = true;
+    } else if (focusedRoute.markerCoords) {
+      bounds.extend(focusedRoute.markerCoords);
+      hasPoint = true;
+    }
 
-  if (mapError) {
+    if (!hasPoint) return;
+
+    const map = googleMapRef.current;
+
+    if (focusedRoute.hasPolyline || hasMultipleBoundsPoints(bounds)) {
+      map.fitBounds(bounds, 72);
+      window.google.maps.event.addListenerOnce(map, "idle", () => {
+        if (map.getZoom() > MAX_ROUTE_ZOOM) {
+          map.setZoom(MAX_ROUTE_ZOOM);
+        }
+      });
+      return;
+    }
+
+    map.panTo(bounds.getCenter());
+    map.setZoom(Math.min(12, MAX_ROUTE_ZOOM));
+  }, [focusedRoute, apiState]);
+
+  if (apiState === "error") {
     return (
-      <div style={errorContainerStyle}>
-        <div style={{ fontSize: "32px", marginBottom: "12px" }}>🗺️</div>
-        <p style={{ color: "#ff6b6b", fontWeight: 700, margin: "0 0 8px" }}>
-          Google Maps no está configurado
-        </p>
-        <p style={{ color: "#888", fontSize: "12px", margin: 0, maxWidth: "260px", textAlign: "center" }}>
-          Agrega <code style={{ color: "#ffd54f" }}>REACT_APP_GOOGLE_MAPS_API_KEY</code> en tu .env y recarga.
-        </p>
+      <div className="lt-map-stage lt-map-stage--hero" ref={wrapperRef}>
+        <EmptyState icon={MapPin} title="Mapa no disponible" description={errorMessage}>
+          <p className="lt-empty-state__hint">
+            Verifica <code>REACT_APP_GOOGLE_MAPS_API_KEY</code> y que Maps JavaScript API esté habilitada en Google Cloud.
+          </p>
+        </EmptyState>
       </div>
     );
   }
 
   return (
-    <div style={{ position: "relative", width: "100%", height: "100%" }}>
-      <div ref={mapRef} style={{ width: "100%", height: "100%" }} />
-      {mapLoaded && <MapLegend alerts={alerts} />}
-      {focusedAlert && (
-        <div style={focusBannerStyle}>
-          🎯 Enfocando: <strong>{focusedAlert.driver_name}</strong> — {focusedAlert.vehicle_plate}
+    <div className="lt-map-stage lt-map-stage--hero" ref={wrapperRef}>
+      <div ref={mapRef} className="lt-map-canvas" />
+      {apiState === "loading" && (
+        <div className="lt-map-loading">
+          <Loader2 size={28} className="lt-map-loading__spin" />
+          <span>Cargando mapa...</span>
         </div>
       )}
+      {apiState === "ready" && <MapLegend />}
+      {apiState === "ready" && overlay}
     </div>
   );
 }
 
-function MapLegend({ alerts }) {
-  const critical = alerts.filter((a) => ["CRITICA", "ALTA"].includes(a.priority) && a.status !== "RESUELTA").length;
-  const active   = alerts.filter((a) => a.status !== "RESUELTA").length;
+function hasMultipleBoundsPoints(bounds) {
+  const ne = bounds.getNorthEast();
+  const sw = bounds.getSouthWest();
+  return Math.abs(ne.lat() - sw.lat()) > 0.0001 || Math.abs(ne.lng() - sw.lng()) > 0.0001;
+}
+
+function buildDotIcon(color, scale) {
+  return {
+    path: window.google.maps.SymbolPath.CIRCLE,
+    scale,
+    fillColor: color,
+    fillOpacity: 1,
+    strokeColor: "#fff",
+    strokeWeight: 2,
+  };
+}
+
+function buildRouteIcon(hasAlert, selected) {
+  return {
+    path: window.google.maps.SymbolPath.CIRCLE,
+    scale: selected ? 10 : 8,
+    fillColor: hasAlert ? "#ef4444" : "#7c6cf6",
+    fillOpacity: 1,
+    strokeColor: "#fff",
+    strokeWeight: selected ? 3 : 2,
+  };
+}
+
+function buildVehicleIcon(hasAlert, selected) {
+  return {
+    path: window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+    scale: selected ? 9 : 7,
+    fillColor: hasAlert ? "#ef4444" : "#7c6cf6",
+    fillOpacity: 1,
+    strokeColor: "#fff",
+    strokeWeight: 2,
+    rotation: 0,
+  };
+}
+
+function buildAlertIcon(isCritical) {
+  return {
+    path: window.google.maps.SymbolPath.BACKWARD_CLOSED_ARROW,
+    scale: isCritical ? 9 : 7,
+    fillColor: isCritical ? "#ef4444" : "#f59e0b",
+    fillOpacity: 1,
+    strokeColor: "#fff",
+    strokeWeight: 2,
+  };
+}
+
+function MapLegend() {
   return (
-    <div style={{
-      position: "absolute", top: "12px", left: "12px",
-      background: "#0a0e1acc", backdropFilter: "blur(12px)",
-      border: "1px solid #1e2a3a", borderRadius: "10px",
-      padding: "10px 14px", fontSize: "12px", color: "#ccc", pointerEvents: "none",
-    }}>
-      <div style={{ fontWeight: 700, color: "#fff", marginBottom: "6px", fontFamily: "'Syne', sans-serif" }}>
-        📡 Camiones en mapa
+    <div className="lt-map-legend">
+      <div className="lt-map-legend__title">
+        <Radio size={14} />
+        Leyenda
       </div>
-      <div style={{ display: "flex", gap: "14px" }}>
-        <LegendItem color="#ff1744" label={`${critical} críticas`} />
-        <LegendItem color="#1565c0" label={`${active - critical} normales`} />
+      <div className="lt-map-legend__items">
+        <LegendItem color="#7c6cf6" label="Vehículo / ruta" />
+        <LegendItem color="#34d399" label="Origen" />
+        <LegendItem color="#60a5fa" label="Destino" />
+        <LegendItem color="#ef4444" label="Alerta" />
       </div>
     </div>
   );
@@ -150,45 +422,48 @@ function MapLegend({ alerts }) {
 
 function LegendItem({ color, label }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-      <div style={{ width: 10, height: 10, borderRadius: "50%", background: color }} />
+    <div className="lt-map-legend__item">
+      <span className="lt-map-legend__dot" style={{ background: color }} />
       <span>{label}</span>
     </div>
   );
 }
 
-function buildInfoWindowContent(alert) {
+function buildAlertInfoContent(alert) {
+  const typeLabel =
+    alert.alert_type === "BOTON_PANICO" ? "PÁNICO" : alert.alert_type || "ALERTA";
+  const typeColor = alert.alert_type === "BOTON_PANICO" ? "#ef4444" : "#7c6cf6";
   return `
-    <div style="font-family:sans-serif;padding:4px;min-width:180px;">
-      <strong style="color:#c62828">${alert.alert_type === "BOTON_PANICO" ? "🚨 PÁNICO" : "⚠️ DESVÍO"}</strong>
-      <hr style="border-color:#eee;margin:6px 0"/>
-      <div><b>Conductor:</b> ${alert.driver_name ?? "—"}</div>
-      <div><b>Patente:</b> ${alert.vehicle_plate ?? "—"}</div>
-      <div><b>Estado:</b> ${alert.status}</div>
+    <div style="font-family:Inter,sans-serif;padding:8px;min-width:200px;">
+      <strong style="color:${typeColor};font-size:12px;">${typeLabel}</strong>
+      <hr style="border-color:#eee;margin:8px 0"/>
+      <div style="font-size:12px;margin-bottom:4px;"><b>Conductor:</b> ${alert.driver_name ?? "—"}</div>
+      <div style="font-size:12px;margin-bottom:4px;"><b>Patente:</b> ${alert.vehicle_plate ?? "—"}</div>
+      <div style="font-size:12px;"><b>Estado:</b> ${alert.status}</div>
     </div>
   `;
 }
 
-const errorContainerStyle = {
-  width: "100%", height: "100%", display: "flex", flexDirection: "column",
-  alignItems: "center", justifyContent: "center", background: "#0a0e1a", color: "#fff",
-};
-
-const focusBannerStyle = {
-  position: "absolute", bottom: "16px", left: "50%", transform: "translateX(-50%)",
-  background: "#1a0800ee", border: "1px solid #ff6d00", borderRadius: "20px",
-  padding: "7px 18px", color: "#ffb347", fontSize: "12px",
-  backdropFilter: "blur(8px)", whiteSpace: "nowrap",
-};
-
 const DARK_MAP_STYLE = [
-  { elementType: "geometry",            stylers: [{ color: "#1d2c4d" }] },
-  { elementType: "labels.text.fill",    stylers: [{ color: "#8ec3b9" }] },
-  { elementType: "labels.text.stroke",  stylers: [{ color: "#1a3646" }] },
-  { featureType: "road", elementType: "geometry",          stylers: [{ color: "#304a7d" }] },
-  { featureType: "road", elementType: "labels.text.fill",  stylers: [{ color: "#98a5be" }] },
-  { featureType: "water", elementType: "geometry",         stylers: [{ color: "#0e1626" }] },
-  { featureType: "poi",     stylers: [{ visibility: "off" }] },
+  { elementType: "geometry", stylers: [{ color: "#1d2c4d" }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#8ec3b9" }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: "#1a3646" }] },
+  { featureType: "road", elementType: "geometry", stylers: [{ color: "#304a7d" }] },
+  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#98a5be" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#0e1626" }] },
+  { featureType: "poi", stylers: [{ visibility: "off" }] },
   { featureType: "transit", stylers: [{ visibility: "off" }] },
-  { featureType: "administrative", elementType: "labels.text.fill", stylers: [{ color: "#444" }] },
+];
+
+const LIGHT_MAP_STYLE = [
+  { elementType: "geometry", stylers: [{ color: "#e8e4dc" }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#523735" }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: "#f5f1e6" }] },
+  { featureType: "road", elementType: "geometry", stylers: [{ color: "#ffffff" }] },
+  { featureType: "road.arterial", elementType: "geometry", stylers: [{ color: "#fdfcf8" }] },
+  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#f8c967" }] },
+  { featureType: "road.highway", elementType: "labels.text.fill", stylers: [{ color: "#b36000" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#a2daf2" }] },
+  { featureType: "poi", stylers: [{ visibility: "off" }] },
+  { featureType: "transit", stylers: [{ visibility: "off" }] },
 ];

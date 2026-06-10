@@ -13,16 +13,16 @@ const ROLES = [
   {
     id: "cliente",
     label: "Cliente B2B",
-    description: "Gestión de pagos y despachos",
+    description: "Gestión de pagos y seguimiento de despachos",
     icon: "📦",
     available: true,
   },
   {
     id: "admin",
     label: "Administrador",
-    description: "Configuración global (próximamente)",
+    description: "Acceso con usuario rol ADMIN en el sistema",
     icon: "⚙️",
-    available: false,
+    available: true,
   },
 ];
 
@@ -36,7 +36,13 @@ export default function LoginPage({ onLogin }) {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (selectedRole !== "operador" && selectedRole !== "cliente") return;
+    if (
+      selectedRole !== "operador" &&
+      selectedRole !== "admin" &&
+      selectedRole !== "cliente"
+    ) {
+      return;
+    }
 
     setLoading(true);
     setError("");

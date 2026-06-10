@@ -1,6 +1,6 @@
 /**
  * Carga única del script de Google Maps con librerías en la URL (modo clásico).
- * Compatible con Autocomplete (places) usado en clientes y rutas.
+ * Compatible con Map (dashboard) y Autocomplete (places) en clientes/rutas.
  */
 
 const MAPS_API_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
@@ -20,27 +20,52 @@ function scriptUrl(libraries) {
   return `https://maps.googleapis.com/maps/api/js?key=${MAPS_API_KEY}&libraries=${libs}&v=weekly&language=es&region=CL`;
 }
 
+function isMapsReady() {
+  return Boolean(window.google?.maps?.Map);
+}
+
 function isPlacesReady() {
   return Boolean(window.google?.maps?.places?.Autocomplete);
 }
 
-function waitForScript(scriptEl) {
+function isReady(requirePlaces) {
+  if (!isMapsReady()) return false;
+  if (requirePlaces && !isPlacesReady()) return false;
+  return true;
+}
+
+function waitForScript(scriptEl, requirePlaces) {
   return new Promise((resolve, reject) => {
-    if (isPlacesReady()) {
+    if (isReady(requirePlaces)) {
       resolve();
       return;
     }
 
+    const timeout = setTimeout(() => {
+      if (isReady(requirePlaces)) resolve();
+      else if (isMapsReady()) resolve();
+      else reject(new Error("Timeout esperando Google Maps."));
+    }, 15000);
+
     const onLoad = () => {
-      if (isPlacesReady()) resolve();
-      else reject(new Error("El script cargó pero Places Autocomplete no está disponible."));
+      clearTimeout(timeout);
+      if (isReady(requirePlaces)) {
+        resolve();
+      } else if (isMapsReady()) {
+        resolve();
+      } else {
+        reject(new Error("El script cargó pero Google Maps no está disponible."));
+      }
     };
 
     scriptEl.addEventListener("load", onLoad, { once: true });
     scriptEl.addEventListener(
       "error",
-      () => reject(new Error("No se pudo descargar el script de Google Maps.")),
-      { once: true }
+      () => {
+        clearTimeout(timeout);
+        reject(new Error("No se pudo descargar el script de Google Maps."));
+      },
+      { once: true },
     );
   });
 }
@@ -62,12 +87,12 @@ function injectScript(libraries) {
   return script;
 }
 
-function loadScript() {
+function loadScript(requirePlaces = false) {
   if (!isGoogleMapsConfigured()) {
     return Promise.reject(new Error("REACT_APP_GOOGLE_MAPS_API_KEY no configurada"));
   }
 
-  if (isPlacesReady()) {
+  if (isReady(requirePlaces)) {
     return Promise.resolve();
   }
 
@@ -76,13 +101,11 @@ function loadScript() {
   loadPromise = (async () => {
     let script = document.getElementById(SCRIPT_ID);
 
-    if (!script) {
-      script = injectScript(BUNDLED_LIBRARIES);
-    } else if (!isPlacesReady()) {
+    if (!script || !isMapsReady()) {
       script = injectScript(BUNDLED_LIBRARIES);
     }
 
-    await waitForScript(script);
+    await waitForScript(script, requirePlaces);
   })().catch((err) => {
     loadPromise = null;
     throw err;
@@ -98,11 +121,17 @@ export async function loadGoogleMaps(options = {}) {
   const requested = options.libraries ?? ["places"];
   const needsPlaces = requested.includes("places");
 
-  await loadScript();
+  await loadScript(needsPlaces);
+
+  if (!isMapsReady()) {
+    throw new Error(
+      "Maps JavaScript API no disponible. Habilita «Maps JavaScript API» en Google Cloud.",
+    );
+  }
 
   if (needsPlaces && !isPlacesReady()) {
     throw new Error(
-      "Places API no disponible. En Google Cloud habilita «Maps JavaScript API» y «Places API»."
+      "Places API no disponible. Habilita «Places API» en Google Cloud.",
     );
   }
 

@@ -29,6 +29,9 @@ export class AuthController {
       throw new BadRequestException('email y password son requeridos');
     }
 
-    return this.authService.login(body.email, body.password);
+    return this.authService.login(
+      body.email.trim(),
+      body.password,
+    );
   }
 }

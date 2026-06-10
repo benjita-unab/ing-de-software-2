@@ -1,80 +1,169 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import {
+  ForbiddenException,
+  Injectable,
+  InternalServerErrorException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { createClient } from '@supabase/supabase-js';
+import { SupabaseConfigService } from '../../config/supabase.config';
+
+export type UserRole = 'ADMIN' | 'OPERADOR' | 'CONDUCTOR' | 'CLIENTE';
+
+interface UsuarioAuthRow {
+  id: string;
+  email: string;
+  password: string;
+  rol: string;
+  activo: boolean | null;
+}
+
+export interface JwtSignPayload {
+  sub: string;
+  email: string;
+  role: UserRole;
+  clienteId?: string;
+  conductorId?: string;
+}
+
+const ALLOWED_ROLES: UserRole[] = ['ADMIN', 'OPERADOR', 'CONDUCTOR', 'CLIENTE'];
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly jwtService: JwtService,
-    private readonly configService: ConfigService,
+    private readonly supabaseConfig: SupabaseConfigService,
   ) {}
 
   /**
-   * Valida credenciales contra la tabla `usuarios` de Supabase.
-   * Como respaldo usa DEBUG_EMAIL/DEBUG_PASSWORD del .env.
+   * Valida credenciales contra `public.usuarios` y emite JWT firmado con JWT_SECRET.
+   * Usuarios CLIENTE deben tener fila en `clientes` con `usuario_id` = `usuarios.id`.
+   * Usuarios CONDUCTOR deben tener fila en `conductores` con `usuario_id` = `usuarios.id` (HU-26).
    */
   async login(
     email: string,
     password: string,
   ): Promise<{ accessToken: string }> {
-    let isValid = false;
-    let authPayload = null;
+    const normalizedEmail = email?.trim()?.toLowerCase();
+    const plainPassword = password ?? '';
 
-    // 1. Buscar usuario en la tabla `usuarios` de Supabase usando Service Role Key
-    const supabaseUrl = this.configService.get<string>('SUPABASE_URL');
-    const supabaseServiceKey = this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY');
-
-    if (supabaseUrl && supabaseServiceKey) {
-      const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-        auth: { persistSession: false, autoRefreshToken: false },
-      });
-
-      const { data: users, error } = await supabase
-        .from('usuarios')
-        .select('id, email, password, nombre')
-        .eq('email', email)
-        .limit(1);
-
-      if (!error && users && users.length > 0) {
-        const user = users[0];
-        if (user.password === password) {
-          isValid = true;
-          authPayload = {
-            sub: user.id,
-            email: user.email,
-            nombre: user.nombre,
-            role: 'operador',
-          };
-        }
-      }
-
-      if (error) {
-        console.error('Supabase query error:', error.message);
-      }
-    }
-
-    // 2. Respaldo: credenciales de depuración del .env
-    if (!isValid) {
-      const debugEmail = this.configService.get<string>('DEBUG_EMAIL');
-      const debugPassword = this.configService.get<string>('DEBUG_PASSWORD');
-
-      if (debugEmail && debugPassword && email === debugEmail && password === debugPassword) {
-        isValid = true;
-        authPayload = {
-          sub: email,
-          email,
-          role: 'debug',
-        };
-      }
-    }
-
-    if (!isValid) {
+    if (!normalizedEmail || !plainPassword) {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
-    const accessToken = await this.jwtService.signAsync(authPayload);
+    const supabase = this.supabaseConfig.getClient();
+
+    const { data: usuario, error } = await supabase
+      .from('usuarios')
+      .select('id, email, password, rol, activo')
+      .ilike('email', normalizedEmail)
+      .maybeSingle();
+
+    if (error) {
+      throw new InternalServerErrorException('Error al validar credenciales');
+    }
+
+    if (!usuario) {
+      throw new UnauthorizedException('Credenciales inválidas');
+    }
+
+    if (usuario.activo === false) {
+      throw new UnauthorizedException('Usuario desactivado');
+    }
+
+    if (usuario.password !== plainPassword) {
+      throw new UnauthorizedException('Credenciales inválidas');
+    }
+
+    const role = String(usuario.rol || '').toUpperCase() as UserRole;
+    if (!ALLOWED_ROLES.includes(role)) {
+      throw new UnauthorizedException('Credenciales inválidas');
+    }
+
+    const payload: JwtSignPayload = {
+      sub: usuario.id,
+      email: usuario.email,
+      role,
+    };
+
+    if (role === 'CLIENTE') {
+      const clienteId = await this.resolveClienteIdForUsuario(
+        supabase,
+        usuario.id,
+      );
+      if (!clienteId) {
+        throw new ForbiddenException(
+          'Tu usuario no está vinculado a un cliente. Solicita al administrador que active tu acceso al portal.',
+        );
+      }
+      payload.clienteId = clienteId;
+    }
+
+    if (role === 'CONDUCTOR') {
+      const conductorId = await this.resolveConductorIdForUsuario(
+        supabase,
+        usuario.id,
+      );
+      if (!conductorId) {
+        throw new ForbiddenException(
+          'Tu usuario no está vinculado a un conductor. Solicita al administrador que active tu acceso.',
+        );
+      }
+      payload.conductorId = conductorId;
+    }
+
+    const accessToken = await this.jwtService.signAsync(payload);
 
     return { accessToken };
+  }
+
+  /**
+   * Resuelve el cliente B2B asociado al usuario portal (HU-27).
+   */
+  private async resolveClienteIdForUsuario(
+    supabase: ReturnType<SupabaseConfigService['getClient']>,
+    usuarioId: string,
+  ): Promise<string | null> {
+    const { data: cliente, error } = await supabase
+      .from('clientes')
+      .select('id')
+      .eq('usuario_id', usuarioId)
+      .maybeSingle();
+
+    if (error) {
+      const message = error.message || '';
+      if (/usuario_id|column/i.test(message)) {
+        throw new InternalServerErrorException(
+          'El portal cliente no está configurado en la base de datos. Ejecute la migración HU-27 (clientes.usuario_id).',
+        );
+      }
+      throw new InternalServerErrorException(
+        'Error al resolver el cliente asociado al usuario',
+      );
+    }
+
+    return cliente?.id ?? null;
+  }
+
+  /**
+   * Resuelve el conductor asociado al usuario chofer (HU-26).
+   */
+  private async resolveConductorIdForUsuario(
+    supabase: ReturnType<SupabaseConfigService['getClient']>,
+    usuarioId: string,
+  ): Promise<string | null> {
+    const { data: conductores, error } = await supabase
+      .from('conductores')
+      .select('id')
+      .eq('usuario_id', usuarioId);
+
+    const conductorIdSeleccionado = conductores?.[0]?.id ?? null;
+
+    if (error) {
+      throw new InternalServerErrorException(
+        'Error al resolver el conductor asociado al usuario',
+      );
+    }
+
+    return conductorIdSeleccionado;
   }
 }
