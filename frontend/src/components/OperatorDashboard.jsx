@@ -8,7 +8,7 @@ import AlertQueue from "./AlertQueue";
 import AlertDetailPanel from "./AlertDetailPanel";
 import MensajesConductor from "./MensajesConductor";
 import MonitoreoLicencias from "./MonitoreoLicencias";
-import AsignacionRutas from "./AsignacionRutas";
+import Flota from "./Flota";
 import RutasActivas from "./RutasActivas";
 import GuiasDespacho from "./GuiasDespacho";
 import Clientes from "./Clientes";
@@ -174,11 +174,6 @@ export default function OperatorDashboard({ operator, onSignOut }) {
                   <RutasActivas />
                 </ModulePage>
               )}
-              {activeSection === "asignacion" && (
-                <ModulePage title="Asignar rutas" subtitle="Asignación de conductores y validación de licencias">
-                  <AsignacionRutas />
-                </ModulePage>
-              )}
               {activeSection === "clientes" && (
                 <ModulePage title="Clientes" subtitle="Directorio de clientes y historial de despachos">
                   <Clientes />
@@ -195,32 +190,13 @@ export default function OperatorDashboard({ operator, onSignOut }) {
                 </ModulePage>
               )}
               {activeSection === "camiones" && (
-                <ModulePage title="Flota" subtitle="Estado de vehículos">
-                  <PlaceholderSection section={activeSection} />
+                <ModulePage title="Flota" subtitle="Gestión de choferes y vehículos">
+                  <Flota />
                 </ModulePage>
               )}
             </div>
           )}
       </main>
-    </div>
-  );
-}
-
-function PlaceholderSection({ section }) {
-  const LABELS = {
-    camiones: "Flota",
-    rutas: "Rutas",
-    despachos: "Guías",
-    mensajes: "Mensajes",
-  };
-  return (
-    <div className="lt-empty-state">
-      <p className="lt-empty-state__title">
-        Sección {LABELS[section] ?? section} en desarrollo
-      </p>
-      <p className="lt-empty-state__desc">
-        Conecta tu backend y completa el schema para habilitar esta vista.
-      </p>
     </div>
   );
 }
