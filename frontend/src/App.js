@@ -3,7 +3,6 @@ import React from "react";
 import { useAuth } from "./hooks/useAuth";
 import LoginPage from "./components/LoginPage";
 import OperatorDashboard from "./components/OperatorDashboard";
-import B2BDashboard from "./components/B2BDashboard";
 import ClientPortalShell from "./components/ClientPortalShell";
 
 const loadingStyle = {
@@ -25,7 +24,7 @@ export default function App() {
   if (loading) {
     return (
       <div style={loadingStyle}>
-        <div style={{ fontSize: "32px" }}>⏱️</div>
+        <div style={{ fontSize: "32px" }}>🚚</div>
         <span>Cargando sesión...</span>
       </div>
     );
@@ -35,11 +34,7 @@ export default function App() {
     return <LoginPage onLogin={signIn} />;
   }
 
-  // Verificar si es el usuario cliente B2B basado en el email asignado
   if (operator?.role === "CLIENTE") {
-    if (operator.email === "portal.cliente@logitrack.cl") {
-      return <B2BDashboard user={operator} onSignOut={signOut} />;
-    }
     return <ClientPortalShell user={operator} onSignOut={signOut} />;
   }
 

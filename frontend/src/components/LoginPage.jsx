@@ -13,7 +13,7 @@ const ROLES = [
   {
     id: "cliente",
     label: "Cliente B2B",
-    description: "Gestión de pagos y seguimiento de despachos",
+    description: "Seguimiento de tus despachos",
     icon: "📦",
     available: true,
   },
@@ -134,7 +134,7 @@ export default function LoginPage({ onLogin }) {
           ))}
         </div>
 
-        {["operador", "cliente"].includes(selectedRole) && (
+        {selectedRole === "operador" && (
           <form onSubmit={handleSubmit}>
             <div style={styles.field}>
               <label style={styles.label}>Correo electrónico</label>
@@ -145,7 +145,7 @@ export default function LoginPage({ onLogin }) {
                 autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder={selectedRole === "cliente" ? "portal.cliente@logitrack.cl" : "operador@empresa.cl"}
+                placeholder="operador@empresa.cl"
                 style={styles.input}
               />
             </div>
@@ -185,9 +185,9 @@ export default function LoginPage({ onLogin }) {
           </form>
         )}
 
-        {!["operador", "cliente"].includes(selectedRole) && error && (
+        {selectedRole !== "operador" && error && (
           <div style={{ ...styles.errorBox, marginTop: 0 }} role="alert">
-            ❌ {error}
+            ⚠️ {error}
           </div>
         )}
 
