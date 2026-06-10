@@ -16,7 +16,13 @@ import {
 } from "../lib/rutasService";
 import Badge from "./ui/Badge";
 import FormularioConductor from "./FormularioConductor";
+import MetricasPagoConductor from "./MetricasPagoConductor";
 import Spinner from "./ui/Spinner";
+
+const DETALLE_TABS = [
+  { id: "general", label: "Información general" },
+  { id: "metricas-pago", label: "Métricas y Pago" },
+];
 
 const NO_DISPONIBLE = "No disponible";
 
@@ -70,13 +76,19 @@ function estadoRutaLabel(estado) {
   return String(estado).replace(/_/g, " ");
 }
 
-export default function DetalleConductorModal({ conductorResumen, onClose, onConductorActualizado }) {
+export default function DetalleConductorModal({
+  conductorResumen,
+  onClose,
+  onConductorActualizado,
+  configPagosVersion = 0,
+}) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [detalle, setDetalle] = useState(null);
   const [rutasAsignadas, setRutasAsignadas] = useState([]);
   const [modoEdicion, setModoEdicion] = useState(false);
   const [busquedaRutas, setBusquedaRutas] = useState("");
+  const [activeTab, setActiveTab] = useState("general");
 
   const cargarDetalle = useCallback(async () => {
     if (!conductorResumen?.id) return;
@@ -120,6 +132,7 @@ export default function DetalleConductorModal({ conductorResumen, onClose, onCon
   useEffect(() => {
     setModoEdicion(false);
     setBusquedaRutas("");
+    setActiveTab("general");
     cargarDetalle();
   }, [cargarDetalle]);
 
@@ -224,12 +237,33 @@ export default function DetalleConductorModal({ conductorResumen, onClose, onCon
               </div>
             ) : (
               <>
-                {error && (
+                {error && activeTab === "general" && (
                   <div className="lt-alert-banner lt-alert-banner--warning" role="alert">
                     {error}
                   </div>
                 )}
 
+                <div className="lt-tabs" style={{ marginBottom: 16 }}>
+                  {DETALLE_TABS.map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      className={`lt-tab ${activeTab === tab.id ? "lt-tab--active" : ""}`}
+                      onClick={() => setActiveTab(tab.id)}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+
+                {activeTab === "metricas-pago" ? (
+                  <MetricasPagoConductor
+                    conductorId={conductor.id}
+                    conductorRut={conductor.rut}
+                    configPagosVersion={configPagosVersion}
+                  />
+                ) : (
+                  <>
                 <div className="lt-modal-section">
                   {filas.map((fila) => (
                     <div key={fila.label} className="lt-info-row">
@@ -305,6 +339,8 @@ export default function DetalleConductorModal({ conductorResumen, onClose, onCon
                     </>
                   )}
                 </div>
+                  </>
+                )}
               </>
             )}
           </div>

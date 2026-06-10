@@ -191,7 +191,7 @@ export default function OperatorDashboard({ operator, onSignOut }) {
               )}
               {activeSection === "camiones" && (
                 <ModulePage title="Flota" subtitle="Gestión de choferes y vehículos">
-                  <Flota />
+                  <Flota operator={operator} />
                 </ModulePage>
               )}
             </div>

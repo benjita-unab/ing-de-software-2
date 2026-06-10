@@ -20,6 +20,7 @@ import { CamionesModule } from './modules/camiones/camiones.module';
 import { MensajesConductorModule } from './modules/mensajes-conductor/mensajes-conductor.module';
 import { PortalModule } from './modules/portal/portal.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { ConfiguracionPagosModule } from './modules/configuracion-pagos/configuracion-pagos.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
     MensajesConductorModule,
     PortalModule,
     DashboardModule,
+    ConfiguracionPagosModule,
   ],
   controllers: [AppController],
   providers: [AppService, SupabaseConfigService, ResendConfigService, JwtStrategy],

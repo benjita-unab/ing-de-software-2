@@ -62,7 +62,7 @@ const OPCIONES_ORDEN = [
   { value: ORDEN_CHOFERES.VENCIMIENTO_LEJANO, label: "Vencimiento más lejano" },
 ];
 
-export default function ChoferesFlota() {
+export default function ChoferesFlota({ configPagosVersion = 0 }) {
   const [conductores, setConductores] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [mensaje, setMensaje] = useState({ tipo: "", texto: "" });
@@ -272,6 +272,7 @@ export default function ChoferesFlota() {
           conductorResumen={conductorDetalle}
           onClose={() => setConductorDetalle(null)}
           onConductorActualizado={handleConductorActualizado}
+          configPagosVersion={configPagosVersion}
         />
       )}
     </>
