@@ -375,15 +375,26 @@ export default function RutasActivas() {
       return;
     }
 
+    if (!form.conductorId.trim()) {
+      setSaving(false);
+      setMensaje({ tipo: "error", texto: "Debe seleccionar un conductor." });
+      return;
+    }
+
+    if (!form.camionId.trim()) {
+      setSaving(false);
+      setMensaje({ tipo: "error", texto: "Debe seleccionar un camión." });
+      return;
+    }
+
     const payload = {
       cliente_id: form.clienteId.trim(),
       origen: form.origen.trim(),
       destino: form.destino.trim(),
       bultos_despachados: bultosDespachosValue,
+      conductor_id: form.conductorId.trim(),
+      camion_id: form.camionId.trim(),
     };
-
-    if (form.conductorId.trim()) payload.conductor_id = form.conductorId.trim();
-    if (form.camionId.trim()) payload.camion_id = form.camionId.trim();
 
     const fi = localDatetimeToIso(form.fechaInicio);
     const eta = localDatetimeToIso(form.eta);
@@ -571,15 +582,16 @@ export default function RutasActivas() {
                 </select>
               </div>
               <div className="lt-field-group">
-                <label className="lt-label" htmlFor="ruta-conductor">Conductor (opcional)</label>
+                <label className="lt-label" htmlFor="ruta-conductor">Conductor *</label>
                 <select
                   id="ruta-conductor"
                   className="lt-select"
+                  required
                   value={form.conductorId}
                   onChange={(e) => actualizarCampo("conductorId", e.target.value)}
                   disabled={listsLoading}
                 >
-                  <option value="">—</option>
+                  <option value="">Seleccionar conductor…</option>
                   {conductores.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.rut || c.id}
@@ -588,15 +600,16 @@ export default function RutasActivas() {
                 </select>
               </div>
               <div className="lt-field-group">
-                <label className="lt-label" htmlFor="ruta-camion">Camión (opcional)</label>
+                <label className="lt-label" htmlFor="ruta-camion">Camión *</label>
                 <select
                   id="ruta-camion"
                   className="lt-select"
+                  required
                   value={form.camionId}
                   onChange={(e) => actualizarCampo("camionId", e.target.value)}
                   disabled={listsLoading}
                 >
-                  <option value="">—</option>
+                  <option value="">Seleccionar camión…</option>
                   {camiones.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.patente || c.id} {c.estado ? `(${c.estado})` : ""}
