@@ -10,7 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 export default function PedidoDetalleScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { colors } = useAuthTheme();
+  const { colors, scheme } = useAuthTheme();
 
   const [detalle, setDetalle] = useState<PortalPedidoDetalleResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -74,7 +74,7 @@ export default function PedidoDetalleScreen() {
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Card Principal */}
-        <View style={[styles.card, { backgroundColor: colors.surface }]}>
+        <View style={[styles.card, { backgroundColor: scheme === 'dark' ? '#334155' : colors.surface }]}>
           <View style={styles.row}>
             <Text style={[styles.subtitle, { color: colors.textPrimary }]}>
               {ruta.origen || '—'} a {ruta.destino || '—'}
@@ -155,7 +155,7 @@ export default function PedidoDetalleScreen() {
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Detalle de Entrega</Text>
             {entregas.map((e) => (
-              <View key={e.id} style={[styles.card, { backgroundColor: colors.surface, marginBottom: 8 }]}>
+              <View key={e.id} style={[styles.card, { backgroundColor: scheme === 'dark' ? '#334155' : colors.surface, marginBottom: 8 }]}>
                 <Text style={{ fontWeight: 'bold', color: colors.textPrimary }}>Estado: {e.estado}</Text>
                 <Text style={{ color: colors.textSecondary }}>Bultos recibidos: {e.bultos_recepcionados ?? '—'}</Text>
                 <Text style={{ color: colors.textSecondary }}>

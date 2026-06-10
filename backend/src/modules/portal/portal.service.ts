@@ -37,7 +37,7 @@ export class PortalService {
     const { data: rutas, error } = await supabase
       .from('rutas')
       .select(
-        'id, estado, origen, destino, fecha_estimada_entrega, distancia_km, bultos_despachados',
+        'id, estado, origen, destino, eta, fecha_estimada_entrega, distancia_km, bultos_despachados',
       )
       .eq('cliente_id', clienteId)
       .order('created_at', { ascending: false });
@@ -79,6 +79,7 @@ export class PortalService {
         estado,
         origen,
         destino,
+        eta,
         fecha_estimada_entrega,
         distancia_km,
         bultos_despachados,
@@ -107,10 +108,10 @@ export class PortalService {
         ),
         incidencias (
           id,
-          tipo_incidencia,
+          tipo,
           descripcion,
           estado,
-          severidad,
+          prioridad,
           created_at
         ),
         mensajes_conductor (
@@ -226,7 +227,7 @@ export class PortalService {
       estado: (row.estado as string) ?? null,
       origen: (row.origen as string) ?? null,
       destino: (row.destino as string) ?? null,
-      fecha_estimada_entrega: (row.fecha_estimada_entrega as string) ?? null,
+      fecha_estimada_entrega: (row.eta as string) || (row.fecha_estimada_entrega as string) || null,
       distancia_km: row.distancia_km != null ? Number(row.distancia_km) : null,
       bultos_despachados:
         row.bultos_despachados != null ? Number(row.bultos_despachados) : null,
@@ -275,10 +276,10 @@ export class PortalService {
   private mapIncidencia(row: Record<string, unknown>): PortalIncidenciaDto {
     return {
       id: String(row.id),
-      tipo_incidencia: (row.tipo_incidencia as string) ?? null,
+      tipo_incidencia: (row.tipo as string) ?? null,
       descripcion: (row.descripcion as string) ?? null,
       estado: (row.estado as string) ?? null,
-      severidad: (row.severidad as string) ?? null,
+      severidad: (row.prioridad as string) ?? null,
       created_at: (row.created_at as string) ?? null,
     };
   }
