@@ -23,7 +23,7 @@ const NAV_ITEMS = [
   { id: "camiones", label: "Flota", icon: Truck },
   { id: "clientes", label: "Clientes", icon: Users },
   { id: "rrhh", label: "RRHH", icon: UserCog },
-  { id: "mensajes", label: "Mensajes", icon: MessageSquare, badgeKey: "messages" },
+  { id: "mensajes", label: "Mensajes", icon: MessageSquare },
   { id: "despachos", label: "Guías", icon: Package },
   { id: "historial", label: "Historial", icon: History },
 ];
@@ -34,7 +34,6 @@ export default function Sidebar({
   collapsed = false,
   onToggle,
   urgentCount = 0,
-  hasUnreadEmergencies = false,
   operator,
   onSignOut,
   isDark = false,
@@ -61,7 +60,6 @@ export default function Sidebar({
           const Icon = item.icon;
           const isActive = activeSection === item.id;
           const showUrgentBadge = item.badgeKey === "urgent" && urgentCount > 0;
-          const showMsgBadge = item.badgeKey === "messages" && hasUnreadEmergencies;
 
           return (
             <button
@@ -76,9 +74,9 @@ export default function Sidebar({
                   size={18}
                   color={isActive ? "var(--lt-accent)" : "var(--lt-sidebar-muted)"}
                 />
-                {(showUrgentBadge || showMsgBadge) && (
+                {showUrgentBadge && (
                   <span className="lt-sidebar__badge">
-                    {showUrgentBadge ? (urgentCount > 9 ? "9+" : urgentCount) : "!"}
+                    {urgentCount > 9 ? "9+" : urgentCount}
                   </span>
                 )}
               </div>

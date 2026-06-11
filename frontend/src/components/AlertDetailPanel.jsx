@@ -6,6 +6,8 @@ import {
 import Badge from "./ui/Badge";
 import EmptyState from "./ui/EmptyState";
 
+/** @legacy Panel de detalle de incidencia. Usado solo por LegacyIncidenciasAlertPanel. */
+
 const PRIORITY_VARIANT = {
   CRITICA: "danger",
   ALTA: "warning",

@@ -1,7 +1,7 @@
 // src/components/OperatorDashboard.jsx
 // Layout principal del Operador — shell operacional con sidebar + dashboard
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState } from "react";
 import { MessageSquare } from "lucide-react";
 import Sidebar from "./Sidebar";
 import DashboardOperational from "./DashboardOperational";
@@ -21,27 +21,6 @@ import { useAlerts } from "../hooks/useAlerts";
 import { useAlertasConductor } from "../hooks/useAlertasConductor";
 import { useTheme } from "../hooks/useTheme";
 
-function playAlarmSound() {
-  if (typeof window === "undefined") return;
-  const AudioContext = window.AudioContext || window.webkitAudioContext;
-  if (!AudioContext) return;
-  try {
-    const ctx = new AudioContext();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "sine";
-    osc.frequency.value = 800;
-    gain.gain.setValueAtTime(0.2, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.5);
-  } catch (e) {
-    console.warn("Audio context failed:", e);
-  }
-}
-
 export default function OperatorDashboard({ operator, onSignOut }) {
   const { alerts, loading } = useAlerts();
   const {
@@ -56,19 +35,6 @@ export default function OperatorDashboard({ operator, onSignOut }) {
 
   const [activeSection, setActiveSection] = useState("dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const playedUrgentIdsRef = useRef(new Set());
-
-  // HU-40 Fase 1: alarma sonora por emergencias en mensajes_conductor (pestaña Alertas)
-  useEffect(() => {
-    const urgentAlertas = alertas.filter(
-      (m) => m.prioridad === "ALTA" && !m.acknowledged,
-    );
-    const newUrgent = urgentAlertas.filter((m) => !playedUrgentIdsRef.current.has(m.id));
-    if (newUrgent.length > 0) {
-      playAlarmSound();
-      newUrgent.forEach((m) => playedUrgentIdsRef.current.add(m.id));
-    }
-  }, [alertas]);
 
   return (
     <div className="lt-app-shell">
@@ -78,7 +44,6 @@ export default function OperatorDashboard({ operator, onSignOut }) {
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed((c) => !c)}
         urgentCount={urgentCount}
-        hasUnreadEmergencies={false}
         operator={operator}
         onSignOut={onSignOut}
         isDark={isDark}
@@ -91,7 +56,7 @@ export default function OperatorDashboard({ operator, onSignOut }) {
             <DashboardOperational
               alerts={alerts}
               alertsLoading={loading}
-              mensajes={alertas}
+              eventosConductor={alertas}
               operator={operator}
               onNavigate={setActiveSection}
               isDark={isDark}

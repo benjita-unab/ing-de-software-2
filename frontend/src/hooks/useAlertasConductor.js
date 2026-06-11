@@ -1,8 +1,26 @@
 /**
- * HU-40 Fase 1: alertas operativas desde mensajes_conductor.
- * Reutiliza la lógica de useMensajesConductor sin duplicar fetch/polling.
+ * HU-40: hook de alertas operativas desde mensajes_conductor.
+ *
+ * Responsabilidades:
+ * - Exponer eventos del conductor como `alertas` (urgencias + estados).
+ * - Contadores y badge de sidebar (`urgentCount`, `hasUnreadAlertas`).
+ * - Alarma sonora ante nuevas emergencias ALTA sin confirmar.
+ *
+ * Polling: delega en useMensajesConductor (única instancia en OperatorDashboard).
+ *
+ * Convive con useAlerts (incidencias legacy):
+ * - useAlerts → tabla incidencias, dashboard KPIs/ticker/mapa legacy.
+ * - useAlertasConductor → mensajes_conductor, pestaña Alertas, badge sidebar, alarma.
+ * Ambos hooks son necesarios hasta unificar incidencias con mensajes_conductor.
  */
+import { useEffect, useRef } from 'react';
 import { useMensajesConductor } from './useMensajesConductor';
+import {
+  countUrgentAlertas,
+  hasUnreadAlertas,
+  isUrgentAlerta,
+  playAlertaAlarm,
+} from '../lib/alertasConductorUtils';
 
 export {
   sortMensajes,
@@ -11,19 +29,17 @@ export {
   groupMensajesByRuta as groupAlertasByRuta,
 } from './useMensajesConductor';
 
-export function countUrgentAlertas(alertas = []) {
-  return alertas.filter(
-    (item) => item.prioridad === 'ALTA' && !item.acknowledged,
-  ).length;
-}
+export {
+  countUrgentAlertas,
+  hasUnreadAlertas,
+  isUrgentAlerta,
+  playAlertaAlarm,
+} from '../lib/alertasConductorUtils';
 
-export function hasUnreadAlertas(alertas = []) {
-  return alertas.some(
-    (item) => item.prioridad === 'ALTA' && !item.acknowledged,
-  );
-}
+export function useAlertasConductor(options = {}) {
+  const { playAlarm = true } = options;
+  const playedUrgentIdsRef = useRef(new Set());
 
-export function useAlertasConductor() {
   const {
     mensajes: alertas,
     rutas,
@@ -33,6 +49,17 @@ export function useAlertasConductor() {
     acknowledgeMensaje: acknowledgeAlerta,
   } = useMensajesConductor();
 
+  useEffect(() => {
+    if (!playAlarm) return;
+    const newUrgent = alertas.filter(
+      (item) => isUrgentAlerta(item) && !playedUrgentIdsRef.current.has(item.id),
+    );
+    if (newUrgent.length > 0) {
+      playAlertaAlarm();
+      newUrgent.forEach((item) => playedUrgentIdsRef.current.add(item.id));
+    }
+  }, [alertas, playAlarm]);
+
   return {
     alertas,
     rutas,
@@ -41,6 +68,6 @@ export function useAlertasConductor() {
     error,
     acknowledgeAlerta,
     urgentCount: countUrgentAlertas(alertas),
-    hasUnreadEmergencies: hasUnreadAlertas(alertas),
+    hasUnreadAlertas: hasUnreadAlertas(alertas),
   };
 }
