@@ -122,6 +122,7 @@ export default function RutasActivas() {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [mensaje, setMensaje] = useState(null);
+  const [erroresFormulario, setErroresFormulario] = useState({});
   const [mensajesRuta, setMensajesRuta] = useState({});
   const [fechasEdit, setFechasEdit] = useState({});
   const [anomaliasPorRuta, setAnomaliasPorRuta] = useState({});
@@ -158,6 +159,15 @@ export default function RutasActivas() {
       setForm((prev) => ({ ...prev, destino: address })),
   });
   const mapsError = mapsOrigenError || mapsDestinoError;
+
+  const renderErrorFormulario = (campo) => {
+    if (!erroresFormulario[campo]) return null;
+    return (
+      <div className="lt-alert-banner lt-alert-banner--error" role="alert" style={{ marginTop: 8, marginBottom: 0 }}>
+        {erroresFormulario[campo]}
+      </div>
+    );
+  };
 
   const cargarRutas = useCallback(async () => {
     setLoading(true);
@@ -232,6 +242,12 @@ export default function RutasActivas() {
 
   const actualizarCampo = (campo, valor) => {
     setForm((prev) => ({ ...prev, [campo]: valor }));
+    setErroresFormulario((prev) => {
+      if (!prev[campo]) return prev;
+      const next = { ...prev };
+      delete next[campo];
+      return next;
+    });
   };
 
   const actualizarFechaForm = (campo, valor) => {
@@ -239,6 +255,18 @@ export default function RutasActivas() {
       ...prev,
       fechasEstimadas: { ...prev.fechasEstimadas, [campo]: valor },
     }));
+    const errorKey =
+      campo === "inicio"
+        ? "fechaInicioEstimado"
+        : campo === "fin"
+          ? "finRangoEstimado"
+          : "diaEstimadoEntrega";
+    setErroresFormulario((prev) => {
+      if (!prev[errorKey]) return prev;
+      const next = { ...prev };
+      delete next[errorKey];
+      return next;
+    });
   };
 
   const calcularDistanciaYFechasForm = async () => {
@@ -359,33 +387,56 @@ export default function RutasActivas() {
   const enviarFormulario = async (e) => {
     e.preventDefault();
     setMensaje(null);
-    setSaving(true);
+    setErroresFormulario({});
+
+    const nuevosErrores = {};
+    const requeridos = [
+      ["clienteId", form.clienteId],
+      ["conductorId", form.conductorId],
+      ["camionId", form.camionId],
+      ["origen", form.origen],
+      ["destino", form.destino],
+      ["fechaInicio", form.fechaInicio],
+      ["eta", form.eta],
+      ["bultosDespachos", form.bultosDespachos],
+      ["distanciaKm", form.distanciaKm],
+      ["fechaInicioEstimado", form.fechasEstimadas.inicio],
+      ["finRangoEstimado", form.fechasEstimadas.fin],
+      ["diaEstimadoEntrega", form.fechasEstimadas.entrega],
+    ];
+
+    requeridos.forEach(([campo, valor]) => {
+      if (!String(valor ?? "").trim()) {
+        nuevosErrores[campo] = "Este campo es obligatorio";
+      }
+    });
 
     const bultosDespachosValue = Number(form.bultosDespachos);
     if (
-      !form.bultosDespachos.trim() ||
-      Number.isNaN(bultosDespachosValue) ||
-      !Number.isInteger(bultosDespachosValue) ||
-      bultosDespachosValue < 1
+      String(form.bultosDespachos ?? "").trim() &&
+      (Number.isNaN(bultosDespachosValue) || !Number.isInteger(bultosDespachosValue) || bultosDespachosValue < 1)
     ) {
+      nuevosErrores.bultosDespachos = "Cantidad de bultos inválida";
+    }
+
+    const distanciaOriginal = String(form.distanciaKm ?? "").trim();
+    const distanciaLimpia = distanciaOriginal.replace(/,/g, ".");
+    const distanciaNumero = distanciaLimpia === "" ? NaN : Number.parseFloat(distanciaLimpia);
+    const distanciaNormalizada = Number.isNaN(distanciaNumero)
+      ? NaN
+      : Number(distanciaNumero.toFixed(2));
+
+    if (Number.isNaN(distanciaNormalizada)) {
+      nuevosErrores.distanciaKm = "Distancia inválida";
+    }
+
+    if (Object.keys(nuevosErrores).length > 0) {
+      setErroresFormulario(nuevosErrores);
       setSaving(false);
-      window.alert(
-        "El campo Cantidad de Bultos a Despachar es obligatorio y debe ser un número entero mayor o igual a 1.",
-      );
       return;
     }
 
-    if (!form.conductorId.trim()) {
-      setSaving(false);
-      setMensaje({ tipo: "error", texto: "Debe seleccionar un conductor." });
-      return;
-    }
-
-    if (!form.camionId.trim()) {
-      setSaving(false);
-      setMensaje({ tipo: "error", texto: "Debe seleccionar un camión." });
-      return;
-    }
+    setSaving(true);
 
     const payload = {
       cliente_id: form.clienteId.trim(),
@@ -394,6 +445,7 @@ export default function RutasActivas() {
       bultos_despachados: bultosDespachosValue,
       conductor_id: form.conductorId.trim(),
       camion_id: form.camionId.trim(),
+      distancia_km: distanciaNormalizada,
     };
 
     const fi = localDatetimeToIso(form.fechaInicio);
@@ -406,9 +458,6 @@ export default function RutasActivas() {
       payload.fecha_estimada_inicio = inicio.trim();
       payload.fecha_estimada_fin = fin.trim();
       payload.fecha_estimada_entrega = entrega.trim();
-    }
-    if (String(form.distanciaKm ?? "").trim() !== "") {
-      payload.distancia_km = Number(form.distanciaKm);
     }
 
     const resultado = await crearRuta(payload);
@@ -436,6 +485,7 @@ export default function RutasActivas() {
       advertenciaEstimacion: "",
       bultosDespachos: "",
     });
+    setErroresFormulario({});
     setShowForm(false);
     await cargarRutas();
   };
@@ -545,7 +595,11 @@ export default function RutasActivas() {
             type="button"
             className="lt-btn lt-btn--primary"
             onClick={() => {
-              setShowForm((v) => !v);
+              setShowForm((v) => {
+                const next = !v;
+                if (next) setErroresFormulario({});
+                return next;
+              });
               setMensaje(null);
             }}
           >
@@ -556,6 +610,7 @@ export default function RutasActivas() {
         {showForm && (
           <form
             onSubmit={enviarFormulario}
+            noValidate
             className="lt-card rutas-nueva-form"
             style={{ marginTop: 16, marginBottom: 16, overflow: "visible" }}
           >
@@ -580,6 +635,7 @@ export default function RutasActivas() {
                     </option>
                   ))}
                 </select>
+                {renderErrorFormulario("clienteId")}
               </div>
               <div className="lt-field-group">
                 <label className="lt-label" htmlFor="ruta-conductor">Conductor *</label>
@@ -598,6 +654,7 @@ export default function RutasActivas() {
                     </option>
                   ))}
                 </select>
+                {renderErrorFormulario("conductorId")}
               </div>
               <div className="lt-field-group">
                 <label className="lt-label" htmlFor="ruta-camion">Camión *</label>
@@ -616,6 +673,7 @@ export default function RutasActivas() {
                     </option>
                   ))}
                 </select>
+                {renderErrorFormulario("camionId")}
               </div>
               <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
                 <label className="lt-label" htmlFor="ruta-origen">Origen *</label>
@@ -634,6 +692,7 @@ export default function RutasActivas() {
                   onChange={(e) => actualizarCampo("origen", e.target.value)}
                   placeholder="Escribe y selecciona una dirección sugerida…"
                 />
+                {renderErrorFormulario("origen")}
               </div>
               <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
                 <label className="lt-label" htmlFor="ruta-destino">Destino *</label>
@@ -647,9 +706,10 @@ export default function RutasActivas() {
                   onChange={(e) => actualizarCampo("destino", e.target.value)}
                   placeholder="Escribe y selecciona una dirección sugerida…"
                 />
+                {renderErrorFormulario("destino")}
               </div>
               <div className="lt-field-group">
-                <label className="lt-label" htmlFor="ruta-fecha-inicio">Fecha inicio (opcional)</label>
+                <label className="lt-label" htmlFor="ruta-fecha-inicio">Fecha inicio *</label>
                 <input
                   id="ruta-fecha-inicio"
                   className="lt-input"
@@ -657,9 +717,10 @@ export default function RutasActivas() {
                   value={form.fechaInicio}
                   onChange={(e) => actualizarCampo("fechaInicio", e.target.value)}
                 />
+                {renderErrorFormulario("fechaInicio")}
               </div>
               <div className="lt-field-group">
-                <label className="lt-label" htmlFor="ruta-eta">ETA (opcional)</label>
+                <label className="lt-label" htmlFor="ruta-eta">ETA *</label>
                 <input
                   id="ruta-eta"
                   className="lt-input"
@@ -667,9 +728,10 @@ export default function RutasActivas() {
                   value={form.eta}
                   onChange={(e) => actualizarCampo("eta", e.target.value)}
                 />
+                {renderErrorFormulario("eta")}
               </div>
               <div className="lt-field-group">
-                <label className="lt-label" htmlFor="ruta-bultos">Cantidad de Bultos a Despachar *</label>
+                <label className="lt-label" htmlFor="ruta-bultos">Cantidad de bultos *</label>
                 <input
                   id="ruta-bultos"
                   className="lt-input"
@@ -680,22 +742,23 @@ export default function RutasActivas() {
                   onChange={(e) => actualizarCampo("bultosDespachos", e.target.value)}
                   placeholder="Ej: 25"
                 />
+                {renderErrorFormulario("bultosDespachos")}
               </div>
               <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
-                <label className="lt-label" htmlFor="ruta-distancia">Distancia vial calculada (km)</label>
+                <label className="lt-label" htmlFor="ruta-distancia">Distancia *</label>
                 <p className="lt-module-card__subtitle" style={{ marginTop: 0, marginBottom: 8 }}>
                   {AYUDA_DISTANCIA_VIAL}
                 </p>
                 <input
                   id="ruta-distancia"
                   className="lt-input"
-                  type="number"
-                  min="0"
-                  step="0.1"
+                  type="text"
+                  inputMode="decimal"
                   value={form.distanciaKm}
                   onChange={(e) => actualizarCampo("distanciaKm", e.target.value)}
                   placeholder="Vacío = calcular por carretera con origen y destino"
                 />
+                {renderErrorFormulario("distanciaKm")}
               </div>
               <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
                 <div className="lt-form-actions" style={{ marginTop: 0, flexWrap: "wrap" }}>
@@ -720,7 +783,7 @@ export default function RutasActivas() {
                 )}
                 <div className="lt-form-grid lt-form-grid--3" style={{ marginTop: 10 }}>
                   <div className="lt-field-group">
-                    <label className="lt-label" htmlFor="ruta-fecha-est-inicio">Inicio rango estimado</label>
+                    <label className="lt-label" htmlFor="ruta-fecha-est-inicio">Inicio rango estimado *</label>
                     <input
                       id="ruta-fecha-est-inicio"
                       type="date"
@@ -728,9 +791,10 @@ export default function RutasActivas() {
                       value={form.fechasEstimadas.inicio}
                       onChange={(e) => actualizarFechaForm("inicio", e.target.value)}
                     />
+                    {renderErrorFormulario("fechaInicioEstimado")}
                   </div>
                   <div className="lt-field-group">
-                    <label className="lt-label" htmlFor="ruta-fecha-est-fin">Fin rango estimado</label>
+                    <label className="lt-label" htmlFor="ruta-fecha-est-fin">Fin rango estimado *</label>
                     <input
                       id="ruta-fecha-est-fin"
                       type="date"
@@ -738,9 +802,10 @@ export default function RutasActivas() {
                       value={form.fechasEstimadas.fin}
                       onChange={(e) => actualizarFechaForm("fin", e.target.value)}
                     />
+                    {renderErrorFormulario("finRangoEstimado")}
                   </div>
                   <div className="lt-field-group">
-                    <label className="lt-label" htmlFor="ruta-fecha-est-entrega">Día estimado de entrega</label>
+                    <label className="lt-label" htmlFor="ruta-fecha-est-entrega">Día estimado de entrega *</label>
                     <input
                       id="ruta-fecha-est-entrega"
                       type="date"
@@ -748,6 +813,7 @@ export default function RutasActivas() {
                       value={form.fechasEstimadas.entrega}
                       onChange={(e) => actualizarFechaForm("entrega", e.target.value)}
                     />
+                    {renderErrorFormulario("diaEstimadoEntrega")}
                   </div>
                 </div>
               </div>
