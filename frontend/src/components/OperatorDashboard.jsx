@@ -114,7 +114,7 @@ export default function OperatorDashboard({ operator, onSignOut }) {
                 </ModulePage>
               )}
               {activeSection === "despachos" && (
-                <ModulePage title="Guías de despacho" subtitle="Seguimiento de guías y cierre de despachos">
+                <ModulePage title="Rutas Activas" subtitle="Seguimiento de rutas activas y cierre de despachos">
                   <GuiasDespacho />
                 </ModulePage>
               )}

@@ -401,9 +401,9 @@ export default function ClientPortalShell({ user, onSignOut }) {
                     ))
                   )}
 
-                  <h3 style={{ fontSize: "15px", marginTop: "16px" }}>Guías de despacho</h3>
+                  <h3 style={{ fontSize: "15px", marginTop: "16px" }}>Rutas activas</h3>
                   {(detalle.guias_despacho || []).length === 0 ? (
-                    <p style={{ opacity: 0.7, fontSize: "14px" }}>Sin guías.</p>
+                    <p style={{ opacity: 0.7, fontSize: "14px" }}>Sin rutas activas.</p>
                   ) : (
                     detalle.guias_despacho.map((g) => (
                       <div key={g.id} style={{ fontSize: "14px", marginBottom: "8px" }}>

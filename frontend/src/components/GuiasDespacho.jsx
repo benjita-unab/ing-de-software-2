@@ -151,9 +151,9 @@ export default function GuiasDespacho() {
           </div>
 
           {loading ? (
-            <p className="lt-empty">Cargando guías en curso...</p>
+            <p className="lt-empty">Cargando rutas activas...</p>
           ) : rutas.length === 0 ? (
-            <p className="lt-empty">No hay rutas pendientes de guías en este momento.</p>
+            <p className="lt-empty">No hay rutas activas pendientes en este momento.</p>
           ) : (
             <div className="lt-table-wrap">
               <table className="lt-table">
