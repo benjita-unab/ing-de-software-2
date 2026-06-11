@@ -6,6 +6,8 @@ import Spinner from "./ui/Spinner";
 import EmptyState from "./ui/EmptyState";
 import { CheckCircle2 } from "lucide-react";
 
+/** @legacy UI de incidencias (tabla incidencias). Usada solo por LegacyIncidenciasAlertPanel. */
+
 const FILTERS = ["TODAS", "PENDIENTE", "EN_GESTION", "RESUELTA"];
 
 const PRIORITY_SECTIONS = [

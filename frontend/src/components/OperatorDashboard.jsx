@@ -1,12 +1,13 @@
 // src/components/OperatorDashboard.jsx
 // Layout principal del Operador — shell operacional con sidebar + dashboard
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState } from "react";
+import ChatOperador from "./ChatOperador";
 import Sidebar from "./Sidebar";
 import DashboardOperational from "./DashboardOperational";
 import AlertQueue from "./AlertQueue";
 import AlertDetailPanel from "./AlertDetailPanel";
-import MensajesConductor from "./MensajesConductor";
+import AlertasConductor from "./AlertasConductor";
 import MonitoreoLicencias from "./MonitoreoLicencias";
 import Flota from "./Flota";
 import RutasActivas from "./RutasActivas";
@@ -16,74 +17,23 @@ import HistorialDespachos from "./HistorialDespachos";
 import ModulePage from "./ui/ModulePage";
 import PageHeader from "./ui/PageHeader";
 import { useAlerts } from "../hooks/useAlerts";
-import { useMensajesConductor } from "../hooks/useMensajesConductor";
+import { useAlertasConductor } from "../hooks/useAlertasConductor";
 import { useTheme } from "../hooks/useTheme";
 
-function playAlarmSound() {
-  if (typeof window === "undefined") return;
-  const AudioContext = window.AudioContext || window.webkitAudioContext;
-  if (!AudioContext) return;
-  try {
-    const ctx = new AudioContext();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "sine";
-    osc.frequency.value = 800;
-    gain.gain.setValueAtTime(0.2, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.5);
-  } catch (e) {
-    console.warn("Audio context failed:", e);
-  }
-}
-
 export default function OperatorDashboard({ operator, onSignOut }) {
-  const { alerts, loading, acknowledgeAlert, resolveAlert: rawResolveAlert } = useAlerts();
-  const { mensajes, rutasMap, loading: mensajesLoading, error: mensajesError, acknowledgeMensaje } = useMensajesConductor();
+  const { alerts, loading } = useAlerts();
+  const {
+    alertas,
+    rutasMap,
+    loading: alertasLoading,
+    error: alertasError,
+    acknowledgeAlerta,
+    urgentCount,
+  } = useAlertasConductor();
   const { isDark, toggleTheme } = useTheme();
 
   const [activeSection, setActiveSection] = useState("dashboard");
-  const [selectedAlert, setSelectedAlert] = useState(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const playedUrgentIdsRef = useRef(new Set());
-
-  useEffect(() => {
-    const urgentMessages = mensajes.filter(
-      (m) => m.prioridad === "ALTA" && !m.acknowledged,
-    );
-    const newUrgent = urgentMessages.filter((m) => !playedUrgentIdsRef.current.has(m.id));
-    if (newUrgent.length > 0) {
-      playAlarmSound();
-      newUrgent.forEach((m) => playedUrgentIdsRef.current.add(m.id));
-    }
-  }, [mensajes]);
-
-  const handleResolveAlert = async (alertId) => {
-    const res = await rawResolveAlert(alertId);
-    if (res?.ok) {
-      alert("El problema ya está resuelto y removido de la cola.");
-      if (selectedAlert?.id === alertId) {
-        setSelectedAlert(null);
-      }
-    } else if (res?.message) {
-      alert(res.message);
-    }
-  };
-
-  const urgentCount = alerts.filter(
-    (a) => ["CRITICA", "ALTA"].includes(a.priority) && a.status === "PENDIENTE",
-  ).length;
-
-  const hasUnreadEmergencies = mensajes.some(
-    (m) => m.prioridad === "ALTA" && !m.acknowledged,
-  );
-
-  const selectedAlertLive = selectedAlert
-    ? alerts.find((a) => a.id === selectedAlert.id) ?? selectedAlert
-    : null;
 
   return (
     <div className="lt-app-shell">
@@ -93,7 +43,6 @@ export default function OperatorDashboard({ operator, onSignOut }) {
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed((c) => !c)}
         urgentCount={urgentCount}
-        hasUnreadEmergencies={hasUnreadEmergencies}
         operator={operator}
         onSignOut={onSignOut}
         isDark={isDark}
@@ -106,7 +55,7 @@ export default function OperatorDashboard({ operator, onSignOut }) {
             <DashboardOperational
               alerts={alerts}
               alertsLoading={loading}
-              mensajes={mensajes}
+              eventosConductor={alertas}
               operator={operator}
               onNavigate={setActiveSection}
               isDark={isDark}
@@ -115,48 +64,28 @@ export default function OperatorDashboard({ operator, onSignOut }) {
         )}
 
         {activeSection === "alertas" && (
-          <div className="lt-module-page lt-module-page--ops-split">
-            <PageHeader
-              title="Centro de alertas"
-              subtitle="Monitoreo y gestión de incidentes en tiempo real"
+          <ModulePage
+            title="Centro de alertas"
+            subtitle="Estados y emergencias enviados desde la app del conductor"
+            className="lt-module-page--mensajes"
+          >
+            <AlertasConductor
+              mensajes={alertas}
+              rutasMap={rutasMap}
+              loading={alertasLoading}
+              error={alertasError}
+              acknowledgeMensaje={acknowledgeAlerta}
             />
-            <div className="lt-module-split lt-module-split--nested">
-              <div className="lt-module-split__queue">
-                <AlertQueue
-                  alerts={alerts}
-                  loading={loading}
-                  onAcknowledge={acknowledgeAlert}
-                  onResolve={handleResolveAlert}
-                  onSelectAlert={setSelectedAlert}
-                  selectedAlertId={selectedAlert?.id}
-                  operatorId={operator?.id}
-                />
-              </div>
-              <div className="lt-module-split__detail">
-                <AlertDetailPanel
-                  alert={selectedAlertLive}
-                  onAcknowledge={acknowledgeAlert}
-                  onResolve={handleResolveAlert}
-                  currentOperatorId={operator?.id}
-                />
-              </div>
-            </div>
-          </div>
+          </ModulePage>
         )}
 
         {activeSection === "mensajes" && (
           <ModulePage
-            title="Mensajes de conductores"
-            subtitle="Estados rápidos enviados desde la app móvil"
+            title="Mensajes"
+            subtitle="Comunicación operador ↔ conductor"
             className="lt-module-page--mensajes"
           >
-            <MensajesConductor
-              mensajes={mensajes}
-              rutasMap={rutasMap}
-              loading={mensajesLoading}
-              error={mensajesError}
-              acknowledgeMensaje={acknowledgeMensaje}
-            />
+            <ChatOperador />
           </ModulePage>
         )}
 
@@ -197,6 +126,48 @@ export default function OperatorDashboard({ operator, onSignOut }) {
             </div>
           )}
       </main>
+    </div>
+  );
+}
+
+// Legacy incidencias UI (HU previa) — conservado para Fase 2+ / referencia
+export function LegacyIncidenciasAlertPanel({
+  alerts,
+  loading,
+  acknowledgeAlert,
+  onResolve,
+  selectedAlert,
+  selectedAlertLive,
+  onSelectAlert,
+  operatorId,
+}) {
+  return (
+    <div className="lt-module-page lt-module-page--ops-split">
+      <PageHeader
+        title="Centro de alertas (incidencias)"
+        subtitle="Monitoreo y gestión de incidentes en tiempo real"
+      />
+      <div className="lt-module-split lt-module-split--nested">
+        <div className="lt-module-split__queue">
+          <AlertQueue
+            alerts={alerts}
+            loading={loading}
+            onAcknowledge={acknowledgeAlert}
+            onResolve={onResolve}
+            onSelectAlert={onSelectAlert}
+            selectedAlertId={selectedAlert?.id}
+            operatorId={operatorId}
+          />
+        </div>
+        <div className="lt-module-split__detail">
+          <AlertDetailPanel
+            alert={selectedAlertLive}
+            onAcknowledge={acknowledgeAlert}
+            onResolve={onResolve}
+            currentOperatorId={operatorId}
+          />
+        </div>
+      </div>
     </div>
   );
 }

@@ -21,6 +21,7 @@ import { MensajesConductorModule } from './modules/mensajes-conductor/mensajes-c
 import { PortalModule } from './modules/portal/portal.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ConfiguracionPagosModule } from './modules/configuracion-pagos/configuracion-pagos.module';
+import { ChatRutaModule } from './modules/chat-ruta/chat-ruta.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { ConfiguracionPagosModule } from './modules/configuracion-pagos/configur
     PortalModule,
     DashboardModule,
     ConfiguracionPagosModule,
+    ChatRutaModule,
   ],
   controllers: [AppController],
   providers: [AppService, SupabaseConfigService, ResendConfigService, JwtStrategy],

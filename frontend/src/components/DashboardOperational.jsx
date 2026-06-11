@@ -112,14 +112,23 @@ function routeStatusLabel(estado) {
   return String(estado).replace(/_/g, " ");
 }
 
+/**
+ * Dashboard operacional con mapa en vivo.
+ *
+ * Dependencias HU-40:
+ * - alerts / alertsLoading → incidencias legacy (useAlerts, tabla incidencias).
+ * - eventosConductor → mensajes_conductor vía useAlertasConductor: GPS en mapa y urgencias en rutas.
+ */
 export default function DashboardOperational({
   alerts = [],
   alertsLoading = false,
-  mensajes = [],
+  eventosConductor = [],
+  mensajes,
   operator,
   onNavigate,
   isDark = false,
 }) {
+  const conductorEventos = mensajes ?? eventosConductor;
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [showFilters, setShowFilters] = useState(false);
   const [clientes, setClientes] = useState([]);
@@ -251,8 +260,8 @@ export default function DashboardOperational({
   }, [alerts, mapFilter]);
 
   const mapRoutes = useMemo(
-    () => buildMapRoutes(activeRoutesRaw, geocodeMap, alerts, mensajes),
-    [activeRoutesRaw, geocodeMap, alerts, mensajes],
+    () => buildMapRoutes(activeRoutesRaw, geocodeMap, alerts, conductorEventos),
+    [activeRoutesRaw, geocodeMap, alerts, conductorEventos],
   );
 
   const vehicleMarkers = useMemo(
@@ -261,8 +270,8 @@ export default function DashboardOperational({
   );
 
   const mapStats = useMemo(
-    () => countMapStats(mapRoutes, camiones, alerts, vehicleMarkers),
-    [mapRoutes, camiones, alerts, vehicleMarkers],
+    () => countMapStats(mapRoutes, camiones, alerts, vehicleMarkers, conductorEventos),
+    [mapRoutes, camiones, alerts, vehicleMarkers, conductorEventos],
   );
 
   const selectedRoute = useMemo(

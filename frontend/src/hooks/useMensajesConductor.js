@@ -1,5 +1,12 @@
+/**
+ * HU-40: capa de datos compartida para mensajes_conductor.
+ * Consumida por useAlertasConductor (pestaña Alertas). No usar directamente en UI de Mensajes
+ * hasta implementar chat (fase futura). Un solo hook activo evita polling duplicado.
+ */
 import { useEffect, useState, useCallback } from 'react';
 import { apiFetch } from '../lib/apiClient';
+
+export const MENSAJES_CONDUCTOR_POLL_MS = 10000;
 
 const ALLOWED_CONDUCTOR_MESSAGES = new Set([
   'Emergencia',
@@ -154,7 +161,7 @@ export function useMensajesConductor() {
   useEffect(() => {
     const interval = setInterval(() => {
       void fetchMensajes();
-    }, 10000);
+    }, MENSAJES_CONDUCTOR_POLL_MS);
     return () => clearInterval(interval);
   }, [fetchMensajes]);
 
