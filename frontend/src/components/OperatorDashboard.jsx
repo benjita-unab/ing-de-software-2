@@ -2,7 +2,7 @@
 // Layout principal del Operador — shell operacional con sidebar + dashboard
 
 import React, { useState } from "react";
-import { MessageSquare } from "lucide-react";
+import ChatOperador from "./ChatOperador";
 import Sidebar from "./Sidebar";
 import DashboardOperational from "./DashboardOperational";
 import AlertQueue from "./AlertQueue";
@@ -16,7 +16,6 @@ import Clientes from "./Clientes";
 import HistorialDespachos from "./HistorialDespachos";
 import ModulePage from "./ui/ModulePage";
 import PageHeader from "./ui/PageHeader";
-import EmptyState from "./ui/EmptyState";
 import { useAlerts } from "../hooks/useAlerts";
 import { useAlertasConductor } from "../hooks/useAlertasConductor";
 import { useTheme } from "../hooks/useTheme";
@@ -86,11 +85,7 @@ export default function OperatorDashboard({ operator, onSignOut }) {
             subtitle="Comunicación operador ↔ conductor"
             className="lt-module-page--mensajes"
           >
-            <EmptyState
-              icon={MessageSquare}
-              title="Chat operador-conductor en construcción"
-              description="Próximamente podrás conversar en tiempo real con los conductores por ruta."
-            />
+            <ChatOperador />
           </ModulePage>
         )}
 
