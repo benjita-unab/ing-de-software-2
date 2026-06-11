@@ -1,8 +1,7 @@
 import React, { useState } from "react";
-import { Truck } from "lucide-react";
+import CamionesFlota from "./CamionesFlota";
 import ChoferesFlota from "./ChoferesFlota";
 import { ConfiguracionPagosButton } from "./ConfiguracionPagosModal";
-import EmptyState from "./ui/EmptyState";
 
 const TABS = [
   { id: "choferes", label: "Choferes" },
@@ -38,23 +37,19 @@ export default function Flota({ operator }) {
           ))}
         </div>
 
-        <ConfiguracionPagosButton
-          operator={operator}
-          onConfigGuardada={() => setConfigVersion((v) => v + 1)}
-        />
+        {activeTab === "choferes" && (
+          <ConfiguracionPagosButton
+            operator={operator}
+            onConfigGuardada={() => setConfigVersion((v) => v + 1)}
+          />
+        )}
       </div>
 
       {activeTab === "choferes" && (
         <ChoferesFlota configPagosVersion={configVersion} />
       )}
 
-      {activeTab === "camiones" && (
-        <EmptyState
-          icon={Truck}
-          title="Funcionalidad disponible en HU-39"
-          description="La gestión de camiones se habilitará en una próxima historia de usuario."
-        />
-      )}
+      {activeTab === "camiones" && <CamionesFlota operator={operator} />}
     </div>
   );
 }
