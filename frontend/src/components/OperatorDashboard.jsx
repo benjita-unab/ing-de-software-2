@@ -14,6 +14,7 @@ import RutasActivas from "./RutasActivas";
 import GuiasDespacho from "./GuiasDespacho";
 import Clientes from "./Clientes";
 import HistorialDespachos from "./HistorialDespachos";
+import PagosCliente from "./PagosCliente";
 import ModulePage from "./ui/ModulePage";
 import PageHeader from "./ui/PageHeader";
 import { useAlerts } from "../hooks/useAlerts";
@@ -106,6 +107,14 @@ export default function OperatorDashboard({ operator, onSignOut }) {
               {activeSection === "clientes" && (
                 <ModulePage title="Clientes" subtitle="Directorio de clientes y historial de despachos">
                   <Clientes />
+                </ModulePage>
+              )}
+              {activeSection === "pagos" && (
+                <ModulePage
+                  title="Pagos de clientes"
+                  subtitle="Gestión de pagos B2B asociados a rutas completadas"
+                >
+                  <PagosCliente />
                 </ModulePage>
               )}
               {activeSection === "historial" && (
