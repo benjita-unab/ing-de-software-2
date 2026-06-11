@@ -1,9 +1,6 @@
-/**
- * DTOs de respuesta del Portal Cliente (HU-27).
- * Vista reducida; no expone datos operativos internos.
- */
+import { bffFetch } from './bffService';
 
-export interface PortalPedidoListItemDto {
+export interface PortalPedidoListItem {
   id: string;
   estado: string | null;
   origen: string | null;
@@ -13,12 +10,12 @@ export interface PortalPedidoListItemDto {
   bultos_despachados: number | null;
 }
 
-export interface PortalPedidoListResponseDto {
-  data: PortalPedidoListItemDto[];
+export interface PortalPedidoListResponse {
+  data: PortalPedidoListItem[];
   total: number;
 }
 
-export interface PortalRutaDetalleDto {
+export interface PortalRutaDetalle {
   id: string;
   estado: string | null;
   origen: string | null;
@@ -28,13 +25,13 @@ export interface PortalRutaDetalleDto {
   bultos_despachados: number | null;
 }
 
-export interface PortalHistorialEstadoDto {
+export interface PortalHistorialEstado {
   id: string;
   estado: string | null;
   created_at: string | null;
 }
 
-export interface PortalEntregaDto {
+export interface PortalEntrega {
   id: string;
   estado: string | null;
   validado: boolean | null;
@@ -44,7 +41,7 @@ export interface PortalEntregaDto {
   created_at: string | null;
 }
 
-export interface PortalGuiaDespachoDto {
+export interface PortalGuiaDespacho {
   id: string;
   numero_guia: string;
   estado_recepcion: string | null;
@@ -53,7 +50,7 @@ export interface PortalGuiaDespachoDto {
   created_at: string | null;
 }
 
-export interface PortalIncidenciaDto {
+export interface PortalIncidencia {
   id: string;
   tipo_incidencia: string | null;
   descripcion: string | null;
@@ -62,7 +59,7 @@ export interface PortalIncidenciaDto {
   created_at: string | null;
 }
 
-export interface PortalMensajeDto {
+export interface PortalMensaje {
   id: string;
   mensaje: string;
   tipo: string | null;
@@ -71,11 +68,29 @@ export interface PortalMensajeDto {
   created_at: string | null;
 }
 
-export interface PortalPedidoDetalleResponseDto {
-  ruta: PortalRutaDetalleDto;
-  historial_estados: PortalHistorialEstadoDto[];
-  entregas: PortalEntregaDto[];
-  guias_despacho: PortalGuiaDespachoDto[];
-  incidencias: PortalIncidenciaDto[];
-  mensajes: PortalMensajeDto[];
+export interface PortalPedidoDetalleResponse {
+  ruta: PortalRutaDetalle;
+  historial_estados: PortalHistorialEstado[];
+  entregas: PortalEntrega[];
+  guias_despacho: PortalGuiaDespacho[];
+  incidencias: PortalIncidencia[];
+  mensajes: PortalMensaje[];
+}
+
+export async function getPortalPedidos(): Promise<PortalPedidoListResponse> {
+  const res = await bffFetch('/api/portal/pedidos');
+  if (!res.ok) {
+    throw new Error('Error al obtener los pedidos');
+  }
+  return res.json();
+}
+
+export async function getPortalPedidoById(
+  pedidoId: string,
+): Promise<PortalPedidoDetalleResponse> {
+  const res = await bffFetch(`/api/portal/pedidos/${encodeURIComponent(pedidoId)}`);
+  if (!res.ok) {
+    throw new Error('Error al obtener detalle del pedido');
+  }
+  return res.json();
 }
