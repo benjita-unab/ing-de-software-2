@@ -49,6 +49,7 @@ export default function Clientes() {
       fetchClientes(search);
     }, 500);
     return () => clearTimeout(delayDebounceFn);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
   useEffect(() => {

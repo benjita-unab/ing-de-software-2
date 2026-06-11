@@ -50,6 +50,10 @@ export class EntregasService {
         destino,
         ficha_despacho_url,
         bultos_despachados,
+        tarifa_base_total,
+        costo_espera_total,
+        total_pagar,
+        tiempo_espera_minutos,
         clientes(id, nombre, contacto_email),
         conductores(rut),
         camiones(patente)
@@ -130,6 +134,10 @@ export class EntregasService {
           bultosRecepcionados: bultos_recepcionados ?? null,
           comentarioDiferenciaBultos: comentario_diferencia_bultos?.trim() || null,
           firmaBuffer,
+          tarifaBaseTotal: ruta.tarifa_base_total,
+          costoEsperaTotal: ruta.costo_espera_total,
+          totalPagar: ruta.total_pagar,
+          tiempoEsperaMinutos: ruta.tiempo_espera_minutos,
         });
         console.log('PDF STEP -> PDF generado, bytes:', pdfBuffer?.length ?? 0);
       } catch (e: any) {
@@ -898,6 +906,10 @@ export class EntregasService {
     bultosRecepcionados?: number | null;
     comentarioDiferenciaBultos?: string | null;
     firmaBuffer?: Buffer | null;
+    tarifaBaseTotal?: number | string | null;
+    costoEsperaTotal?: number | string | null;
+    totalPagar?: number | string | null;
+    tiempoEsperaMinutos?: number | string | null;
   }): Promise<Buffer> {
     console.log(
       'PDF generateDeliveryPDF -> firmaBuffer bytes:',
@@ -975,6 +987,22 @@ export class EntregasService {
             ? String(data.bultosRecepcionados)
             : 'No registrado',
         ],
+      );
+
+      if (data.tiempoEsperaMinutos != null) {
+        filas.push(['Tiempo de espera', `${data.tiempoEsperaMinutos} minutos`]);
+      }
+      if (data.tarifaBaseTotal != null) {
+        filas.push(['Tarifa base total', `$${data.tarifaBaseTotal} CLP`]);
+      }
+      if (data.costoEsperaTotal != null) {
+        filas.push(['Costo de espera', `$${data.costoEsperaTotal} CLP`]);
+      }
+      if (data.totalPagar != null) {
+        filas.push(['Total a pagar', `$${data.totalPagar} CLP`]);
+      }
+
+      filas.push(
         [
           'Observaciones',
           data.comentarioDiferenciaBultos?.trim() || 'Sin observaciones',

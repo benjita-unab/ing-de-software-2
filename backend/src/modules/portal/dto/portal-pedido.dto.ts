@@ -11,6 +11,9 @@ export interface PortalPedidoListItemDto {
   fecha_estimada_entrega: string | null;
   distancia_km: number | null;
   bultos_despachados: number | null;
+  tarifa_base_total?: number | null;
+  costo_espera_total?: number | null;
+  total_pagar?: number | null;
 }
 
 export interface PortalPedidoListResponseDto {
@@ -26,6 +29,9 @@ export interface PortalRutaDetalleDto {
   fecha_estimada_entrega: string | null;
   distancia_km: number | null;
   bultos_despachados: number | null;
+  tarifa_base_total?: number | null;
+  costo_espera_total?: number | null;
+  total_pagar?: number | null;
 }
 
 export interface PortalHistorialEstadoDto {

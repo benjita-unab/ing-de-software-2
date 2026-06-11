@@ -14,6 +14,7 @@ import GuiasDespacho from "./GuiasDespacho";
 import Clientes from "./Clientes";
 import HistorialDespachos from "./HistorialDespachos";
 import ModulePage from "./ui/ModulePage";
+import FormularioOperadorSimplificado from "./FormularioOperadorSimplificado";
 import PageHeader from "./ui/PageHeader";
 import { useAlerts } from "../hooks/useAlerts";
 import { useMensajesConductor } from "../hooks/useMensajesConductor";
@@ -172,6 +173,11 @@ export default function OperatorDashboard({ operator, onSignOut }) {
               {activeSection === "rutas" && (
                 <ModulePage title="Rutas" subtitle="Gestión y seguimiento de rutas operativas">
                   <RutasActivas />
+                </ModulePage>
+              )}
+              {activeSection === "panol" && (
+                <ModulePage title="Sistema Pañol" subtitle="Categorización y control de carga por bloques simplificados">
+                  <FormularioOperadorSimplificado />
                 </ModulePage>
               )}
               {activeSection === "asignacion" && (

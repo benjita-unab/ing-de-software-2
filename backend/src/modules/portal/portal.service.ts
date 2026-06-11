@@ -4,7 +4,7 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import { RutasService } from '../rutas/rutas.service';
+import { RutasService, CreateRutaDto } from '../rutas/rutas.service';
 import { SupabaseConfigService } from '../../config/supabase.config';
 import type {
   PortalEntregaDto,
@@ -35,7 +35,7 @@ export class PortalService {
     const { data: rutas, error } = await supabase
       .from('rutas')
       .select(
-        'id, estado, origen, destino, fecha_estimada_entrega, distancia_km, bultos_despachados',
+        'id, estado, origen, destino, fecha_estimada_entrega, distancia_km, bultos_despachados, tarifa_base_total, costo_espera_total, total_pagar',
       )
       .eq('cliente_id', clienteId)
       .order('created_at', { ascending: false });
@@ -80,6 +80,9 @@ export class PortalService {
         fecha_estimada_entrega,
         distancia_km,
         bultos_despachados,
+        tarifa_base_total,
+        costo_espera_total,
+        total_pagar,
         cliente_id,
         historial_estados (
           id,
@@ -208,6 +211,9 @@ export class PortalService {
       distancia_km: row.distancia_km != null ? Number(row.distancia_km) : null,
       bultos_despachados:
         row.bultos_despachados != null ? Number(row.bultos_despachados) : null,
+      tarifa_base_total: row.tarifa_base_total != null ? Number(row.tarifa_base_total) : null,
+      costo_espera_total: row.costo_espera_total != null ? Number(row.costo_espera_total) : null,
+      total_pagar: row.total_pagar != null ? Number(row.total_pagar) : null,
     };
   }
 
@@ -248,5 +254,14 @@ export class PortalService {
       observaciones: (row.observaciones as string) ?? null,
       created_at: (row.created_at as string) ?? null,
     };
+  }
+
+  async createPedido(clienteId: string, body: Omit<CreateRutaDto, 'cliente_id'>) {
+    this.assertClienteId(clienteId);
+    return this.rutasService.createRoute({
+      ...body,
+      cliente_id: clienteId,
+      estado: 'PENDIENTE',
+    });
   }
 }

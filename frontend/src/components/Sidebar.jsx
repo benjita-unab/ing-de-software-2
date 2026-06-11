@@ -21,6 +21,7 @@ const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "alertas", label: "Alertas", icon: Bell, badgeKey: "urgent" },
   { id: "rutas", label: "Rutas", icon: Route },
+  { id: "panol", label: "Sistema Pañol", icon: Package },
   { id: "asignacion", label: "Asignar", icon: UserCheck },
   { id: "camiones", label: "Flota", icon: Truck },
   { id: "clientes", label: "Clientes", icon: Users },

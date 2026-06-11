@@ -763,6 +763,7 @@ export default function RutasActivas() {
                   <th>Destino</th>
                   <th>Cliente</th>
                   <th>Estado</th>
+                  <th>Pago (CLP)</th>
                   <th>Conductor / Camión</th>
                   <th>ETA</th>
                   <th>Fechas estimadas</th>
@@ -780,6 +781,17 @@ export default function RutasActivas() {
                       <Badge variant={estadoBadgeVariant(ruta.estado)}>
                         {estadoLabel(ruta.estado)}
                       </Badge>
+                    </td>
+                    <td>
+                      {ruta.tarifa_base_total != null ? (
+                        <div style={{ fontSize: "12px", lineHeight: "1.4" }}>
+                          <div>Base: <strong>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(Number(ruta.tarifa_base_total))}</strong></div>
+                          <div>Espera: <span style={{ color: Number(ruta.costo_espera_total) > 0 ? "#ef4444" : "inherit" }}>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(Number(ruta.costo_espera_total || 0))}</span></div>
+                          <div style={{ borderTop: "1px dashed rgba(255,255,255,0.15)", marginTop: 4, paddingTop: 4 }}>Total: <strong>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(Number(ruta.total_pagar || ruta.tarifa_base_total))}</strong></div>
+                        </div>
+                      ) : (
+                        <span className="lt-list-item__sub" style={{ opacity: 0.6 }}>No calculado</span>
+                      )}
                     </td>
                     <td>
                       <div>{ruta.conductores?.rut || "—"}</div>

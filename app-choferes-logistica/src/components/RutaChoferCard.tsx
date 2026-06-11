@@ -72,6 +72,18 @@ export function RutaChoferCard({
   if (distancia) metaParts.push(`Distancia: ${distancia}`);
   if (fechaEntrega) metaParts.push(`Entrega estimada: ${fechaEntrega}`);
 
+  if (ruta.tarifa_base_total != null && Number(ruta.tarifa_base_total) > 0) {
+    const formattedBase = new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(Number(ruta.tarifa_base_total));
+    const formattedEspera = new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(Number(ruta.costo_espera_total || 0));
+    const formattedTotal = new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(Number(ruta.total_pagar || ruta.tarifa_base_total));
+    
+    metaParts.push(`Tarifa Base: ${formattedBase}`);
+    if (Number(ruta.costo_espera_total) > 0) {
+      metaParts.push(`Costo Espera: ${formattedEspera}`);
+    }
+    metaParts.push(`Total a Pagar: ${formattedTotal}`);
+  }
+
   return (
     <Pressable
       onPress={onPress}

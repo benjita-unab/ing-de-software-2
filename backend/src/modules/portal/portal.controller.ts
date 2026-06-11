@@ -4,6 +4,8 @@ import {
   Get,
   Param,
   UseGuards,
+  Post,
+  Body,
 } from '@nestjs/common';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/user.decorator';
@@ -15,6 +17,7 @@ import type {
   PortalPedidoListResponseDto,
 } from './dto/portal-pedido.dto';
 import { PortalService } from './portal.service';
+import { CreateRutaDto } from '../rutas/rutas.service';
 
 @Controller('api/portal')
 @UseGuards(JwtGuard, RolesGuard)
@@ -58,6 +61,19 @@ export class PortalController {
   ): Promise<PortalPedidoDetalleResponseDto> {
     const clienteId = this.requireClienteId(user);
     return this.portalService.getPedidoById(id, clienteId);
+  }
+
+  /**
+   * POST /api/portal/pedidos
+   * Crea un nuevo pedido para el cliente autenticado.
+   */
+  @Post('pedidos')
+  async createPedido(
+    @Body() body: Omit<CreateRutaDto, 'cliente_id'>,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const clienteId = this.requireClienteId(user);
+    return this.portalService.createPedido(clienteId, body);
   }
 
   private requireClienteId(user: AuthenticatedUser): string {

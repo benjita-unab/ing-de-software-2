@@ -11,6 +11,13 @@ import { EmailService } from '../email/email.service';
 import { calcularDistanciaVialGoogle } from './google-routes-distance.helper';
 import { CreateAnomaliaDto } from './dto/create-anomalia.dto';
 
+export type BultoInputDto = {
+  alto_cm: number;
+  ancho_cm: number;
+  largo_cm: number;
+  peso_kg: number;
+};
+
 /** Cuerpo esperado por POST /api/rutas (validación en createRoute). */
 export type CreateRutaDto = {
   cliente_id: string;
@@ -26,6 +33,11 @@ export type CreateRutaDto = {
   fecha_estimada_fin?: string | null;
   fecha_estimada_entrega?: string | null;
   bultos_despachados?: number | string | null;
+  bultos_detalle?: BultoInputDto[];
+  costo_tac_peajes_clp?: number | string | null;
+  pago_conductor_base_clp?: number | string | null;
+  is_tarifa_manual?: boolean | null;
+  tarifa_base_total?: number | string | null;
 };
 
 /** POST /api/rutas/estimar-fechas (HU-24). */
@@ -258,6 +270,24 @@ export class RutasService {
       throw new BadRequestException('destino es obligatorio');
     }
 
+    // Validar capacidad física permitida
+    if (body.bultos_detalle && Array.isArray(body.bultos_detalle)) {
+      let volumenAcumulado = 0;
+      for (const b of body.bultos_detalle) {
+        const alto = Number(b.alto_cm || 0);
+        const ancho = Number(b.ancho_cm || 0);
+        const largo = Number(b.largo_cm || 0);
+        const volumen = alto * ancho * largo;
+        if (largo > 500 || ancho > 200 || alto > 250 || volumen > 25000000) {
+          throw new BadRequestException('Excede capacidad física permitida');
+        }
+        volumenAcumulado += volumen;
+      }
+      if (volumenAcumulado > 25000000) {
+        throw new BadRequestException('Capacidad de volumen excedida para este envío. Requiere coordinar un camión adicional');
+      }
+    }
+
     const conductorRaw = body?.conductor_id;
     const camionRaw = body?.camion_id;
     const conductor_id =
@@ -330,6 +360,19 @@ export class RutasService {
       insert.distancia_km = distanciaKm;
     }
 
+    if (body.costo_tac_peajes_clp != null && String(body.costo_tac_peajes_clp).trim() !== '') {
+      insert.costo_tac_peajes_clp = Number(body.costo_tac_peajes_clp);
+    }
+    if (body.pago_conductor_base_clp != null && String(body.pago_conductor_base_clp).trim() !== '') {
+      insert.pago_conductor_base_clp = Number(body.pago_conductor_base_clp);
+    }
+    if (body.is_tarifa_manual != null) {
+      insert.is_tarifa_manual = Boolean(body.is_tarifa_manual);
+    }
+    if (body.tarifa_base_total != null && String(body.tarifa_base_total).trim() !== '') {
+      insert.tarifa_base_total = Number(body.tarifa_base_total);
+    }
+
     const feInicio = this.parseDateOnly(body.fecha_estimada_inicio);
     const feFin = this.parseDateOnly(body.fecha_estimada_fin);
     const feEntrega = this.parseDateOnly(body.fecha_estimada_entrega);
@@ -377,6 +420,13 @@ export class RutasService {
         fecha_estimada_inicio,
         fecha_estimada_fin,
         fecha_estimada_entrega,
+        tarifa_base_total,
+        costo_espera_total,
+        total_pagar,
+        costo_tac_peajes_clp,
+        pago_conductor_base_clp,
+        costo_combustible_calculado,
+        is_tarifa_manual,
         created_at,
         ficha_despacho_url,
         clientes(id, nombre),
@@ -396,6 +446,32 @@ export class RutasService {
       throw new BadRequestException(
         `No se pudo crear la ruta: ${error.message}${error.hint ? ` (${error.hint})` : ''}`,
       );
+    }
+
+    // Insertar bultos si existen
+    if (body.bultos_detalle && Array.isArray(body.bultos_detalle) && body.bultos_detalle.length > 0) {
+      const inserts = body.bultos_detalle.map(b => ({
+        ruta_id: created.id,
+        alto_cm: Number(b.alto_cm),
+        ancho_cm: Number(b.ancho_cm),
+        largo_cm: Number(b.largo_cm),
+        peso_kg: Number(b.peso_kg),
+        categoria: null as string | null,
+        tarifa_calculada_clp: 0
+      }));
+
+      const { error: bultosError } = await supabase
+        .from('bultos')
+        .insert(inserts);
+
+      if (bultosError) {
+        console.error('Error al insertar bultos:', bultosError);
+        throw new BadRequestException(`Error al registrar el detalle de bultos: ${bultosError.message}`);
+      }
+    }
+
+    if (estadoInicial === 'ASIGNADO') {
+      await this.calcularYBloquearTarifaRuta(supabase, created.id);
     }
 
     try {
@@ -595,6 +671,8 @@ export class RutasService {
         created_at: new Date().toISOString(),
       },
     ]);
+
+    await this.calcularYBloquearTarifaRuta(supabase, rutaId);
 
     return {
       success: true,
@@ -809,6 +887,10 @@ export class RutasService {
       throw new BadRequestException(`Error al actualizar ruta: ${error.message}`);
     }
 
+    if (nuevoEstado === 'ASIGNADO') {
+      await this.calcularYBloquearTarifaRuta(supabase, rutaId);
+    }
+
     // Si el despacho se marca ENTREGADO desde la web sin pasar por closeDelivery,
     // reflejar fecha de entrega en `entregas` cuando exista la fila (best effort).
     if (nuevoEstado === 'ENTREGADO') {
@@ -843,7 +925,7 @@ export class RutasService {
 
     const { data: ruta, error: fetchError } = await supabase
       .from('rutas')
-      .select('hora_llegada_destino, hora_inspeccion_aprobada')
+      .select('hora_llegada_destino, hora_inspeccion_aprobada, tarifa_base_total')
       .eq('id', rutaId)
       .single();
 
@@ -867,6 +949,20 @@ export class RutasService {
       const msDifference = new Date(aprobacion).getTime() - new Date(llegada).getTime();
       const mins = Math.max(0, Math.floor(msDifference / 60000));
       patch.tiempo_espera_minutos = mins;
+
+      let costoEspera = 0;
+      if (mins > 60) {
+        patch.estado = 'CANCELADO';
+        costoEspera = 0;
+      } else if (mins > 30) {
+        costoEspera = 20000;
+      } else if (mins > 15) {
+        costoEspera = (mins - 15) * 300;
+      }
+
+      patch.costo_espera_total = costoEspera;
+      const baseTotal = Number(ruta.tarifa_base_total || 0);
+      patch.total_pagar = baseTotal + costoEspera;
     }
 
     const { data, error } = await supabase
@@ -877,6 +973,20 @@ export class RutasService {
 
     if (error) {
       throw new BadRequestException(`Error al actualizar tiempos: ${error.message}`);
+    }
+
+    if (patch.estado === 'CANCELADO') {
+      try {
+        await supabase.from('historial_estados').insert([
+          {
+            ruta_id: rutaId,
+            estado: 'CANCELADO',
+            created_at: new Date().toISOString(),
+          },
+        ]);
+      } catch (histErr: any) {
+        console.warn('updateTiemposInspeccion: error guardando historial cancelado:', histErr.message);
+      }
     }
 
     return { message: 'Tiempos actualizados correctamente', ruta: data[0] };
@@ -915,6 +1025,13 @@ export class RutasService {
       notificacion_fecha_estimada_enviada_at,
       notificacion_fecha_estimada_destinatario,
       bultos_despachados,
+      tarifa_base_total,
+      costo_espera_total,
+      total_pagar,
+      costo_tac_peajes_clp,
+      pago_conductor_base_clp,
+      costo_combustible_calculado,
+      is_tarifa_manual,
       clientes(id, nombre, contacto_email),
       conductores(id, rut),
       camiones(id, patente)
@@ -1418,5 +1535,79 @@ export class RutasService {
       rutaId: ruta.id,
       resendId,
     };
+  }
+
+  async calcularYBloquearTarifaRuta(supabase: any, rutaId: string) {
+    console.log('calcularYBloquearTarifaRuta -> rutaId:', rutaId);
+    try {
+      const { data: ruta, error: rErr } = await supabase
+        .from('rutas')
+        .select('id, distancia_km, tarifa_base_total, costo_espera_total')
+        .eq('id', rutaId)
+        .single();
+
+      if (rErr || !ruta) {
+        console.warn('calcularYBloquearTarifaRuta: no se pudo cargar la ruta', rErr);
+        return;
+      }
+
+      const { data: bultos, error: bErr } = await supabase
+        .from('bultos')
+        .select('*')
+        .eq('ruta_id', rutaId);
+
+      if (bErr || !bultos || bultos.length === 0) {
+        console.log('calcularYBloquearTarifaRuta: no hay bultos registrados para esta ruta');
+        return;
+      }
+
+      const dist = Number(ruta.distancia_km || 0);
+      let baseTotal = 0;
+
+      // Obtener matriz de tarifas de la base de datos
+      const { data: matriz, error: mErr } = await supabase
+        .from('tarifas_matriz')
+        .select('*');
+
+      if (mErr || !matriz) {
+        console.warn('calcularYBloquearTarifaRuta: no se pudo cargar la matriz de tarifas', mErr);
+        return;
+      }
+
+      // Buscar tarifa en la matriz
+      const getTarifa = (categoria: string, km: number): number => {
+        const queryKm = Math.min(3500, Math.max(0, km));
+        const matching = matriz.find((t: any) => 
+          queryKm >= t.tramo_min_km && 
+          queryKm <= t.tramo_max_km && 
+          t.categoria.toUpperCase() === categoria.toUpperCase()
+        );
+        return matching ? Number(matching.tarifa_clp) : 0;
+      };
+
+      for (const b of bultos) {
+        const cat = b.categoria || 'XS';
+        const tarifa = getTarifa(cat, dist);
+        baseTotal += tarifa;
+
+        await supabase
+          .from('bultos')
+          .update({ tarifa_calculada_clp: tarifa })
+          .eq('id', b.id);
+      }
+
+      const costoEspera = Number(ruta.costo_espera_total || 0);
+      await supabase
+        .from('rutas')
+        .update({
+          tarifa_base_total: baseTotal,
+          total_pagar: baseTotal + costoEspera
+        })
+        .eq('id', rutaId);
+
+      console.log('calcularYBloquearTarifaRuta -> Terminado. Tarifa base total:', baseTotal);
+    } catch (e: any) {
+      console.error('Error en calcularYBloquearTarifaRuta:', e);
+    }
   }
 }

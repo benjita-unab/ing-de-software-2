@@ -16,3 +16,11 @@ export async function getPortalPedidoEvidencias(pedidoId) {
     `/api/portal/pedidos/${encodeURIComponent(pedidoId)}/evidencias`,
   );
 }
+
+export async function createPortalPedido(data) {
+  return apiFetch("/api/portal/pedidos", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}

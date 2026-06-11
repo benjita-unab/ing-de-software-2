@@ -11,6 +11,9 @@ export type RutaListItem = {
     | { id?: string; nombre?: string | null }
     | { id?: string; nombre?: string | null }[]
     | null;
+  tarifa_base_total?: number | string | null;
+  costo_espera_total?: number | string | null;
+  total_pagar?: number | string | null;
 };
 
 export function getClienteNombre(ruta: RutaListItem): string | null {
