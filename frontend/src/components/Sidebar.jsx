@@ -24,7 +24,7 @@ const NAV_ITEMS = [
   { id: "clientes", label: "Clientes", icon: Users },
   { id: "rrhh", label: "RRHH", icon: UserCog },
   { id: "mensajes", label: "Mensajes", icon: MessageSquare },
-  { id: "despachos", label: "Guías", icon: Package },
+  { id: "despachos", label: "Rutas Activas", icon: Package },
   { id: "historial", label: "Historial", icon: History },
 ];
 
