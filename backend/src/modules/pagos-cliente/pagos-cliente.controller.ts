@@ -16,46 +16,24 @@ import { UpdateEstadoPagoDto } from './dto/update-estado-pago.dto';
 import { PagosClienteService } from './pagos-cliente.service';
 
 /**
- * HU-34 — Módulo de consulta y gestión de pagos cliente.
+ * HU-34 — Consulta y gestión de estado de pagos cliente.
  *
- * IMPORTANTE: los pagos NO se originan desde este controlador.
- * La creación de pagos (PagosClienteService.crearPago) se invocará desde
- * el flujo de pedido/ruta o portal cliente cuando exista integración Transbank.
- * Este módulo expone listado, detalle y cambio de estado para operador/admin.
+ * Los pagos NO se crean desde este controlador.
+ * Origen: creación del pedido (PedidosModule) → PagosClienteService.crearPagoParaPedido()
  */
 @Controller('api/pagos-cliente')
 @UseGuards(JwtGuard, RolesGuard)
 export class PagosClienteController {
   constructor(private readonly pagosClienteService: PagosClienteService) {}
 
-  /**
-   * GET /api/pagos-cliente
-   * Lista todos los pagos con cliente, rutas y montos (admin / operador).
-   */
+  /** GET /api/pagos-cliente — listado global (admin / operador). */
   @Get()
   @Roles('ADMIN', 'OPERADOR')
   listAll() {
     return this.pagosClienteService.listAll();
   }
 
-  /**
-   * GET /api/pagos-cliente/:clienteId/pendientes
-   * Rutas completadas sin pago (uso futuro: checkout al crear pedido).
-   */
-  @Get(':clienteId/pendientes')
-  @Roles('ADMIN', 'OPERADOR', 'CLIENTE')
-  listPendientes(
-    @Param('clienteId') clienteId: string,
-    @CurrentUser() user: AuthenticatedUser,
-  ) {
-    this.pagosClienteService.assertClienteAccess(user, clienteId);
-    return this.pagosClienteService.listPendientes(clienteId);
-  }
-
-  /**
-   * GET /api/pagos-cliente/:clienteId
-   * Pagos de un cliente específico.
-   */
+  /** GET /api/pagos-cliente/:clienteId — pagos del cliente (portal / operador). */
   @Get(':clienteId')
   @Roles('ADMIN', 'OPERADOR', 'CLIENTE')
   listByCliente(
@@ -68,7 +46,7 @@ export class PagosClienteController {
 
   /**
    * PATCH /api/pagos-cliente/:id/estado
-   * Cambio manual de estado (pruebas / contingencias): PENDIENTE | PROCESANDO | PAGADO.
+   * Cambio manual PENDIENTE | PROCESANDO | PAGADO (pruebas / contingencias).
    */
   @Patch(':id/estado')
   @Roles('ADMIN', 'OPERADOR')

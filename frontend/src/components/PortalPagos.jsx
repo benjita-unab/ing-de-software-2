@@ -1,12 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { getPagosCliente } from "../lib/pagosClienteService";
+import {
+  ESTADO_PAGADO,
+  ESTADO_PENDIENTE,
+  ESTADO_PROCESANDO,
+  formatMontoPago,
+  normalizarEstadoPago,
+  etiquetaMetodo,
+  etiquetaPedido,
+} from "../lib/pagosClienteUtils";
 
 const TAB_PENDIENTE = "PENDIENTE";
 const TAB_PAGADO = "PAGADO";
-
-const ESTADO_PENDIENTE = "PENDIENTE";
-const ESTADO_PROCESANDO = "PROCESANDO";
-const ESTADO_PAGADO = "PAGADO";
 
 const styles = {
   badge: (estado) => {
@@ -33,11 +38,7 @@ const styles = {
     border: "1px solid rgba(255,255,255,0.12)",
     marginBottom: "16px",
   },
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
-    fontSize: "14px",
-  },
+  table: { width: "100%", borderCollapse: "collapse", fontSize: "14px" },
   th: {
     textAlign: "left",
     padding: "12px 14px",
@@ -53,9 +54,7 @@ const styles = {
     borderBottom: "1px solid rgba(255,255,255,0.08)",
     verticalAlign: "middle",
   },
-  rowActive: {
-    background: "rgba(14,165,233,0.1)",
-  },
+  rowActive: { background: "rgba(14,165,233,0.1)" },
   btnPagar: {
     padding: "8px 14px",
     borderRadius: "8px",
@@ -77,18 +76,12 @@ const styles = {
     marginBottom: "20px",
   },
   detail: {
-    marginTop: "0",
     padding: "20px",
     borderRadius: "12px",
     border: "1px solid rgba(255,255,255,0.12)",
     background: "rgba(8,12,24,0.9)",
   },
-  tabs: {
-    display: "flex",
-    gap: "8px",
-    marginBottom: "16px",
-    flexWrap: "wrap",
-  },
+  tabs: { display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" },
   tab: (active) => ({
     display: "inline-flex",
     alignItems: "center",
@@ -119,29 +112,6 @@ const styles = {
   },
 };
 
-function formatMoney(value) {
-  const n = Number(value);
-  const safe = Number.isFinite(n) ? n : 0;
-  return new Intl.NumberFormat("es-CL", {
-    style: "currency",
-    currency: "CLP",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(safe);
-}
-
-function normalizarEstadoPago(estado) {
-  const upper = String(estado || "").trim().toUpperCase();
-  if (upper === ESTADO_PAGADO) return ESTADO_PAGADO;
-  if (upper === ESTADO_PROCESANDO) return ESTADO_PROCESANDO;
-  return ESTADO_PENDIENTE;
-}
-
-function etiquetaMetodo(metodo) {
-  const m = String(metodo || "").trim();
-  return m || "—";
-}
-
 function formatDate(value) {
   if (!value) return "—";
   try {
@@ -151,18 +121,32 @@ function formatDate(value) {
   }
 }
 
+function formatKpi(value) {
+  const n = Number(value);
+  const safe = Number.isFinite(n) ? n : 0;
+  return new Intl.NumberFormat("es-CL", {
+    style: "currency",
+    currency: "CLP",
+    maximumFractionDigits: 0,
+  }).format(safe);
+}
+
 function puedeIntentarPagoOnline(estado) {
   const e = normalizarEstadoPago(estado);
   return e === ESTADO_PENDIENTE || e === ESTADO_PROCESANDO;
 }
 
 /**
- * Portal cliente — consulta de pagos.
- * El botón Pagar se habilitará con integración Transbank desde pedido/ruta.
+ * Portal cliente — historial de pagos asociados a pedidos.
+ * Botón Pagar: placeholder Transbank (HU futura).
  */
 export default function PortalPagos({ clienteId }) {
   const [pagos, setPagos] = useState([]);
-  const [totales, setTotales] = useState({ totalPendiente: 0, totalPagado: 0 });
+  const [totales, setTotales] = useState({
+    totalPendiente: 0,
+    totalPagado: 0,
+    pagosSinMontoCalculado: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState(TAB_PENDIENTE);
@@ -185,6 +169,7 @@ export default function PortalPagos({ clienteId }) {
       setTotales({
         totalPendiente: res.data?.totalPendiente ?? 0,
         totalPagado: res.data?.totalPagado ?? 0,
+        pagosSinMontoCalculado: res.data?.pagosSinMontoCalculado ?? 0,
       });
     }
     setLoading(false);
@@ -199,11 +184,8 @@ export default function PortalPagos({ clienteId }) {
     const g = [];
     for (const item of pagos) {
       const e = normalizarEstadoPago(item.estado);
-      if (e === ESTADO_PAGADO) {
-        g.push(item);
-      } else if (e === ESTADO_PENDIENTE || e === ESTADO_PROCESANDO) {
-        p.push(item);
-      }
+      if (e === ESTADO_PAGADO) g.push(item);
+      else if (e === ESTADO_PENDIENTE || e === ESTADO_PROCESANDO) p.push(item);
     }
     return { pendientes: p, pagados: g };
   }, [pagos]);
@@ -221,16 +203,22 @@ export default function PortalPagos({ clienteId }) {
         <div style={styles.kpi}>
           <div style={{ fontSize: "12px", opacity: 0.7 }}>Pendiente / procesando</div>
           <div style={{ fontSize: "20px", fontWeight: 700 }}>
-            {formatMoney(totales.totalPendiente)}
+            {formatKpi(totales.totalPendiente)}
           </div>
         </div>
         <div style={styles.kpi}>
           <div style={{ fontSize: "12px", opacity: 0.7 }}>Pagado</div>
           <div style={{ fontSize: "20px", fontWeight: 700 }}>
-            {formatMoney(totales.totalPagado)}
+            {formatKpi(totales.totalPagado)}
           </div>
         </div>
       </div>
+
+      {totales.pagosSinMontoCalculado > 0 ? (
+        <p style={{ opacity: 0.75, fontSize: "13px", marginBottom: "12px" }}>
+          {totales.pagosSinMontoCalculado} pago(s) con monto pendiente de cálculo.
+        </p>
+      ) : null}
 
       {error ? (
         <p style={{ color: "#f87171", marginBottom: "16px" }} role="alert">
@@ -246,7 +234,7 @@ export default function PortalPagos({ clienteId }) {
         </div>
       ) : (
         <>
-          <div style={styles.tabs} role="tablist" aria-label="Pagos por estado">
+          <div style={styles.tabs} role="tablist" aria-label="Historial de pagos">
             <button
               type="button"
               role="tab"
@@ -273,13 +261,7 @@ export default function PortalPagos({ clienteId }) {
             </button>
           </div>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "16px",
-            }}
-          >
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
             <div role="tabpanel">
               {visibles.length === 0 ? (
                 <p style={{ opacity: 0.7 }}>
@@ -295,6 +277,7 @@ export default function PortalPagos({ clienteId }) {
                         <th style={styles.th}>Monto</th>
                         <th style={styles.th}>Estado</th>
                         <th style={styles.th}>Método</th>
+                        <th style={styles.th}>Pedido</th>
                         <th style={styles.th}>Fecha</th>
                         <th style={styles.th}>Acción</th>
                       </tr>
@@ -309,13 +292,14 @@ export default function PortalPagos({ clienteId }) {
                           }}
                           onClick={() => setSelectedId(p.id)}
                         >
-                          <td style={styles.td}>{formatMoney(p.montoTotal)}</td>
+                          <td style={styles.td}>{formatMontoPago(p)}</td>
                           <td style={styles.td}>
                             <span style={styles.badge(p.estado)}>
                               {normalizarEstadoPago(p.estado)}
                             </span>
                           </td>
                           <td style={styles.td}>{etiquetaMetodo(p.metodoPago)}</td>
+                          <td style={styles.td}>{etiquetaPedido(p.pedidoId)}</td>
                           <td style={styles.td}>{formatDate(p.fechaCreacion)}</td>
                           <td style={styles.td}>
                             <button
@@ -348,10 +332,16 @@ export default function PortalPagos({ clienteId }) {
                     </span>
                   </p>
                   <p>
-                    <strong>Monto:</strong> {formatMoney(selected.montoTotal)}
+                    <strong>Monto:</strong> {formatMontoPago(selected)}
+                  </p>
+                  <p>
+                    <strong>Pedido:</strong> {etiquetaPedido(selected.pedidoId)}
                   </p>
                   <p>
                     <strong>Método:</strong> {etiquetaMetodo(selected.metodoPago)}
+                  </p>
+                  <p>
+                    <strong>Proveedor:</strong> {etiquetaMetodo(selected.proveedorPago)}
                   </p>
                   <p>
                     <strong>Fecha creación:</strong> {formatDate(selected.fechaCreacion)}
@@ -375,28 +365,6 @@ export default function PortalPagos({ clienteId }) {
                       </p>
                     </div>
                   ) : null}
-
-                  <h3 style={{ fontSize: "15px", marginTop: "20px" }}>Rutas asociadas</h3>
-                  {(selected.rutas || []).length === 0 ? (
-                    <p style={{ opacity: 0.7, fontSize: "14px" }}>Sin rutas.</p>
-                  ) : (
-                    selected.rutas.map((r) => (
-                      <div
-                        key={r.id}
-                        style={{
-                          fontSize: "14px",
-                          marginBottom: "8px",
-                          padding: "8px 0",
-                          borderBottom: "1px solid rgba(255,255,255,0.08)",
-                        }}
-                      >
-                        {r.origen || "—"} → {r.destino || "—"}
-                        <div style={{ opacity: 0.75 }}>
-                          {formatMoney(r.montoRuta)} · {formatDate(r.fechaFin)}
-                        </div>
-                      </div>
-                    ))
-                  )}
                 </>
               )}
             </div>

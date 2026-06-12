@@ -1,55 +1,32 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { DollarSign, RefreshCw, Search } from "lucide-react";
 import { actualizarEstado, getPagos } from "../lib/pagosClienteService";
+import {
+  ESTADO_PAGADO,
+  ESTADO_PENDIENTE,
+  ESTADO_PROCESANDO,
+  estadoBadgeVariant,
+  etiquetaMetodo,
+  etiquetaPedido,
+  formatMontoPago,
+  normalizarEstadoPago,
+} from "../lib/pagosClienteUtils";
 import Badge from "./ui/Badge";
 import Card from "./ui/Card";
 import EmptyState from "./ui/EmptyState";
 import Spinner from "./ui/Spinner";
 
 const FILTRO_TODOS = "todos";
-const ESTADO_PENDIENTE = "PENDIENTE";
-const ESTADO_PROCESANDO = "PROCESANDO";
-const ESTADO_PAGADO = "PAGADO";
 
 /**
- * Vista operador HU-34: solo consulta y cambio de estado manual.
- * Los pagos se originan desde pedido/ruta o checkout portal (Transbank), no desde aquí.
+ * Vista operador HU-34: consulta y cambio de estado.
+ * Pagos asociados a pedidos — sin creación manual ni dependencia de rutas.
  */
-function formatMoney(value) {
-  const n = Number(value);
-  const safe = Number.isFinite(n) ? n : 0;
-  return new Intl.NumberFormat("es-CL", {
-    style: "currency",
-    currency: "CLP",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(safe);
-}
-
 function formatDate(value) {
   if (!value) return "—";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "—";
   return d.toLocaleString("es-CL");
-}
-
-function normalizarEstadoPago(estado) {
-  const upper = String(estado || "").trim().toUpperCase();
-  if (upper === ESTADO_PAGADO) return ESTADO_PAGADO;
-  if (upper === ESTADO_PROCESANDO) return ESTADO_PROCESANDO;
-  return ESTADO_PENDIENTE;
-}
-
-function estadoBadgeVariant(estado) {
-  const e = normalizarEstadoPago(estado);
-  if (e === ESTADO_PAGADO) return "success";
-  if (e === ESTADO_PROCESANDO) return "info";
-  return "warning";
-}
-
-function etiquetaMetodo(metodo) {
-  const m = String(metodo || "").trim();
-  return m || "—";
 }
 
 function DetallePagoModal({ pago, onClose, onCambiarEstado, updating }) {
@@ -90,12 +67,16 @@ function DetallePagoModal({ pago, onClose, onCambiarEstado, updating }) {
         <div className="lt-modal-body">
           <div className="lt-info-row" style={{ marginBottom: "16px" }}>
             <div>
-              <div className="lt-info-row__label">Monto total</div>
-              <div className="lt-info-row__value">{formatMoney(pago.montoTotal)}</div>
+              <div className="lt-info-row__label">Monto</div>
+              <div className="lt-info-row__value">{formatMontoPago(pago)}</div>
             </div>
             <div>
               <div className="lt-info-row__label">Estado</div>
               <Badge variant={estadoBadgeVariant(estado)}>{estado}</Badge>
+            </div>
+            <div>
+              <div className="lt-info-row__label">Pedido</div>
+              <div className="lt-info-row__value">{etiquetaPedido(pago.pedidoId)}</div>
             </div>
             <div>
               <div className="lt-info-row__label">Fecha pago</div>
@@ -105,6 +86,10 @@ function DetallePagoModal({ pago, onClose, onCambiarEstado, updating }) {
               <div className="lt-info-row__label">Método</div>
               <div className="lt-info-row__value">{etiquetaMetodo(pago.metodoPago)}</div>
             </div>
+            <div>
+              <div className="lt-info-row__label">Proveedor</div>
+              <div className="lt-info-row__value">{etiquetaMetodo(pago.proveedorPago)}</div>
+            </div>
             {pago.referenciaTransaccion ? (
               <div>
                 <div className="lt-info-row__label">Ref. transacción</div>
@@ -113,45 +98,9 @@ function DetallePagoModal({ pago, onClose, onCambiarEstado, updating }) {
             ) : null}
           </div>
 
-          <h3 className="lt-section-title">Rutas incluidas</h3>
-          <div className="lt-table-wrap">
-            <table className="lt-table">
-              <thead>
-                <tr>
-                  <th>Origen → Destino</th>
-                  <th>Estado</th>
-                  <th>Fecha fin</th>
-                  <th>Monto</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(pago.rutas || []).length === 0 ? (
-                  <tr>
-                    <td colSpan={4} style={{ textAlign: "center", opacity: 0.7 }}>
-                      Sin rutas asociadas
-                    </td>
-                  </tr>
-                ) : (
-                  pago.rutas.map((r) => (
-                    <tr key={r.id}>
-                      <td>
-                        {r.origen || "—"} → {r.destino || "—"}
-                      </td>
-                      <td>
-                        <Badge variant="muted">{r.estado}</Badge>
-                      </td>
-                      <td>{formatDate(r.fechaFin)}</td>
-                      <td>{formatMoney(r.montoRuta)}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <p className="lt-text-muted" style={{ marginTop: "16px", fontSize: "13px" }}>
-            Cambio de estado manual solo para pruebas y contingencias. En producción el pago
-            se confirmará vía Transbank desde el portal cliente.
+          <p className="lt-text-muted" style={{ fontSize: "13px" }}>
+            Cambio de estado manual para pruebas y contingencias. En producción el cobro se
+            originará al crear el pedido y confirmará vía Transbank.
           </p>
 
           {puedeMarcarPagado ? (
@@ -186,6 +135,7 @@ export default function PagosCliente() {
     totalAcumulado: 0,
     totalPendiente: 0,
     totalPagado: 0,
+    pagosSinMontoCalculado: 0,
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -207,6 +157,7 @@ export default function PagosCliente() {
         totalAcumulado: res.data?.totalAcumulado ?? 0,
         totalPendiente: res.data?.totalPendiente ?? 0,
         totalPagado: res.data?.totalPagado ?? 0,
+        pagosSinMontoCalculado: res.data?.pagosSinMontoCalculado ?? 0,
       });
     }
     setLoading(false);
@@ -228,14 +179,24 @@ export default function PagosCliente() {
       if (!q) return true;
       const cliente = String(p.clienteNombre || "").toLowerCase();
       const id = String(p.id || "").toLowerCase();
+      const pedido = String(p.pedidoId || "").toLowerCase();
       const metodo = String(p.metodoPago || "").toLowerCase();
-      return cliente.includes(q) || id.includes(q) || metodo.includes(q);
+      return (
+        cliente.includes(q) ||
+        id.includes(q) ||
+        pedido.includes(q) ||
+        metodo.includes(q)
+      );
     });
   }, [pagos, search, filtroEstado]);
 
   async function handleCambiarEstado(pago, estado, metodoPago) {
     setUpdating(true);
-    const res = await actualizarEstado(pago.id, { estado, metodoPago });
+    const res = await actualizarEstado(pago.id, {
+      estado,
+      metodoPago,
+      proveedorPago: metodoPago === "transbank" ? "transbank" : "manual",
+    });
     setUpdating(false);
     if (res.error) {
       setError(res.error);
@@ -262,8 +223,14 @@ export default function PagosCliente() {
               <DollarSign size={20} />
             </div>
             <div>
-              <div className="lt-kpi-card__label">Total acumulado</div>
-              <div className="lt-kpi-card__value">{formatMoney(totales.totalAcumulado)}</div>
+              <div className="lt-kpi-card__label">Total acumulado (calculado)</div>
+              <div className="lt-kpi-card__value">
+                {new Intl.NumberFormat("es-CL", {
+                  style: "currency",
+                  currency: "CLP",
+                  maximumFractionDigits: 0,
+                }).format(totales.totalAcumulado || 0)}
+              </div>
             </div>
           </div>
         </Card>
@@ -271,7 +238,13 @@ export default function PagosCliente() {
           <div className="lt-kpi-card">
             <div>
               <div className="lt-kpi-card__label">Pendiente / procesando</div>
-              <div className="lt-kpi-card__value">{formatMoney(totales.totalPendiente)}</div>
+              <div className="lt-kpi-card__value">
+                {new Intl.NumberFormat("es-CL", {
+                  style: "currency",
+                  currency: "CLP",
+                  maximumFractionDigits: 0,
+                }).format(totales.totalPendiente || 0)}
+              </div>
             </div>
           </div>
         </Card>
@@ -279,11 +252,23 @@ export default function PagosCliente() {
           <div className="lt-kpi-card">
             <div>
               <div className="lt-kpi-card__label">Pagado</div>
-              <div className="lt-kpi-card__value">{formatMoney(totales.totalPagado)}</div>
+              <div className="lt-kpi-card__value">
+                {new Intl.NumberFormat("es-CL", {
+                  style: "currency",
+                  currency: "CLP",
+                  maximumFractionDigits: 0,
+                }).format(totales.totalPagado || 0)}
+              </div>
             </div>
           </div>
         </Card>
       </div>
+
+      {totales.pagosSinMontoCalculado > 0 ? (
+        <p className="lt-text-muted" style={{ marginBottom: "12px", fontSize: "13px" }}>
+          {totales.pagosSinMontoCalculado} pago(s) con monto pendiente de cálculo (HU-51).
+        </p>
+      ) : null}
 
       <div className="lt-toolbar" style={{ marginBottom: "16px" }}>
         <div className="lt-search-wrap">
@@ -291,7 +276,7 @@ export default function PagosCliente() {
           <input
             type="search"
             className="lt-input"
-            placeholder="Buscar por cliente, ID o método…"
+            placeholder="Buscar por cliente, pedido, ID o método…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -322,7 +307,7 @@ export default function PagosCliente() {
       {pagosFiltrados.length === 0 ? (
         <EmptyState
           title="Sin pagos registrados"
-          message="Los pagos aparecerán aquí cuando se generen desde pedidos o el portal cliente."
+          message="Los pagos aparecerán aquí cuando se generen al crear pedidos."
         />
       ) : (
         <div className="lt-card lt-module-card">
@@ -332,12 +317,12 @@ export default function PagosCliente() {
                 <thead>
                   <tr>
                     <th>Cliente</th>
+                    <th>Pedido</th>
                     <th>Monto</th>
                     <th>Estado</th>
                     <th>Método</th>
                     <th>Fecha creación</th>
                     <th>Fecha pago</th>
-                    <th>Rutas</th>
                     <th />
                   </tr>
                 </thead>
@@ -345,7 +330,8 @@ export default function PagosCliente() {
                   {pagosFiltrados.map((p) => (
                     <tr key={p.id}>
                       <td>{p.clienteNombre || "—"}</td>
-                      <td>{formatMoney(p.montoTotal)}</td>
+                      <td>{etiquetaPedido(p.pedidoId)}</td>
+                      <td>{formatMontoPago(p)}</td>
                       <td>
                         <Badge variant={estadoBadgeVariant(p.estado)}>
                           {normalizarEstadoPago(p.estado)}
@@ -354,7 +340,6 @@ export default function PagosCliente() {
                       <td>{etiquetaMetodo(p.metodoPago)}</td>
                       <td>{formatDate(p.fechaCreacion)}</td>
                       <td>{formatDate(p.fechaPago)}</td>
-                      <td>{(p.rutas || []).length}</td>
                       <td>
                         <button
                           type="button"

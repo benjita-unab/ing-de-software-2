@@ -112,7 +112,7 @@ export default function OperatorDashboard({ operator, onSignOut }) {
               {activeSection === "pagos" && (
                 <ModulePage
                   title="Pagos de clientes"
-                  subtitle="Gestión de pagos B2B asociados a rutas completadas"
+                  subtitle="Consulta y gestión de cobros B2B asociados a pedidos"
                 >
                   <PagosCliente />
                 </ModulePage>

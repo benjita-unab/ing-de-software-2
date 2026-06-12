@@ -10,6 +10,10 @@ export class UpdateEstadoPagoDto {
   @IsString()
   metodoPago?: string;
 
+  @IsOptional()
+  @IsString()
+  proveedorPago?: string;
+
   /** Referencia Transbank (buy_order / token); uso futuro en callback. */
   @IsOptional()
   @IsString()
