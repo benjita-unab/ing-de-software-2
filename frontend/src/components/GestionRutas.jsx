@@ -19,7 +19,7 @@ export default function GestionRutas() {
       const { data: rutasData, error: rErr } = await supabase
         .from('rutas')
         .select(`
-          id, origen, destino, distancia_km, total_pagar, estado, fecha_estimada_entrega,
+          id, origen, destino, distancia_km, total_pagar, costo_servicio, tarifa_base_total, estado, fecha_estimada_entrega,
           clientes (nombre),
           camion_id,
           camiones (patente)
@@ -143,7 +143,7 @@ export default function GestionRutas() {
                     🗑️ Eliminar
                   </button>
                 </div>
-                <span style={{fontWeight:'900', color:'#38BDF8', fontSize:'18px'}}>${r.total_pagar?.toLocaleString()} CLP</span>
+                <span style={{fontWeight:'900', color:'#38BDF8', fontSize:'18px'}}>${(Number(r.costo_servicio) > 0 ? Number(r.costo_servicio) : Number(r.total_pagar || r.tarifa_base_total || 0)).toLocaleString()} CLP</span>
               </div>
               <div style={{padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px'}}>
                 <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '13px'}}><span className="liquid-label" style={{fontWeight:'700'}}>Cliente Principal:</span> <strong>{r.clientes?.nombre || 'Desconocido'}</strong></div>

@@ -28,6 +28,7 @@ interface Ruta {
   costo_tac_peajes_clp: number;
   pago_conductor_base_clp: number;
   total_pagar: number;
+  costo_servicio?: number;
   is_tarifa_manual: boolean;
   created_at: string;
   bultos?: Bulto[];
@@ -169,7 +170,7 @@ export default function ClienteHomeScreen() {
 
         <View style={styles.cardFooter}>
           <Text style={styles.priceLabel}>Total a Pagar:</Text>
-          <Text style={styles.priceValue}>{formatearCLP(Number(item.costo_servicio) > 0 ? item.costo_servicio : item.total_pagar)}</Text>
+          <Text style={styles.priceValue}>{formatearCLP(Number(item.costo_servicio) > 0 ? Number(item.costo_servicio) : Number(item.total_pagar))}</Text>
         </View>
       </TouchableOpacity>
     );
@@ -322,7 +323,7 @@ export default function ClienteHomeScreen() {
                   <Text style={styles.sectionHeader}>Desglose Financiero</Text>
                   <View style={styles.paymentRow}>
                     <Text style={[styles.paymentLabel, { color: '#f8fafc', fontWeight: 'bold' }]}>Total a Pagar</Text>
-                    <Text style={[styles.paymentVal, { color: '#38bdf8', fontWeight: 'bold', fontSize: 18 }]}>{formatearCLP(Number(selectedRuta.costo_servicio) > 0 ? selectedRuta.costo_servicio : selectedRuta.total_pagar)}</Text>
+                    <Text style={[styles.paymentVal, { color: '#38bdf8', fontWeight: 'bold', fontSize: 18 }]}>{formatearCLP(Number(selectedRuta.costo_servicio) > 0 ? Number(selectedRuta.costo_servicio) : Number(selectedRuta.total_pagar))}</Text>
                   </View>
                 </View>
               </ScrollView>
@@ -372,7 +373,7 @@ const styles = StyleSheet.create({
     paddingBottom: 20
   },
   card: {
-    background: 'rgba(255, 255, 255, 0.03)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     borderWidth: 1,
     borderRadius: 14,
     padding: 16,
