@@ -1,0 +1,89 @@
+/* LiquidGlass.css */
+
+/* Contenedor Principal */
+.liquid-container {
+  padding: 30px;
+  border-radius: 24px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  max-width: 900px;
+  margin: 20px auto;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  transition: all 0.3s ease;
+}
+
+/* Modo Claro (Por Defecto) */
+.liquid-container {
+  background: rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  color: #000;
+}
+.liquid-title { color: #1D4ED8; }
+.liquid-text { color: #000; }
+.liquid-step-box { background: rgba(255, 255, 255, 0.5); border: 1px solid rgba(255, 255, 255, 0.8); }
+.liquid-label { color: #000; }
+.liquid-input { background: #ffffff; border: 1px solid rgba(0,0,0,0.2); color: #000; }
+.liquid-section-divider { color: #DC2626; }
+.liquid-canvas { background: rgba(255, 255, 255, 0.7); border: 2px dashed rgba(0,0,0,0.2); }
+.liquid-slot-empty { background-color: rgba(255, 255, 255, 0.6); border-color: rgba(0,0,0,0.1); }
+.liquid-row { background: #ffffff; border: 1px solid rgba(0,0,0,0.1); color: #000; }
+.liquid-resume { background: #ffffff; border: 2px solid rgba(29,78,216,0.3); }
+
+/* Modo Oscuro - Diseño Premium activado por clase html.dark */
+.dark .liquid-container {
+  background: rgba(30, 41, 59, 0.6); /* Slate 800 transparente */
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  color: #f8fafc;
+}
+.dark .liquid-title { color: #60A5FA; } /* Celeste moderno */
+.dark .liquid-text { color: #e2e8f0; }
+
+.dark .liquid-step-box { 
+  background: rgba(15, 23, 42, 0.4); /* Slate 900 transparente */
+  border: 1px solid rgba(255, 255, 255, 0.05); 
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.02);
+}
+
+.dark .liquid-label { color: #cbd5e1; font-weight: 600; }
+
+.dark .liquid-input { 
+  background: rgba(15, 23, 42, 0.8); 
+  border: 1px solid rgba(255, 255, 255, 0.15); 
+  color: #ffffff; 
+}
+
+.dark .liquid-input:disabled {
+  background: rgba(15, 23, 42, 0.4);
+  color: #94a3b8;
+}
+
+.dark .liquid-input option {
+  background: #0f172a;
+  color: #ffffff;
+}
+
+.dark .liquid-section-divider { color: #f87171; }
+
+.dark .liquid-canvas { 
+  background: rgba(0, 0, 0, 0.2); 
+  border: 2px dashed rgba(255, 255, 255, 0.15); 
+}
+
+.dark .liquid-slot-empty { 
+  background-color: rgba(255, 255, 255, 0.03); 
+  border-color: rgba(255, 255, 255, 0.08); 
+}
+
+.dark .liquid-row { 
+  background: rgba(15, 23, 42, 0.5); 
+  border: 1px solid rgba(255, 255, 255, 0.05); 
+  color: #f8fafc; 
+}
+
+.dark .liquid-resume { 
+  background: rgba(15, 23, 42, 0.6); 
+  border: 1px solid rgba(96, 165, 250, 0.3); 
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}

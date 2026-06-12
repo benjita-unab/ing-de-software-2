@@ -1,7 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { StyleSheet, Text, View, FlatList, TouchableOpacity, Modal, ScrollView, ActivityIndicator } from 'react-native';
+import { StyleSheet, Text, View, FlatList, TouchableOpacity, Modal, ScrollView, ActivityIndicator, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
+import * as Location from 'expo-location';
+import MapView, { Marker, Polyline } from 'react-native-maps';
 import { useAuth } from '@/src/context/AuthContext';
 import { useAuthTheme } from '@/src/hooks/use-auth-theme';
 import { AuthSpacing } from '@/src/constants/authTheme';
@@ -39,6 +41,51 @@ export default function ClienteHomeScreen() {
   const [loading, setLoading] = useState(true);
   const [selectedRuta, setSelectedRuta] = useState<Ruta | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [mapCoords, setMapCoords] = useState<{ origin: any, dest: any, curve: any[] } | null>(null);
+  const [loadingMap, setLoadingMap] = useState(false);
+
+  // Generar puntos para la curva de Bézier ("media luna")
+  const getBezierPoints = (o: any, d: any) => {
+    const points = [];
+    // Punto de control perpendicular a la línea recta
+    const controlPoint = {
+      latitude: (o.latitude + d.latitude) / 2 + (d.longitude - o.longitude) * 0.2,
+      longitude: (o.longitude + d.longitude) / 2 - (d.latitude - o.latitude) * 0.2,
+    };
+    for (let t = 0; t <= 1; t += 0.05) {
+      const lat = (1 - t) * (1 - t) * o.latitude + 2 * (1 - t) * t * controlPoint.latitude + t * t * d.latitude;
+      const lng = (1 - t) * (1 - t) * o.longitude + 2 * (1 - t) * t * controlPoint.longitude + t * t * d.longitude;
+      points.push({ latitude: lat, longitude: lng });
+    }
+    return points;
+  };
+
+  useEffect(() => {
+    const loadMapData = async (origenStr: string, destStr: string) => {
+      setLoadingMap(true);
+      try {
+        const originGeocode = await Location.geocodeAsync(origenStr);
+        const destGeocode = await Location.geocodeAsync(destStr);
+        
+        if (originGeocode.length > 0 && destGeocode.length > 0) {
+          const o = { latitude: originGeocode[0].latitude, longitude: originGeocode[0].longitude };
+          const d = { latitude: destGeocode[0].latitude, longitude: destGeocode[0].longitude };
+          
+          const curve = getBezierPoints(o, d);
+          setMapCoords({ origin: o, dest: d, curve });
+        }
+      } catch (err) {
+        console.log('Error geocoding', err);
+      }
+      setLoadingMap(false);
+    };
+
+    if (selectedRuta && modalVisible) {
+      loadMapData(selectedRuta.origen, selectedRuta.destino);
+    } else {
+      setMapCoords(null);
+    }
+  }, [selectedRuta, modalVisible]);
 
   const clienteId = session?.clienteId;
 
@@ -212,6 +259,47 @@ export default function ClienteHomeScreen() {
                   </Text>
                 </View>
 
+                {/* Mapa */}
+                <View style={[styles.detailSection, { height: 250, padding: 0, overflow: 'hidden' }]}>
+                  {loadingMap ? (
+                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                      <ActivityIndicator size="small" color="#38bdf8" />
+                      <Text style={{ color: '#94a3b8', marginTop: 8 }}>Cargando mapa...</Text>
+                    </View>
+                  ) : mapCoords ? (
+                    <MapView
+                      style={{ flex: 1 }}
+                      initialRegion={{
+                        latitude: (mapCoords.origin.latitude + mapCoords.dest.latitude) / 2,
+                        longitude: (mapCoords.origin.longitude + mapCoords.dest.longitude) / 2,
+                        latitudeDelta: Math.abs(mapCoords.origin.latitude - mapCoords.dest.latitude) * 2 + 0.5,
+                        longitudeDelta: Math.abs(mapCoords.origin.longitude - mapCoords.dest.longitude) * 2 + 0.5,
+                      }}
+                    >
+                      <Marker coordinate={mapCoords.origin} title="Origen" pinColor="#ef4444" />
+                      <Marker coordinate={mapCoords.dest} title="Destino" pinColor="#10b981" />
+                      
+                      <Polyline
+                        coordinates={mapCoords.curve}
+                        strokeColor="#38bdf8"
+                        strokeWidth={4}
+                        lineDashPattern={[10, 10]}
+                      />
+                      
+                      {/* Camión animado/estático a la mitad del trayecto */}
+                      <Marker coordinate={mapCoords.curve[Math.floor(mapCoords.curve.length / 2)]}>
+                        <View style={{ backgroundColor: '#1e293b', padding: 6, borderRadius: 20, borderWidth: 2, borderColor: '#38bdf8' }}>
+                          <FontAwesome5 name="truck" size={16} color="#38bdf8" />
+                        </View>
+                      </Marker>
+                    </MapView>
+                  ) : (
+                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                      <Text style={{ color: '#94a3b8' }}>Mapa no disponible</Text>
+                    </View>
+                  )}
+                </View>
+
                 {/* Bultos */}
                 <View style={styles.detailSection}>
                   <Text style={styles.sectionHeader}>Detalle de Carga</Text>
@@ -220,7 +308,7 @@ export default function ClienteHomeScreen() {
                       <View key={b.id} style={styles.bultoDetailRow}>
                         <Text style={styles.bultoName}>Bulto #{idx + 1} ({b.tamaño})</Text>
                         <Text style={styles.bultoSpecs}>
-                          {Number(b.cuadrados_equivalentes || 0).toFixed(2)} Bloques / ${b.tarifa_calculada_clp.toLocaleString()} CLP
+                          {Number(b.cuadrados_equivalentes || 0).toFixed(2)} Bloques
                         </Text>
                       </View>
                     ))
@@ -233,22 +321,6 @@ export default function ClienteHomeScreen() {
                 <View style={[styles.detailSection, { borderBottomWidth: 0 }]}>
                   <Text style={styles.sectionHeader}>Desglose Financiero</Text>
                   <View style={styles.paymentRow}>
-                    <Text style={styles.paymentLabel}>Tarifa Base Bultos:</Text>
-                    <Text style={styles.paymentVal}>{formatearCLP(selectedRuta.tarifa_base_total)}</Text>
-                  </View>
-                  <View style={styles.paymentRow}>
-                    <Text style={styles.paymentLabel}>Costo Combustible:</Text>
-                    <Text style={styles.paymentVal}>{formatearCLP(selectedRuta.costo_combustible_calculado)}</Text>
-                  </View>
-                  <View style={styles.paymentRow}>
-                    <Text style={styles.paymentLabel}>Costo TAC/Peajes:</Text>
-                    <Text style={styles.paymentVal}>{formatearCLP(selectedRuta.costo_tac_peajes_clp)}</Text>
-                  </View>
-                  <View style={styles.paymentRow}>
-                    <Text style={styles.paymentLabel}>Pago Conductor:</Text>
-                    <Text style={styles.paymentVal}>{formatearCLP(selectedRuta.pago_conductor_base_clp)}</Text>
-                  </View>
-                  <View style={[styles.paymentRow, { marginTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)', paddingTop: 10 }]}>
                     <Text style={[styles.paymentLabel, { color: '#38bdf8', fontWeight: 'bold', fontSize: 16 }]}>Total Cobrado:</Text>
                     <Text style={[styles.paymentVal, { color: '#38bdf8', fontWeight: 'bold', fontSize: 18 }]}>{formatearCLP(selectedRuta.total_pagar)}</Text>
                   </View>

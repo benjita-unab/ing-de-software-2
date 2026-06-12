@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { createClient } from '@supabase/supabase-js';
 import { apiFetch } from "../lib/apiClient";
 import {
   crearRuta,
@@ -10,6 +11,10 @@ import {
 import { useGooglePlacesAutocomplete } from "../hooks/useGooglePlacesAutocomplete";
 import Badge from "./ui/Badge";
 import Spinner from "./ui/Spinner";
+
+const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || "";
+const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY || "";
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 function mensajeFilaClass(tipo) {
   if (tipo === "ok") return "lt-alert-banner lt-alert-banner--success";
@@ -229,6 +234,25 @@ export default function RutasActivas() {
     cargarRutas();
     cargarListas();
   }, [cargarRutas, cargarListas]);
+
+  const handleDelete = async (id) => {
+    if (window.confirm("¿Estás seguro de que deseas eliminar esta ruta? Esta acción no se puede deshacer.")) {
+      try {
+        await supabase.from('historial_estados').delete().eq('ruta_id', id);
+        await supabase.from('bultos').delete().eq('ruta_id', id);
+        await supabase.from('cargas').delete().eq('ruta_id', id);
+        
+        const { error } = await supabase.from('rutas').delete().eq('id', id);
+        if (error) {
+          alert("Error al eliminar ruta: " + error.message);
+        } else {
+          setRutas(prev => prev.filter(r => r.id !== id));
+        }
+      } catch (err) {
+        alert("Error al procesar eliminación: " + err.message);
+      }
+    }
+  };
 
   const actualizarCampo = (campo, valor) => {
     setForm((prev) => ({ ...prev, [campo]: valor }));
@@ -512,244 +536,10 @@ export default function RutasActivas() {
 
   return (
     <div className="lt-module-inner">
-      <div className="lt-card lt-module-card">
-        <h3 className="lt-module-card__title">Gestión de rutas</h3>
-        <p className="lt-module-card__subtitle">
-          Creá y consultá rutas operativas. El seguimiento y las evidencias siguen siendo responsabilidad de LogiTrack (app móvil y trazabilidad).
-        </p>
 
-        {mensaje?.tipo === "ok" && (
-          <div className="lt-alert-banner lt-alert-banner--success" role="status">
-            {mensaje.texto}
-          </div>
-        )}
-        {mensaje?.tipo === "error" && (
-          <div className="lt-alert-banner lt-alert-banner--error" role="alert">
-            {mensaje.texto}
-          </div>
-        )}
-
-        <div className="lt-form-actions" style={{ marginTop: 0 }}>
-          <button
-            type="button"
-            className="lt-btn lt-btn--primary"
-            onClick={() => {
-              setShowForm((v) => !v);
-              setMensaje(null);
-            }}
-          >
-            {showForm ? "Ocultar formulario" : "Crear nueva ruta"}
-          </button>
-        </div>
-
-        {showForm && (
-          <form
-            onSubmit={enviarFormulario}
-            className="lt-card rutas-nueva-form"
-            style={{ marginTop: 16, marginBottom: 16, overflow: "visible" }}
-          >
-            <div className="lt-module-card__title" style={{ marginBottom: 12 }}>
-              Nueva ruta
-            </div>
-            <div className="lt-form-grid">
-              <div className="lt-field-group">
-                <label className="lt-label" htmlFor="ruta-cliente">Cliente *</label>
-                <select
-                  id="ruta-cliente"
-                  className="lt-select"
-                  required
-                  value={form.clienteId}
-                  onChange={(e) => actualizarCampo("clienteId", e.target.value)}
-                  disabled={listsLoading}
-                >
-                  <option value="">Seleccionar…</option>
-                  {clientes.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.nombre || c.id}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="lt-field-group">
-                <label className="lt-label" htmlFor="ruta-conductor">Conductor (opcional)</label>
-                <select
-                  id="ruta-conductor"
-                  className="lt-select"
-                  value={form.conductorId}
-                  onChange={(e) => actualizarCampo("conductorId", e.target.value)}
-                  disabled={listsLoading}
-                >
-                  <option value="">—</option>
-                  {conductores.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.rut || c.id}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="lt-field-group">
-                <label className="lt-label" htmlFor="ruta-camion">Camión (opcional)</label>
-                <select
-                  id="ruta-camion"
-                  className="lt-select"
-                  value={form.camionId}
-                  onChange={(e) => actualizarCampo("camionId", e.target.value)}
-                  disabled={listsLoading}
-                >
-                  <option value="">—</option>
-                  {camiones.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.patente || c.id} {c.estado ? `(${c.estado})` : ""}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
-                <label className="lt-label" htmlFor="ruta-origen">Origen *</label>
-                {mapsError && (
-                  <div className="lt-alert-banner lt-alert-banner--error" role="alert" style={{ marginBottom: 8 }}>
-                    {mapsError}
-                  </div>
-                )}
-                <input
-                  id="ruta-origen"
-                  ref={origenInputRef}
-                  className="lt-input"
-                  required
-                  autoComplete="off"
-                  value={form.origen}
-                  onChange={(e) => actualizarCampo("origen", e.target.value)}
-                  placeholder="Escribe y selecciona una dirección sugerida…"
-                />
-              </div>
-              <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
-                <label className="lt-label" htmlFor="ruta-destino">Destino *</label>
-                <input
-                  id="ruta-destino"
-                  ref={destinoInputRef}
-                  className="lt-input"
-                  required
-                  autoComplete="off"
-                  value={form.destino}
-                  onChange={(e) => actualizarCampo("destino", e.target.value)}
-                  placeholder="Escribe y selecciona una dirección sugerida…"
-                />
-              </div>
-              <div className="lt-field-group">
-                <label className="lt-label" htmlFor="ruta-fecha-inicio">Fecha inicio (opcional)</label>
-                <input
-                  id="ruta-fecha-inicio"
-                  className="lt-input"
-                  type="datetime-local"
-                  value={form.fechaInicio}
-                  onChange={(e) => actualizarCampo("fechaInicio", e.target.value)}
-                />
-              </div>
-              <div className="lt-field-group">
-                <label className="lt-label" htmlFor="ruta-eta">ETA (opcional)</label>
-                <input
-                  id="ruta-eta"
-                  className="lt-input"
-                  type="datetime-local"
-                  value={form.eta}
-                  onChange={(e) => actualizarCampo("eta", e.target.value)}
-                />
-              </div>
-              <div className="lt-field-group">
-                <label className="lt-label" htmlFor="ruta-bultos">Cantidad de Bultos a Despachar *</label>
-                <input
-                  id="ruta-bultos"
-                  className="lt-input"
-                  type="number"
-                  min="1"
-                  required
-                  value={form.bultosDespachos}
-                  onChange={(e) => actualizarCampo("bultosDespachos", e.target.value)}
-                  placeholder="Ej: 25"
-                />
-              </div>
-              <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
-                <label className="lt-label" htmlFor="ruta-distancia">Distancia vial calculada (km)</label>
-                <p className="lt-module-card__subtitle" style={{ marginTop: 0, marginBottom: 8 }}>
-                  {AYUDA_DISTANCIA_VIAL}
-                </p>
-                <input
-                  id="ruta-distancia"
-                  className="lt-input"
-                  type="number"
-                  min="0"
-                  step="0.1"
-                  value={form.distanciaKm}
-                  onChange={(e) => actualizarCampo("distanciaKm", e.target.value)}
-                  placeholder="Vacío = calcular por carretera con origen y destino"
-                />
-              </div>
-              <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
-                <div className="lt-form-actions" style={{ marginTop: 0, flexWrap: "wrap" }}>
-                  <span className="lt-module-card__title" style={{ marginBottom: 0, fontSize: 13 }}>
-                    Fechas estimadas de entrega
-                  </span>
-                  <button
-                    type="button"
-                    className="lt-btn lt-btn--secondary"
-                    disabled={calculandoEstimacion || saving}
-                    onClick={calcularDistanciaYFechasForm}
-                  >
-                    {calculandoEstimacion
-                      ? "Calculando…"
-                      : "Calcular distancia y fechas"}
-                  </button>
-                </div>
-                {form.advertenciaEstimacion && (
-                  <div className="lt-alert-banner lt-alert-banner--warning" role="alert" style={{ marginTop: 10 }}>
-                    {form.advertenciaEstimacion}
-                  </div>
-                )}
-                <div className="lt-form-grid lt-form-grid--3" style={{ marginTop: 10 }}>
-                  <div className="lt-field-group">
-                    <label className="lt-label" htmlFor="ruta-fecha-est-inicio">Inicio rango estimado</label>
-                    <input
-                      id="ruta-fecha-est-inicio"
-                      type="date"
-                      className="lt-input"
-                      value={form.fechasEstimadas.inicio}
-                      onChange={(e) => actualizarFechaForm("inicio", e.target.value)}
-                    />
-                  </div>
-                  <div className="lt-field-group">
-                    <label className="lt-label" htmlFor="ruta-fecha-est-fin">Fin rango estimado</label>
-                    <input
-                      id="ruta-fecha-est-fin"
-                      type="date"
-                      className="lt-input"
-                      value={form.fechasEstimadas.fin}
-                      onChange={(e) => actualizarFechaForm("fin", e.target.value)}
-                    />
-                  </div>
-                  <div className="lt-field-group">
-                    <label className="lt-label" htmlFor="ruta-fecha-est-entrega">Día estimado de entrega</label>
-                    <input
-                      id="ruta-fecha-est-entrega"
-                      type="date"
-                      className="lt-input"
-                      value={form.fechasEstimadas.entrega}
-                      onChange={(e) => actualizarFechaForm("entrega", e.target.value)}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="lt-form-actions">
-              <button type="submit" className="lt-btn lt-btn--primary" disabled={saving || listsLoading}>
-                {saving ? "Guardando…" : "Guardar ruta"}
-              </button>
-            </div>
-          </form>
-        )}
-      </div>
 
       <div className="lt-card lt-module-card">
-        <h3 className="lt-module-card__title">Rutas registradas</h3>
+        <h3 className="lt-module-card__title" style={{ textAlign: 'center', padding: '10px', margin: '0' }}>Rutas registradas</h3>
         {loading ? (
           <Spinner message="Cargando rutas…" />
         ) : rutas.length === 0 ? (
@@ -767,8 +557,8 @@ export default function RutasActivas() {
                   <th>Conductor / Camión</th>
                   <th>ETA</th>
                   <th>Fechas estimadas</th>
-                  <th>Anomalías</th>
                   <th>Acciones</th>
+                  <th>Anomalías</th>
                 </tr>
               </thead>
               <tbody>
@@ -783,11 +573,22 @@ export default function RutasActivas() {
                       </Badge>
                     </td>
                     <td>
-                      {ruta.tarifa_base_total != null ? (
+                      {ruta.total_pagar != null || ruta.tarifa_base_total != null ? (
                         <div style={{ fontSize: "12px", lineHeight: "1.4" }}>
-                          <div>Base: <strong>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(Number(ruta.tarifa_base_total))}</strong></div>
-                          <div>Espera: <span style={{ color: Number(ruta.costo_espera_total) > 0 ? "#ef4444" : "inherit" }}>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(Number(ruta.costo_espera_total || 0))}</span></div>
-                          <div style={{ borderTop: "1px dashed rgba(255,255,255,0.15)", marginTop: 4, paddingTop: 4 }}>Total: <strong>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(Number(ruta.total_pagar || ruta.tarifa_base_total))}</strong></div>
+                          {(() => {
+                            const totalCobrado = Number(ruta.total_pagar || ruta.tarifa_base_total || 0);
+                            const gastos = Number(ruta.costo_combustible_calculado || 0) + Number(ruta.costo_tac_peajes_clp || 0) + Number(ruta.pago_conductor_base_clp || 0);
+                            const ganancia = totalCobrado - gastos;
+                            return (
+                              <>
+                                <div>Cobrado: <strong>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(totalCobrado)}</strong></div>
+                                <div>Gastos Op.: <span style={{ color: "#ef4444" }}>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(gastos)}</span></div>
+                                <div style={{ borderTop: "1px dashed rgba(255,255,255,0.15)", marginTop: 4, paddingTop: 4 }}>
+                                  Ganancia Neta: <strong style={{color: "#10b981"}}>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(ganancia)}</strong>
+                                </div>
+                              </>
+                            );
+                          })()}
                         </div>
                       ) : (
                         <span className="lt-list-item__sub" style={{ opacity: 0.6 }}>No calculado</span>
@@ -893,12 +694,21 @@ export default function RutasActivas() {
                         className="lt-btn lt-btn--success lt-btn--full"
                         disabled={notifyingId === ruta.id}
                         onClick={() => enviarNotificacionRuta(ruta.id)}
+                        style={{ marginBottom: 8 }}
                       >
                         {notifyingId === ruta.id
                           ? "Enviando…"
                           : "Notificar fecha estimada"}
                       </button>
                       <MensajeFilaRuta mensaje={mensajesRuta[ruta.id]?.notificar} />
+                      <button
+                        type="button"
+                        className="lt-btn lt-btn--full"
+                        style={{ backgroundColor: 'transparent', border: '1px solid #ef4444', color: '#ef4444' }}
+                        onClick={() => handleDelete(ruta.id)}
+                      >
+                        🗑️ Eliminar Ruta
+                      </button>
                     </td>
                     <td>
                       {Array.isArray(anomaliasPorRuta[ruta.id]) && anomaliasPorRuta[ruta.id].length > 0 ? (

@@ -87,17 +87,17 @@ export default function FormularioOperadorSimplificado() {
           setClientes(Array.isArray(res.data) ? res.data : res.data?.data || []);
         }
 
-        // Consultar la configuración global de Supabase
-        const { data: config, error: configErr } = await supabase
+        // 3. Obtener configuración de costos (Sistema de Configuración General)
+        const { data: config } = await supabase
           .from("sistema_config")
-          .select("precio_diesel_actual, rendimiento_km_l")
+          .select("precio_diesel_por_litro, rendimiento_promedio_km_l")
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle();
 
-        if (config && !configErr) {
-          setPrecioDiesel(Number(config.precio_diesel_actual));
-          setRendimientoKm(Number(config.rendimiento_km_l));
+        if (config && config.precio_diesel_por_litro) {
+          setPrecioDiesel(Number(config.precio_diesel_por_litro));
+          setRendimientoKm(Number(config.rendimiento_promedio_km_l));
         }
       } catch (err) {
         console.error("Error cargando configuración inicial:", err);
@@ -124,10 +124,8 @@ export default function FormularioOperadorSimplificado() {
 
   const tarifaFinalBase = isTarifaManual ? tarifaManualTotal : tarifaCalculadaBultos;
 
-  // Total Final a Pagar (Base + Combustible + TAC + Chofer)
-  const totalAPagar = isTarifaManual 
-    ? (tarifaManualTotal + costoTac + pagoConductor) 
-    : (tarifaCalculadaBultos + costoCombustibleCalculado + costoTac + pagoConductor);
+  // Total Final a Pagar por el cliente (Ingreso Total)
+  const totalAPagar = tarifaFinalBase;
 
   // Acciones sobre bultos
   const handleAddBulto = () => {

@@ -238,6 +238,8 @@ export class ConductoresService {
         `
         id,
         rut,
+        nombre,
+        camion_id,
         licencia_numero,
         licencia_vencimiento,
         telefono,
