@@ -576,7 +576,9 @@ export default function RutasActivas() {
                       {ruta.total_pagar != null || ruta.tarifa_base_total != null ? (
                         <div style={{ fontSize: "12px", lineHeight: "1.4" }}>
                           {(() => {
-                            const totalCobrado = Number(ruta.total_pagar || ruta.tarifa_base_total || 0);
+                            const totalCobrado = Number(ruta.costo_servicio) > 0 
+                              ? Number(ruta.costo_servicio) 
+                              : Number(ruta.total_pagar || ruta.tarifa_base_total || 0);
                             const gastos = Number(ruta.costo_combustible_calculado || 0) + Number(ruta.costo_tac_peajes_clp || 0) + Number(ruta.pago_conductor_base_clp || 0);
                             const ganancia = totalCobrado - gastos;
                             return (

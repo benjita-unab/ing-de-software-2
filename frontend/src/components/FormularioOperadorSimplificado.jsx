@@ -178,6 +178,7 @@ export default function FormularioOperadorSimplificado() {
           costo_tac_peajes_clp: costoTac,
           pago_conductor_base_clp: pagoConductor,
           tarifa_base_total: tarifaFinalBase,
+          costo_servicio: tarifaFinalBase, // BYPASS: Guardamos la tarifa aquí porque el DB trigger sobrescribe total_pagar
           costo_combustible_calculado: costoCombustibleCalculado,
           total_pagar: totalAPagar,
           is_tarifa_manual: isTarifaManual,

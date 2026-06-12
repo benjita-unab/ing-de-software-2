@@ -169,7 +169,7 @@ export default function ClienteHomeScreen() {
 
         <View style={styles.cardFooter}>
           <Text style={styles.priceLabel}>Total a Pagar:</Text>
-          <Text style={styles.priceValue}>{formatearCLP(item.total_pagar)}</Text>
+          <Text style={styles.priceValue}>{formatearCLP(Number(item.costo_servicio) > 0 ? item.costo_servicio : item.total_pagar)}</Text>
         </View>
       </TouchableOpacity>
     );
@@ -321,8 +321,8 @@ export default function ClienteHomeScreen() {
                 <View style={[styles.detailSection, { borderBottomWidth: 0 }]}>
                   <Text style={styles.sectionHeader}>Desglose Financiero</Text>
                   <View style={styles.paymentRow}>
-                    <Text style={[styles.paymentLabel, { color: '#38bdf8', fontWeight: 'bold', fontSize: 16 }]}>Total Cobrado:</Text>
-                    <Text style={[styles.paymentVal, { color: '#38bdf8', fontWeight: 'bold', fontSize: 18 }]}>{formatearCLP(selectedRuta.total_pagar)}</Text>
+                    <Text style={[styles.paymentLabel, { color: '#f8fafc', fontWeight: 'bold' }]}>Total a Pagar</Text>
+                    <Text style={[styles.paymentVal, { color: '#38bdf8', fontWeight: 'bold', fontSize: 18 }]}>{formatearCLP(Number(selectedRuta.costo_servicio) > 0 ? selectedRuta.costo_servicio : selectedRuta.total_pagar)}</Text>
                   </View>
                 </View>
               </ScrollView>
