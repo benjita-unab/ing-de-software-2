@@ -461,8 +461,9 @@ export default function CreadorCarga() {
           costo_tac_peajes_clp: Number(costoTac || 0),
           pago_conductor_base_clp: Number(pagoConductor || 0),
           tarifa_base_total: tarifaFinalBase,
+          costo_servicio: tarifaFinalBase, // BYPASS: Guardamos la tarifa aquí porque el DB trigger sobrescribe total_pagar
           costo_combustible_calculado: modoCarga === 'RETORNO' ? 0 : costoCombustibleCalculado,
-          total_pagar: totalAPagarCliente, // Solo cobra la tarifa de matriz al cliente
+          total_pagar: totalAPagarCliente, 
           is_tarifa_manual: isTarifaManual,
           fecha_estimada_entrega: fechaEntregaTimestamp || null,
           estado: 'PENDIENTE',
