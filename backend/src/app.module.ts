@@ -22,6 +22,7 @@ import { PortalModule } from './modules/portal/portal.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ConfiguracionPagosModule } from './modules/configuracion-pagos/configuracion-pagos.module';
 import { ChatRutaModule } from './modules/chat-ruta/chat-ruta.module';
+import { PagosClienteModule } from './modules/pagos-cliente/pagos-cliente.module';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { ChatRutaModule } from './modules/chat-ruta/chat-ruta.module';
     DashboardModule,
     ConfiguracionPagosModule,
     ChatRutaModule,
+    PagosClienteModule,
   ],
   controllers: [AppController],
   providers: [AppService, SupabaseConfigService, ResendConfigService, JwtStrategy],
