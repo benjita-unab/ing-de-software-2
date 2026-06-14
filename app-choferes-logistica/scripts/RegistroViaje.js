@@ -31,6 +31,7 @@ import {
 } from '../src/services/mensajesConductorService';
 import { useMensajesQueueScheduler } from '../src/hooks/useMensajesQueueScheduler';
 import { MENSAJES_CATALOGO } from '../src/constants/mensajesCatalog';
+import mqtt from 'mqtt';
 
 /** Claves canónicas (etapa en API / carpeta en storage) */
 const HOJA_DESPACHO = 'HOJA_DESPACHO';
@@ -277,6 +278,71 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
       cancelled = true;
     };
   }, [rutaId]);
+
+  // =========================================================
+  // MOTOR DE TRANSMISIÓN GPS AUTOMÁTICA VÍA MQTT
+  // =========================================================
+  useEffect(() => {
+    if (!rutaId) return;
+
+    let locationSubscription = null;
+    
+    // 1. Leemos la IP desde tu archivo .env
+    const brokerUrl = process.env.EXPO_PUBLIC_MQTT_BROKER_URL;
+    if (!brokerUrl) {
+      console.warn("No se encontró EXPO_PUBLIC_MQTT_BROKER_URL en el .env");
+      return;
+    }
+
+    // 2. Nos conectamos a Mosquitto
+    const client = mqtt.connect(brokerUrl);
+
+    client.on('connect', async () => {
+      console.log('✅ Conectado a MQTT para transmisión GPS automática');
+
+      // 3. Verificamos permisos de ubicación
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        console.warn('Permiso de ubicación denegado. No se enviará GPS.');
+        return;
+      }
+
+      // 4. Encendemos el rastreador automático de Expo
+      locationSubscription = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.High,
+          timeInterval: 5000,    // Transmitir cada 5 segundos
+          distanceInterval: 10,  // O cada vez que avance 10 metros
+        },
+        (location) => {
+          const { latitude, longitude } = location.coords;
+          
+          const topic = `logitrack/rutas/${rutaId}/gps`;
+          const payload = JSON.stringify({
+            lat: latitude,
+            lng: longitude,
+            timestamp: new Date().toISOString()
+          });
+
+          // 5. ¡Disparamos el mensaje por el aire sin tocar botones!
+          client.publish(topic, payload, { qos: 0 });
+          console.log('📍 GPS Automático publicado:', latitude, longitude);
+        }
+      );
+    });
+
+    client.on('error', (err) => console.error('Error MQTT:', err));
+
+    // 6. Limpieza: Cuando se cierra el viaje, apagamos el rastreador para ahorrar batería
+    return () => {
+      if (locationSubscription) {
+        locationSubscription.remove();
+      }
+      client.end();
+      console.log('🛑 Transmisión GPS detenida');
+    };
+  }, [rutaId]);
+  // =========================================================
 
   const persistRecords = async (nextRecords) => {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(nextRecords));
