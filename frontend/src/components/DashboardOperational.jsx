@@ -144,6 +144,8 @@ export default function DashboardOperational({
   const [geocoding, setGeocoding] = useState(false);
   const [mapFilter, setMapFilter] = useState("todos");
   const [selectedRouteId, setSelectedRouteId] = useState(null);
+  const [routeTracking, setRouteTracking] = useState({});
+  const [routeTrackingLoading, setRouteTrackingLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -284,7 +286,18 @@ export default function DashboardOperational({
     [rutas, selectedRouteId],
   );
 
-  const focusedRoute = selectedRoute;
+  const focusedRoute = useMemo(() => {
+    if (!selectedRoute) return null;
+    const tracking = routeTracking[selectedRouteId];
+    if (!tracking) return selectedRoute;
+
+    const ubic = tracking.ubicacion_actual;
+    const vehicleGps = ubic && ubic.latitud != null && ubic.longitud != null
+      ? { lat: Number(ubic.latitud), lng: Number(ubic.longitud), timestamp_evento: ubic.timestamp_evento }
+      : selectedRoute.vehicleGps || null;
+
+    return { ...selectedRoute, vehicleGps, tracking };
+  }, [selectedRoute, routeTracking, selectedRouteId]);
 
   /** Solo la ruta seleccionada se dibuja en el mapa (visor individual). */
   const visibleMapRoutes = useMemo(
@@ -304,7 +317,58 @@ export default function DashboardOperational({
 
   const handleRouteSelect = (routeId) => {
     setSelectedRouteId((prev) => (prev === routeId ? null : routeId));
+    // Fire-and-forget: fetch tracking for the newly selected route
+    if (routeId) {
+      (async () => {
+        setRouteTrackingLoading(true);
+        try {
+          const res = await apiFetch(`/api/rutas/${routeId}/tracking`);
+          if (res.ok && res.data) {
+            setRouteTracking((prev) => ({ ...prev, [routeId]: res.data }));
+          } else {
+            setRouteTracking((prev) => ({ ...prev, [routeId]: { ubicacion_actual: null, historial: [] } }));
+          }
+        } catch (e) {
+          setRouteTracking((prev) => ({ ...prev, [routeId]: { ubicacion_actual: null, historial: [] } }));
+        } finally {
+          setRouteTrackingLoading(false);
+        }
+      })();
+    }
   };
+
+  /* Polling: refresh tracking every 3 minutes while a route is selected */
+  useEffect(() => {
+    if (!selectedRouteId) return undefined;
+    let mounted = true;
+
+    const fetchTracking = async () => {
+      setRouteTrackingLoading(true);
+      try {
+        const res = await apiFetch(`/api/rutas/${selectedRouteId}/tracking`);
+        if (!mounted) return;
+        if (res.ok && res.data) {
+          setRouteTracking((prev) => ({ ...prev, [selectedRouteId]: res.data }));
+        } else {
+          setRouteTracking((prev) => ({ ...prev, [selectedRouteId]: { ubicacion_actual: null, historial: [] } }));
+        }
+      } catch (e) {
+        if (!mounted) return;
+        setRouteTracking((prev) => ({ ...prev, [selectedRouteId]: { ubicacion_actual: null, historial: [] } }));
+      } finally {
+        if (mounted) setRouteTrackingLoading(false);
+      }
+    };
+
+    // initial immediate fetch so panel shows up-to-date info
+    fetchTracking();
+
+    const intervalId = setInterval(fetchTracking, 180000); // 180,000 ms = 3 minutes
+    return () => {
+      mounted = false;
+      clearInterval(intervalId);
+    };
+  }, [selectedRouteId]);
 
   const kpiValues = KPI_CONFIG.map((cfg) => ({
     ...cfg,
@@ -552,6 +616,24 @@ export default function DashboardOperational({
                 const mapRoute = mapRoutes.find((mr) => mr.id === ruta.id);
                 const progress = mapRoute?.progress ?? routeProgress(ruta.estado);
                 const hasAlert = mapRoute?.hasAlert;
+                const tracking = routeTracking[ruta.id];
+                let onlineStatus = { label: "Sin señal", color: "#9ca3af" };
+                if (tracking) {
+                  const ubic = tracking.ubicacion_actual;
+                  if (!ubic) {
+                    onlineStatus = { label: "Sin señal", color: "#9ca3af" };
+                  } else if (ubic.timestamp_evento) {
+                    const ageMs = Date.now() - Date.parse(String(ubic.timestamp_evento));
+                    const ageMin = ageMs / 60000;
+                    if (Number.isFinite(ageMin) && ageMin <= 5) {
+                      onlineStatus = { label: "Online", color: "#16a34a" };
+                    } else {
+                      onlineStatus = { label: "Offline", color: "#ef4444" };
+                    }
+                  } else {
+                    onlineStatus = { label: "Sin señal", color: "#9ca3af" };
+                  }
+                }
                 return (
                   <div
                     key={ruta.id}
@@ -567,6 +649,10 @@ export default function DashboardOperational({
                         </div>
                         <div className="lt-list-item__sub">
                           <MapPin size={10} /> {ruta.origen || "—"} → {ruta.destino || "—"}
+                          <span style={{ marginLeft: 8, display: "inline-flex", alignItems: "center", gap: 6 }}>
+                            <span style={{ width: 10, height: 10, borderRadius: 10, background: onlineStatus.color, display: "inline-block" }} />
+                            <small style={{ color: "#6b7280" }}>{onlineStatus.label}</small>
+                          </span>
                         </div>
                       </div>
                       <div className="lt-list-item__eta">{fmtEta(ruta.eta)}</div>

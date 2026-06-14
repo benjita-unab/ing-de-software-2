@@ -1065,7 +1065,7 @@ body {
 }
 
 .lt-map-overlay--top-right {
-  top: 12px;
+  top: 70px;
   right: 12px;
   display: flex;
   flex-direction: column;
@@ -1330,8 +1330,8 @@ body {
 
 .lt-map-route-panel {
   position: absolute;
-  top: 52px;
-  right: 12px;
+  bottom: 24px;
+  left: 24px;
   z-index: 5;
   background: var(--lt-bg-surface);
   border: 1px solid var(--lt-border);
