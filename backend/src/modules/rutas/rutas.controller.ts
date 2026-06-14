@@ -116,6 +116,16 @@ export class RutasController {
   }
 
   /**
+   * GET /api/rutas/:id/tracking
+   * HU-44 Fase 1: obtiene ubicación actual e historial GPS de la ruta.
+   */
+  @Get(':id/tracking')
+  @Roles('ADMIN', 'OPERADOR')
+  async getRouteTracking(@Param('id') rutaId: string) {
+    return await this.rutasService.getRouteTracking(rutaId);
+  }
+
+  /**
    * PATCH /api/rutas/:id/status
    * Actualiza el estado de una ruta
    */

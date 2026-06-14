@@ -49,6 +49,19 @@ export type EstimarFechasResult = {
   advertencia?: string;
 };
 
+export type RouteTrackingPointDto = {
+  latitud: number;
+  longitud: number;
+  timestamp_evento: string | null;
+};
+
+export type RouteTrackingDto = {
+  ubicacion_actual: RouteTrackingPointDto | null;
+  historial: RouteTrackingPointDto[];
+};
+
+const TRACEABILITY_RUTA_ID_MISSING_CODES = new Set(['42703', 'PGRST204']);
+
 const ADVERTENCIA_DISTANCIA_VIAL =
   'No se pudo calcular la distancia vial automáticamente. Ingrese la distancia manualmente o revise origen/destino.';
 
@@ -691,6 +704,93 @@ export class RutasService {
       fotosEvidencia,
       licenseStatus: ruta.conductor_id
         ? await this.conductoresService.validateDriverLicense(ruta.conductor_id)
+        : null,
+    };
+  }
+
+  async getRouteTracking(rutaId: string): Promise<RouteTrackingDto> {
+    const rutaUuid = String(rutaId ?? '').trim();
+    if (!rutaUuid) {
+      throw new BadRequestException('rutaId es requerido');
+    }
+
+    const supabase = this.supabaseConfig.getClient();
+
+    const { data: ruta, error: routeError } = await supabase
+      .from('rutas')
+      .select('id, fecha_inicio, fecha_fin')
+      .eq('id', rutaUuid)
+      .maybeSingle();
+
+    if (routeError) {
+      throw new BadRequestException(`Error al validar ruta: ${routeError.message}`);
+    }
+    if (!ruta) {
+      throw new NotFoundException(`Ruta no encontrada: ${rutaUuid}`);
+    }
+
+    const gpsQuery = await supabase
+      .from('traceability_events')
+      .select('latitud, longitud, timestamp_evento')
+      .eq('ruta_id', rutaUuid)
+      .order('timestamp_evento', { ascending: true });
+
+    let rawRows = gpsQuery.data || [];
+    const rawErrorMessage = (gpsQuery.error as { message?: string } | undefined)
+      ?.message;
+    const columnMissing =
+      gpsQuery.error &&
+      /ruta_id/i.test(rawErrorMessage || '') &&
+      TRACEABILITY_RUTA_ID_MISSING_CODES.has((gpsQuery.error as { code?: string }).code || '');
+
+    if (gpsQuery.error && columnMissing) {
+      if (!ruta.fecha_inicio) {
+        return { ubicacion_actual: null, historial: [] };
+      }
+
+      const desde = String(ruta.fecha_inicio);
+      const hasta = String(ruta.fecha_fin || new Date().toISOString());
+
+      const fallback = await supabase
+        .from('traceability_events')
+        .select('latitud, longitud, timestamp_evento')
+        .gte('timestamp_evento', desde)
+        .lte('timestamp_evento', hasta)
+        .order('timestamp_evento', { ascending: true });
+
+      if (fallback.error) {
+        return { ubicacion_actual: null, historial: [] };
+      }
+      rawRows = fallback.data || [];
+    } else if (gpsQuery.error) {
+      throw new BadRequestException(
+        `Error al obtener historial GPS: ${gpsQuery.error.message}`,
+      );
+    }
+
+    const historial: RouteTrackingPointDto[] = (rawRows || [])
+      .filter(
+        (row): row is {
+          latitud: unknown;
+          longitud: unknown;
+          timestamp_evento: unknown;
+        } => row != null,
+      )
+      .map((row) => ({
+        latitud: Number(row.latitud),
+        longitud: Number(row.longitud),
+        timestamp_evento:
+          row.timestamp_evento != null ? String(row.timestamp_evento) : null,
+      }))
+      .filter(
+        (row) =>
+          Number.isFinite(row.latitud) && Number.isFinite(row.longitud),
+      );
+
+    return {
+      historial,
+      ubicacion_actual: historial.length
+        ? historial[historial.length - 1]
         : null,
     };
   }
