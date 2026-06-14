@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import mqtt from "mqtt";
 import {
   Truck,
   Package,
@@ -337,36 +338,94 @@ export default function DashboardOperational({
     }
   };
 
-  /* Polling: refresh tracking every 3 minutes while a route is selected */
+  /* Realtime tracking via MQTT: subscribe to per-route topics when a route is selected */
   useEffect(() => {
     if (!selectedRouteId) return undefined;
     let mounted = true;
 
-    const fetchTracking = async () => {
-      setRouteTrackingLoading(true);
+    const topics = [`logitrack/rutas/${selectedRouteId}/gps`, `logitrack/rutas/${selectedRouteId}/estado`];
+
+    const client = mqtt.connect("ws://localhost:9001", { reconnectPeriod: 5000 });
+
+    const safeJson = (buf) => {
       try {
-        const res = await apiFetch(`/api/rutas/${selectedRouteId}/tracking`);
-        if (!mounted) return;
-        if (res.ok && res.data) {
-          setRouteTracking((prev) => ({ ...prev, [selectedRouteId]: res.data }));
-        } else {
-          setRouteTracking((prev) => ({ ...prev, [selectedRouteId]: { ubicacion_actual: null, historial: [] } }));
-        }
-      } catch (e) {
-        if (!mounted) return;
-        setRouteTracking((prev) => ({ ...prev, [selectedRouteId]: { ubicacion_actual: null, historial: [] } }));
-      } finally {
-        if (mounted) setRouteTrackingLoading(false);
+        return JSON.parse(Buffer.isBuffer(buf) ? buf.toString() : String(buf));
+      } catch {
+        try { return JSON.parse(String(buf)); } catch { return null; }
       }
     };
 
-    // initial immediate fetch so panel shows up-to-date info
-    fetchTracking();
+    client.on("connect", () => {
+      client.subscribe(topics, (err) => {
+        if (err) {
+          // subscribe error — keep client alive for retries
+          console.error("MQTT subscribe error", err);
+        }
+      });
+    });
 
-    const intervalId = setInterval(fetchTracking, 180000); // 180,000 ms = 3 minutes
+    client.on("reconnect", () => {
+      console.debug("MQTT reconnecting...");
+    });
+
+    client.on("error", (err) => {
+      console.error("MQTT error", err);
+    });
+
+    client.on("message", (topic, message) => {
+      if (!mounted) return;
+      const payload = safeJson(message);
+      if (!payload) return;
+
+      if (topic.endsWith("/gps")) {
+        // Normalize possible field names
+        const lat = payload.lat ?? payload.latitude ?? payload.latitud;
+        const lng = payload.lng ?? payload.longitude ?? payload.longitud;
+        const timestamp = payload.timestamp ?? payload.timestamp_evento ?? new Date().toISOString();
+        const ubic = lat != null && lng != null ? { latitud: Number(lat), longitud: Number(lng), timestamp_evento: timestamp } : null;
+        if (ubic) {
+          setRouteTracking((prev) => {
+            const prevItem = prev[selectedRouteId] || { ubicacion_actual: null, historial: [] };
+            const newHist = Array.isArray(prevItem.historial) ? prevItem.historial.concat([ubic]) : [ubic];
+            return { ...prev, [selectedRouteId]: { ...prevItem, ubicacion_actual: ubic, historial: newHist } };
+          });
+        }
+      } else if (topic.endsWith("/estado")) {
+        const estado = payload.estado ?? payload.status ?? payload;
+        if (estado) {
+          setRutas((prev) => prev.map((r) => (r.id === selectedRouteId ? { ...r, estado } : r)));
+        }
+      }
+    });
+
+    // initial fetch so UI has baseline data (keeps existing behavior)
+    (async () => {
+      setRouteTrackingLoading(true);
+      try {
+        const res = await apiFetch(`/api/rutas/${selectedRouteId}/tracking`);
+        if (mounted) {
+          if (res.ok && res.data) setRouteTracking((prev) => ({ ...prev, [selectedRouteId]: res.data }));
+          else setRouteTracking((prev) => ({ ...prev, [selectedRouteId]: { ubicacion_actual: null, historial: [] } }));
+        }
+      } catch (e) {
+        if (mounted) setRouteTracking((prev) => ({ ...prev, [selectedRouteId]: { ubicacion_actual: null, historial: [] } }));
+      } finally {
+        if (mounted) setRouteTrackingLoading(false);
+      }
+    })();
+
     return () => {
       mounted = false;
-      clearInterval(intervalId);
+      try {
+        client.unsubscribe(topics, () => { /* noop */ });
+      } catch (e) {
+        /* ignore */
+      }
+      try {
+        client.end(true);
+      } catch (e) {
+        /* ignore */
+      }
     };
   }, [selectedRouteId]);
 
