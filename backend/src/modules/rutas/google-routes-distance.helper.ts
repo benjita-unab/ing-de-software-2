@@ -51,9 +51,13 @@ export async function calcularDistanciaVialGoogle(
   origen: string,
   destino: string,
   apiKey: string,
+  intermediates: string[] = [],
 ): Promise<GoogleRoutesDistanceResult> {
   const originAddress = String(origen ?? '').trim();
   const destinationAddress = String(destino ?? '').trim();
+  const waypointAddresses = (intermediates ?? [])
+    .map((addr) => String(addr ?? '').trim())
+    .filter(Boolean);
 
   if (!originAddress || !destinationAddress) {
     return {
@@ -69,6 +73,19 @@ export async function calcularDistanciaVialGoogle(
     };
   }
 
+  const requestBody: Record<string, unknown> = {
+    origin: { address: originAddress },
+    destination: { address: destinationAddress },
+    travelMode: 'DRIVE',
+    routingPreference: 'TRAFFIC_UNAWARE',
+    languageCode: 'es-CL',
+    units: 'METRIC',
+  };
+
+  if (waypointAddresses.length > 0) {
+    requestBody.intermediates = waypointAddresses.map((address) => ({ address }));
+  }
+
   let response: Response;
   try {
     response = await fetch(ROUTES_COMPUTE_URL, {
@@ -78,14 +95,7 @@ export async function calcularDistanciaVialGoogle(
         'X-Goog-Api-Key': apiKey.trim(),
         'X-Goog-FieldMask': 'routes.distanceMeters,routes.duration',
       },
-      body: JSON.stringify({
-        origin: { address: originAddress },
-        destination: { address: destinationAddress },
-        travelMode: 'DRIVE',
-        routingPreference: 'TRAFFIC_UNAWARE',
-        languageCode: 'es-CL',
-        units: 'METRIC',
-      }),
+      body: JSON.stringify(requestBody),
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
