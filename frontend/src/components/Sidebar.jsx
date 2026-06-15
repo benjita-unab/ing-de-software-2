@@ -10,6 +10,7 @@ import {
   Package,
   History,
   DollarSign,
+  Map,
   ChevronLeft,
   ChevronRight,
   LogOut,
@@ -20,6 +21,7 @@ import {
 const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "alertas", label: "Alertas", icon: Bell, badgeKey: "urgent" },
+  { id: "rutas-plantilla", label: "Plantillas", icon: Map },
   { id: "rutas", label: "Rutas", icon: Route },
   { id: "camiones", label: "Flota", icon: Truck },
   { id: "clientes", label: "Clientes", icon: Users },

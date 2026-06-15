@@ -15,6 +15,7 @@ import GuiasDespacho from "./GuiasDespacho";
 import Clientes from "./Clientes";
 import HistorialDespachos from "./HistorialDespachos";
 import PagosCliente from "./PagosCliente";
+import RutasPlantilla from "./RutasPlantilla";
 import ModulePage from "./ui/ModulePage";
 import PageHeader from "./ui/PageHeader";
 import { useAlerts } from "../hooks/useAlerts";
@@ -97,6 +98,14 @@ export default function OperatorDashboard({ operator, onSignOut }) {
               {activeSection === "rrhh" && (
                 <ModulePage title="Recursos Humanos" subtitle="Monitoreo de licencias de conductores">
                   <MonitoreoLicencias />
+                </ModulePage>
+              )}
+              {activeSection === "rutas-plantilla" && (
+                <ModulePage
+                  title="Rutas plantilla"
+                  subtitle="Plantillas reutilizables para originar pedidos (HU-57)"
+                >
+                  <RutasPlantilla />
                 </ModulePage>
               )}
               {activeSection === "rutas" && (
