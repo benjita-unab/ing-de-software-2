@@ -23,6 +23,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ConfiguracionPagosModule } from './modules/configuracion-pagos/configuracion-pagos.module';
 import { ChatRutaModule } from './modules/chat-ruta/chat-ruta.module';
 import { PagosClienteModule } from './modules/pagos-cliente/pagos-cliente.module';
+import { ParadasModule } from './modules/paradas/paradas.module'; // HU-61
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { PagosClienteModule } from './modules/pagos-cliente/pagos-cliente.module
     ConfiguracionPagosModule,
     ChatRutaModule,
     PagosClienteModule,
+    ParadasModule, // HU-61 — Gestión de paradas (aditivo, Zero Breaking Change)
   ],
   controllers: [AppController],
   providers: [AppService, SupabaseConfigService, ResendConfigService, JwtStrategy],

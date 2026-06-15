@@ -10,6 +10,7 @@ import {
 import { useGooglePlacesAutocomplete } from "../hooks/useGooglePlacesAutocomplete";
 import Badge from "./ui/Badge";
 import Spinner from "./ui/Spinner";
+import GestionParadas from "./GestionParadas"; // HU-61
 
 function mensajeFilaClass(tipo) {
   if (tipo === "ok") return "lt-alert-banner lt-alert-banner--success";
@@ -130,6 +131,11 @@ export default function RutasActivas() {
   const [notifyingId, setNotifyingId] = useState(null);
   const [calculandoEstimacion, setCalculandoEstimacion] = useState(false);
   const [calculandoEstimacionRutaId, setCalculandoEstimacionRutaId] = useState(null);
+  // HU-61: control de qué ruta tiene el panel de paradas expandido
+  const [paradasExpandidas, setParadasExpandidas] = useState({});
+
+  const toggleParadas = (rutaId) =>
+    setParadasExpandidas((prev) => ({ ...prev, [rutaId]: !prev[rutaId] }));
 
   const [form, setForm] = useState({
     clienteId: "",
@@ -847,11 +853,13 @@ export default function RutasActivas() {
                   <th>Fechas estimadas</th>
                   <th>Anomalías</th>
                   <th>Acciones</th>
+                  <th>Paradas</th>
                 </tr>
               </thead>
               <tbody>
                 {rutas.map((ruta) => (
-                  <tr key={ruta.id}>
+                  <React.Fragment key={ruta.id}>
+                  <tr>
                     <td>{ruta.origen || "—"}</td>
                     <td>{ruta.destino || "—"}</td>
                     <td>{ruta.clientes?.nombre || "—"}</td>
@@ -1009,7 +1017,35 @@ export default function RutasActivas() {
                         </div>
                       )}
                     </td>
+                    {/* HU-61: botón y panel de paradas intermedias */}
+                    <td style={{ textAlign: "center" }}>
+                      <button
+                        type="button"
+                        id={`btn-paradas-${ruta.id}`}
+                        className="lt-btn lt-btn--secondary"
+                        style={{ fontSize: 12, padding: "4px 10px", whiteSpace: "nowrap" }}
+                        onClick={() => toggleParadas(ruta.id)}
+                      >
+                        {paradasExpandidas[ruta.id] ? "▲ Ocultar" : "🗺️ Paradas"}
+                      </button>
+                    </td>
                   </tr>
+                  {/* Fila secundaria con el panel de paradas (no afecta columnas existentes) */}
+                  {paradasExpandidas[ruta.id] && (
+                    <tr key={`${ruta.id}-paradas`}>
+                      <td
+                        colSpan={10}
+                        style={{ padding: "0 12px 12px", background: "var(--lt-surface-alt, #f8fafc)" }}
+                      >
+                        <GestionParadas
+                          rutaId={ruta.id}
+                          rutaOrigen={ruta.origen}
+                          rutaDestino={ruta.destino}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>
