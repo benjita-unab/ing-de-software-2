@@ -33,8 +33,9 @@ export class RutasPlantillaController {
     @Query('nombre') nombre?: string,
     @Query('q') q?: string,
     @Query('activa') activa?: string,
+    @Query('clienteId') clienteId?: string,
   ) {
-    return this.rutasPlantillaService.list(nombre || q, activa);
+    return this.rutasPlantillaService.list(nombre || q, activa, clienteId);
   }
 
   /** POST /api/rutas-plantilla/calcular-ruta — distancia y tiempo vía Google Routes */

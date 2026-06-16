@@ -24,6 +24,7 @@ export type RutaPlantillaListItemDto = {
   destinoLat?: number | null;
   destinoLng?: number | null;
   activa: boolean;
+  clienteId?: string | null;
   fechaCreacion: string;
   fechaActualizacion: string;
   cantidadParadas: number;

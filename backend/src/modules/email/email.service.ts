@@ -168,6 +168,51 @@ export class EmailService {
   }
 
   /**
+   * HU-60 CA-06: correo con enlace de recuperación de contraseña portal cliente.
+   */
+  async enviarRecuperacionPassword(
+    email: string,
+    nombreUsuario: string,
+    resetUrl: string,
+  ) {
+    if (!email?.trim()) {
+      throw new BadRequestException('email es requerido');
+    }
+    if (!resetUrl?.trim()) {
+      throw new BadRequestException('resetUrl es requerido');
+    }
+
+    const nombreSeguro = this.escapeHtml(nombreUsuario.trim());
+    const urlSegura = this.escapeHtml(resetUrl.trim());
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <body style="font-family: Arial, sans-serif; padding: 24px; color: #111827;">
+          <h1 style="color: #1565c0;">Recuperación de contraseña</h1>
+          <p>Hola, <strong>${nombreSeguro}</strong>,</p>
+          <p>Recibimos una solicitud para restablecer la contraseña de su acceso al portal LogiTrack.</p>
+          <p style="margin: 24px 0;">
+            <a href="${urlSegura}" style="background:#1565c0;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;">
+              Restablecer contraseña
+            </a>
+          </p>
+          <p style="color:#6B7280;">Este enlace expira en 1 hora. Si no solicitó el cambio, ignore este correo.</p>
+          <p style="color:#6B7280;">Saludos,<br/>LogiTrack</p>
+        </body>
+      </html>
+    `;
+
+    await this.resendConfig.sendEmail(
+      email.trim(),
+      'Recuperación de contraseña — Portal LogiTrack',
+      html,
+    );
+
+    return { message: 'Correo de recuperación enviado' };
+  }
+
+  /**
    * Busca el `codigo_otp` más reciente vinculado a la ruta. Si no existe
    * registro de entrega o la columna está vacía, devuelve null.
    */
