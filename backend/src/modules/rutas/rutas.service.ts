@@ -26,6 +26,7 @@ export type CreateRutaDto = {
   fecha_estimada_fin?: string | null;
   fecha_estimada_entrega?: string | null;
   bultos_despachados?: number | string | null;
+  nombre_ruta?: string | null;
 };
 
 /** POST /api/rutas/estimar-fechas (HU-24). */
@@ -309,6 +310,10 @@ export class RutasService {
       destino,
       estado: estadoInicial,
     };
+    
+    if (body.nombre_ruta !== undefined) {
+      insert.nombre_ruta = body.nombre_ruta;
+    }
 
     if (conductor_id) {
       insert.conductor_id = conductor_id;
@@ -377,6 +382,7 @@ export class RutasService {
       .select(
         `
         id,
+        nombre_ruta,
         cliente_id,
         conductor_id,
         camion_id,
@@ -631,6 +637,7 @@ export class RutasService {
       .from('rutas')
       .select(`
         id,
+        nombre_ruta,
         origen,
         destino,
         estado,
@@ -663,6 +670,7 @@ export class RutasService {
       .from('rutas')
       .select(`
         id,
+        nombre_ruta,
         origen,
         destino,
         estado,
@@ -994,6 +1002,7 @@ export class RutasService {
 
     let query = supabase.from('rutas').select(`
       id,
+      nombre_ruta,
       origen,
       destino,
       estado,

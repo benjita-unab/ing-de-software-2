@@ -13,6 +13,7 @@ type RemitenteTipo = 'OPERADOR' | 'CONDUCTOR';
 
 interface RutaRow {
   id: string;
+  nombre_ruta?: string | null;
   origen?: string | null;
   destino?: string | null;
   conductor_id?: string | null;
@@ -51,12 +52,10 @@ export class ChatRutaService {
   constructor(private readonly supabaseConfig: SupabaseConfigService) {}
 
   private buildCodigoRuta(ruta: RutaRow): string {
-    const origen = String(ruta.origen ?? '').trim();
+    if (ruta.nombre_ruta) return ruta.nombre_ruta;
     const destino = String(ruta.destino ?? '').trim();
-    if (origen && destino) return `${origen} → ${destino}`;
-    if (destino) return destino;
-    if (origen) return origen;
-    return `Ruta ${String(ruta.id).substring(0, 8)}`;
+    if (destino) return `Ruta a ${destino}`;
+    return `Ruta Genérica (${String(ruta.id).substring(0, 8)})`;
   }
 
   private extractConductor(ruta: RutaRow): string | null {
@@ -101,7 +100,7 @@ export class ChatRutaService {
     const { data, error } = await supabase
       .from('rutas')
       .select(
-        'id, origen, destino, estado, conductor_id, conductores(id, rut), camiones(patente)',
+        'id, nombre_ruta, origen, destino, estado, conductor_id, conductores(id, rut), camiones(patente)',
       )
       .eq('id', rutaId)
       .single();
@@ -133,7 +132,7 @@ export class ChatRutaService {
     let rutasQuery = supabase
       .from('rutas')
       .select(
-        'id, origen, destino, estado, conductor_id, conductores(id, rut), camiones(patente)',
+        'id, nombre_ruta, origen, destino, estado, conductor_id, conductores(id, rut), camiones(patente)',
       );
 
     if (user.role === 'CONDUCTOR') {
