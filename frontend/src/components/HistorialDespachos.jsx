@@ -338,7 +338,7 @@ export default function HistorialDespachos() {
               <table className="lt-table">
                 <thead>
                   <tr>
-                    <th>ID</th>
+                    <th>Ruta</th>
                     <th>Cliente</th>
                     <th>Conductor / Vehículo</th>
                     <th>Destino</th>
@@ -352,7 +352,9 @@ export default function HistorialDespachos() {
                   {historial.map((despacho) => (
                     <tr key={despacho.id}>
                       <td>
-                        <span className="lt-card__subtitle">#{String(despacho.id).substring(0, 8)}</span>
+                        <span style={{ fontWeight: 600, display: "block" }}>
+                          {despacho.nombre_ruta || (despacho.origen && despacho.destino ? `${despacho.origen.split(',')[0]} - ${despacho.destino.split(',')[0]}` : `Ruta #${String(despacho.id).substring(0, 6).toUpperCase()}`)}
+                        </span>
                       </td>
                       <td>{despacho.clientes?.nombre || "N/A"}</td>
                       <td>

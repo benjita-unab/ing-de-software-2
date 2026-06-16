@@ -16,6 +16,7 @@ export type CreateRutaDto = {
   cliente_id: string;
   conductor_id?: string | null;
   camion_id?: string | null;
+  nombre_ruta?: string | null;
   origen: string;
   destino: string;
   estado?: string | null;
@@ -316,6 +317,13 @@ export class RutasService {
     if (camion_id) {
       insert.camion_id = camion_id;
     }
+    if (body.nombre_ruta != null && String(body.nombre_ruta).trim() !== '') {
+      insert.nombre_ruta = String(body.nombre_ruta).trim();
+    } else {
+      const supabase = this.supabaseConfig.getClient();
+      const { count } = await supabase.from('rutas').select('*', { count: 'exact', head: true });
+      insert.nombre_ruta = `Ruta #${(count || 0) + 1}`;
+    }
 
     if (body.fecha_inicio != null && String(body.fecha_inicio).trim() !== '') {
       insert.fecha_inicio = String(body.fecha_inicio).trim();
@@ -377,6 +385,7 @@ export class RutasService {
       .select(
         `
         id,
+        nombre_ruta,
         cliente_id,
         conductor_id,
         camion_id,
@@ -631,6 +640,7 @@ export class RutasService {
       .from('rutas')
       .select(`
         id,
+        nombre_ruta,
         origen,
         destino,
         estado,
@@ -663,6 +673,7 @@ export class RutasService {
       .from('rutas')
       .select(`
         id,
+        nombre_ruta,
         origen,
         destino,
         estado,
@@ -994,6 +1005,7 @@ export class RutasService {
 
     let query = supabase.from('rutas').select(`
       id,
+      nombre_ruta,
       origen,
       destino,
       estado,

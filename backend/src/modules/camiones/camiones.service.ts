@@ -13,7 +13,7 @@ import { UpdateCamionDto } from './dto/update-camion.dto';
 //   proxima_mantencion, created_at.
 
 const CAMION_SELECT =
-  'id, patente, capacidad_kg, estado, activo, ultima_mantencion, proxima_mantencion, created_at';
+  'id, patente, slots, estado, activo, ultima_mantencion, proxima_mantencion, created_at';
 
 @Injectable()
 export class CamionesService {
@@ -23,7 +23,7 @@ export class CamionesService {
     return {
       id: c.id,
       patente: c.patente,
-      capacidad_kg: c.capacidad_kg ?? null,
+      slots: c.slots ?? null,
       estado: c.estado ?? 'DISPONIBLE',
       activo: c.activo ?? true,
       ultima_mantencion: c.ultima_mantencion ?? null,
@@ -96,7 +96,7 @@ export class CamionesService {
 
     const { data, error } = await supabase
       .from('camiones')
-      .select('id, patente, capacidad_kg, estado')
+      .select('id, patente, slots, estado')
       .eq('activo', true)
       .eq('estado', 'DISPONIBLE')
       .order('patente', { ascending: true });
@@ -143,8 +143,8 @@ export class CamionesService {
       throw new BadRequestException('La patente es obligatoria');
     }
 
-    if (!payload.capacidad_kg || payload.capacidad_kg <= 0) {
-      throw new BadRequestException('La capacidad debe ser mayor a 0');
+    if (!payload.slots || payload.slots <= 0) {
+      throw new BadRequestException('Los slots deben ser mayores a 0');
     }
 
     await this.assertPatenteUnica(patente);
@@ -153,7 +153,7 @@ export class CamionesService {
 
     const insertRow = {
       patente,
-      capacidad_kg: payload.capacidad_kg,
+      slots: payload.slots,
       estado: payload.estado ?? 'DISPONIBLE',
       activo: true,
       ultima_mantencion: this.normalizeDateOnly(payload.ultima_mantencion),
@@ -187,16 +187,16 @@ export class CamionesService {
     await this.getCamion(id);
 
     if (
-      payload.capacidad_kg != null
-      && payload.capacidad_kg <= 0
+      payload.slots != null
+      && payload.slots <= 0
     ) {
-      throw new BadRequestException('La capacidad debe ser mayor a 0');
+      throw new BadRequestException('Los slots deben ser mayores a 0');
     }
 
     const updateRow: Record<string, unknown> = {};
 
-    if (payload.capacidad_kg != null) {
-      updateRow.capacidad_kg = payload.capacidad_kg;
+    if (payload.slots != null) {
+      updateRow.slots = payload.slots;
     }
     if (payload.estado != null) {
       updateRow.estado = payload.estado;

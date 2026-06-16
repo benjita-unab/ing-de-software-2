@@ -176,7 +176,7 @@ export default function GuiasDespacho() {
                     return (
                       <tr key={ruta.id}>
                         <td>
-                          <span className="lt-card__subtitle">#{String(ruta.id).substring(0, 8)}</span>
+                          <span className="lt-card__subtitle">{ruta.nombre_ruta || (ruta.origen && ruta.destino ? `${ruta.origen.split(',')[0]} - ${ruta.destino.split(',')[0]}` : `Ruta #${String(ruta.id).substring(0, 6).toUpperCase()}`)}</span>
                         </td>
                         <td>
                           <strong>{ruta.clientes?.nombre || "Sin Asignar"}</strong>

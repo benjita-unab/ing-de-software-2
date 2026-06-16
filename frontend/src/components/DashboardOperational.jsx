@@ -484,7 +484,7 @@ export default function DashboardOperational({
           </button>
           <div className="lt-map-route-panel__header">
             <span className="lt-map-route-panel__id">
-              {selectedRuta.id?.slice?.(0, 8) ?? selectedRuta.id}
+              {selectedRuta.nombre_ruta || (selectedRuta.origen && selectedRuta.destino ? `${selectedRuta.origen.split(',')[0]} - ${selectedRuta.destino.split(',')[0]}` : `Ruta #${String(selectedRuta.id).substring(0, 6).toUpperCase()}`)}
             </span>
             <Badge variant={routeBadgeVariant(selectedRoute.estado)}>
               {routeStatusLabel(selectedRoute.estado)}
@@ -703,7 +703,7 @@ export default function DashboardOperational({
                     <div className="lt-list-item__row">
                       <div>
                         <div className="lt-list-item__title">
-                          <span>{ruta.id?.slice?.(0, 8) ?? ruta.id}</span>
+                          <span>{ruta.nombre_ruta || (ruta.origen && ruta.destino ? `${ruta.origen.split(',')[0]} - ${ruta.destino.split(',')[0]}` : `Ruta #${String(ruta.id).substring(0, 6).toUpperCase()}`)}</span>
                           <Badge variant={routeBadgeVariant(ruta.estado)}>{routeStatusLabel(ruta.estado)}</Badge>
                           {hasAlert && <Badge variant="danger">!</Badge>}
                         </div>

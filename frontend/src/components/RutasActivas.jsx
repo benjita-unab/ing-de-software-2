@@ -132,6 +132,7 @@ export default function RutasActivas() {
   const [calculandoEstimacionRutaId, setCalculandoEstimacionRutaId] = useState(null);
 
   const [form, setForm] = useState({
+    nombreRuta: "",
     clienteId: "",
     conductorId: "",
     camionId: "",
@@ -448,6 +449,10 @@ export default function RutasActivas() {
       distancia_km: distanciaNormalizada,
     };
 
+    if (form.nombreRuta?.trim()) {
+      payload.nombre_ruta = form.nombreRuta.trim();
+    }
+
     const fi = localDatetimeToIso(form.fechaInicio);
     const eta = localDatetimeToIso(form.eta);
     if (fi) payload.fecha_inicio = fi;
@@ -473,6 +478,7 @@ export default function RutasActivas() {
 
     setMensaje({ tipo: "ok", texto: "Ruta creada correctamente." });
     setForm({
+      nombreRuta: "",
       clienteId: "",
       conductorId: "",
       camionId: "",
@@ -618,6 +624,16 @@ export default function RutasActivas() {
               Nueva ruta
             </div>
             <div className="lt-form-grid">
+              <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
+                <label className="lt-label" htmlFor="ruta-nombre">Nombre de la ruta (Opcional)</label>
+                <input
+                  id="ruta-nombre"
+                  className="lt-input"
+                  value={form.nombreRuta}
+                  onChange={(e) => actualizarCampo("nombreRuta", e.target.value)}
+                  placeholder="Ej: Ruta Norte #2 (se autogenerará si se deja vacío)"
+                />
+              </div>
               <div className="lt-field-group">
                 <label className="lt-label" htmlFor="ruta-cliente">Cliente *</label>
                 <select
@@ -838,6 +854,7 @@ export default function RutasActivas() {
             <table className="lt-table">
               <thead>
                 <tr>
+                  <th>Nombre Ruta</th>
                   <th>Origen</th>
                   <th>Destino</th>
                   <th>Cliente</th>
@@ -852,6 +869,7 @@ export default function RutasActivas() {
               <tbody>
                 {rutas.map((ruta) => (
                   <tr key={ruta.id}>
+                    <td style={{ fontWeight: 600 }}>{ruta.nombre_ruta || (ruta.origen && ruta.destino ? `${ruta.origen.split(',')[0]} - ${ruta.destino.split(',')[0]}` : `Ruta #${String(ruta.id).substring(0, 6).toUpperCase()}`)}</td>
                     <td>{ruta.origen || "—"}</td>
                     <td>{ruta.destino || "—"}</td>
                     <td>{ruta.clientes?.nombre || "—"}</td>
