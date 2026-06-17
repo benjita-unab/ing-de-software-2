@@ -15,6 +15,11 @@ export class UpdateCamionDto {
   slots?: number;
 
   @IsOptional()
+  @IsNumber()
+  @Min(0)
+  slots_utilizados?: number;
+
+  @IsOptional()
   @IsIn(ESTADOS_CAMION)
   estado?: (typeof ESTADOS_CAMION)[number];
 
