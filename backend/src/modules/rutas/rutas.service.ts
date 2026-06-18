@@ -983,14 +983,21 @@ export class RutasService {
   }
 
   /**
-   * Lista todas las rutas con filtros opcionales
+   * Lista todas las rutas con filtros opcionales y paginación
    */
   async listRoutes(filters?: {
     estado?: string;
     conductorId?: string;
     clienteId?: string;
+    page?: number;
+    limit?: number;
   }) {
     const supabase = this.supabaseConfig.getClient();
+
+    const page = filters?.page || 1;
+    const limit = filters?.limit || 10;
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
 
     let query = supabase.from('rutas').select(`
       id,
@@ -1018,7 +1025,7 @@ export class RutasService {
       clientes(id, nombre, contacto_email),
       conductores(id, rut),
       camiones(id, patente)
-    `);
+    `, { count: 'exact' });
 
     if (filters?.estado) {
       query = query.eq('estado', filters.estado);
@@ -1032,13 +1039,58 @@ export class RutasService {
       query = query.eq('cliente_id', filters.clienteId);
     }
 
-    const { data: rutas, error } = await query.order('created_at', { ascending: false });
+    if (filters?.search) {
+      const q = filters.search.trim();
+
+      // Buscamos clientes que coincidan
+      const { data: clients } = await supabase
+        .from('clientes')
+        .select('id')
+        .ilike('nombre', `%${q}%`);
+      const clientIds = clients?.map((c) => c.id) || [];
+
+      // Buscamos conductores que coincidan (por rut o nombre)
+      const { data: conductors } = await supabase
+        .from('conductores')
+        .select('id')
+        .or(`nombre.ilike.%${q}%,rut.ilike.%${q}%`);
+      const conductorIds = conductors?.map((c) => c.id) || [];
+
+      // Construimos el filtro OR dinámicamente
+      // Simulamos "nombre de ruta" usando el origen o destino
+      let orString = `origen.ilike.%${q}%,destino.ilike.%${q}%`;
+      
+      if (clientIds.length > 0) {
+        orString += `,cliente_id.in.(${clientIds.join(',')})`;
+      }
+      
+      if (conductorIds.length > 0) {
+        orString += `,conductor_id.in.(${conductorIds.join(',')})`;
+      }
+
+      query = query.or(orString);
+    }
+
+    const { data: rutas, error, count } = await query
+      .order('created_at', { ascending: false })
+      .range(from, to);
 
     if (error) {
       throw new BadRequestException(`Error al obtener rutas: ${error.message}`);
     }
 
-    return rutas || [];
+    const total_items = count || 0;
+    const total_pages = Math.ceil(total_items / limit);
+
+    return {
+      data: rutas || [],
+      meta: {
+        total_items,
+        total_pages,
+        current_page: page,
+        limit,
+      }
+    };
   }
 
   /**

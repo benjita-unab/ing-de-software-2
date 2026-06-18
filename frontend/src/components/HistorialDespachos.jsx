@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { apiFetch } from "../lib/apiClient";
 import Badge from "./ui/Badge";
+import Pagination from "./ui/Pagination";
+import { Search } from "lucide-react";
 
 const ESTADOS_FINALIZADOS = ["ENTREGADO", "ENTREGADA"];
 
@@ -248,6 +250,15 @@ export default function HistorialDespachos() {
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState(null);
 
+  // Estado de paginación y filtros
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalItems, setTotalItems] = useState(0);
+  
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+
   useEffect(() => {
     let cancelled = false;
 
@@ -255,13 +266,26 @@ export default function HistorialDespachos() {
       setLoading(true);
 
       let lista = [];
-      const resAll = await apiFetch("/api/rutas?estado=ENTREGADO");
+      const queryParams = new URLSearchParams({
+        page,
+        limit,
+        estado: "ENTREGADO" // Fijo para historial
+      });
+      if (searchQuery) {
+        queryParams.append("search", searchQuery);
+      }
+
+      const resAll = await apiFetch(`/api/rutas?${queryParams.toString()}`);
       if (resAll.ok) {
         const payload = resAll.data;
-        const data = Array.isArray(payload) ? payload : payload?.data ?? [];
+        const data = Array.isArray(payload.data) ? payload.data : (Array.isArray(payload) ? payload : payload?.data ?? []);
         lista = data.filter((ruta) =>
           ESTADOS_FINALIZADOS.includes(String(ruta?.estado || "").toUpperCase())
         );
+        if (payload.meta && !cancelled) {
+          setTotalPages(payload.meta.total_pages);
+          setTotalItems(payload.meta.total_items);
+        }
       } else {
         console.error("Error cargando historial de rutas:", resAll.error);
       }
@@ -283,7 +307,13 @@ export default function HistorialDespachos() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [page, limit, searchQuery]);
+
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    setSearchQuery(searchInput);
+    setPage(1); // Reset a primera página al buscar
+  };
 
   const abrirEvidencias = useCallback(async (despacho) => {
     setSeleccionado(despacho);
@@ -327,6 +357,29 @@ export default function HistorialDespachos() {
 
   return (
     <div className="lt-module-inner">
+      <div className="lt-toolbar" style={{ marginBottom: "16px" }}>
+        <form className="lt-search-wrap" onSubmit={handleSearchSubmit} style={{ flex: 1, maxWidth: "400px" }}>
+          <Search size={16} className="lt-search-wrap__icon" />
+          <input
+            type="search"
+            className="lt-input"
+            placeholder="Buscar por cliente, conductor o ruta..."
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+          />
+        </form>
+        <button
+          type="button"
+          className="lt-btn lt-btn--secondary"
+          onClick={() => {
+            setSearchQuery(searchInput);
+            setPage(1);
+          }}
+        >
+          Buscar
+        </button>
+      </div>
+
       <div className="lt-card lt-module-card">
         <div className="lt-card__body">
           {loading ? (
@@ -399,6 +452,19 @@ export default function HistorialDespachos() {
                 </tbody>
               </table>
             </div>
+          )}
+          {!loading && historial.length > 0 && (
+            <Pagination
+              currentPage={page}
+              totalPages={totalPages}
+              totalItems={totalItems}
+              limit={limit}
+              onPageChange={setPage}
+              onLimitChange={(newLimit) => {
+                setLimit(newLimit);
+                setPage(1); // Paginación No Destructiva
+              }}
+            />
           )}
         </div>
       </div>
