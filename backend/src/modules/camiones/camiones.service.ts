@@ -13,7 +13,7 @@ import { UpdateCamionDto } from './dto/update-camion.dto';
 //   proxima_mantencion, created_at.
 
 const CAMION_SELECT =
-  'id, patente, capacidad_kg, estado, activo, ultima_mantencion, proxima_mantencion, created_at';
+  'id, patente, estado, activo, ultima_mantencion, proxima_mantencion, created_at';
 
 @Injectable()
 export class CamionesService {
@@ -73,14 +73,56 @@ export class CamionesService {
     }
   }
 
-  async listCamiones() {
+  async listCamiones(params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    estado?: string;
+    orden?: string;
+  }) {
     const supabase = this.supabaseConfig.getClient();
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('camiones')
-      .select(CAMION_SELECT)
-      .eq('activo', true)
-      .order('patente', { ascending: true });
+      .select(CAMION_SELECT, { count: 'exact' })
+      .eq('activo', true);
+
+    if (params?.search) {
+      const term = `%${params.search.trim()}%`;
+      query = query.ilike('patente', term);
+    }
+
+    if (params?.estado && params.estado !== 'TODOS') {
+      query = query.eq('estado', params.estado);
+    }
+
+    if (params?.orden) {
+      switch (params.orden) {
+        case 'patente-desc':
+          query = query.order('patente', { ascending: false });
+          break;
+        case 'revision-proxima':
+          query = query.order('proxima_mantencion', { ascending: true, nullsFirst: false });
+          break;
+        case 'revision-lejana':
+          query = query.order('proxima_mantencion', { ascending: false, nullsFirst: false });
+          break;
+        case 'patente-asc':
+        default:
+          query = query.order('patente', { ascending: true });
+          break;
+      }
+    } else {
+      query = query.order('patente', { ascending: true });
+    }
+
+    if (params?.page && params?.limit) {
+      const from = (params.page - 1) * params.limit;
+      const to = from + params.limit - 1;
+      query = query.range(from, to);
+    }
+
+    const { data, count, error } = await query;
 
     if (error) {
       throw new BadRequestException(
@@ -88,7 +130,21 @@ export class CamionesService {
       );
     }
 
-    return (data || []).map((c) => this.mapCamion(c));
+    const resultData = (data || []).map((c) => this.mapCamion(c));
+
+    if (params?.page && params?.limit) {
+      return {
+        data: resultData,
+        meta: {
+          total_items: count || 0,
+          total_pages: Math.ceil((count || 0) / params.limit),
+          current_page: params.page,
+          limit: params.limit,
+        },
+      };
+    }
+
+    return resultData;
   }
 
   async listCamionesDisponibles() {
@@ -96,7 +152,7 @@ export class CamionesService {
 
     const { data, error } = await supabase
       .from('camiones')
-      .select('id, patente, capacidad_kg, estado')
+      .select('id, patente, estado')
       .eq('activo', true)
       .eq('estado', 'DISPONIBLE')
       .order('patente', { ascending: true });
@@ -153,7 +209,6 @@ export class CamionesService {
 
     const insertRow = {
       patente,
-      capacidad_kg: payload.capacidad_kg,
       estado: payload.estado ?? 'DISPONIBLE',
       activo: true,
       ultima_mantencion: this.normalizeDateOnly(payload.ultima_mantencion),
@@ -195,9 +250,6 @@ export class CamionesService {
 
     const updateRow: Record<string, unknown> = {};
 
-    if (payload.capacidad_kg != null) {
-      updateRow.capacidad_kg = payload.capacidad_kg;
-    }
     if (payload.estado != null) {
       updateRow.estado = payload.estado;
     }
