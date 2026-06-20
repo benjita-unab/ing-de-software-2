@@ -345,7 +345,8 @@ export default function DashboardOperational({
 
     const topics = [`logitrack/rutas/${selectedRouteId}/gps`, `logitrack/rutas/${selectedRouteId}/estado`];
 
-    const client = mqtt.connect("ws://localhost:9001", { reconnectPeriod: 5000 });
+    const brokerUrl = process.env.REACT_APP_MQTT_BROKER_URL || "ws://localhost:9001";
+    const client = mqtt.connect(brokerUrl, { reconnectPeriod: 5000 });
 
     const safeJson = (buf) => {
       try {
