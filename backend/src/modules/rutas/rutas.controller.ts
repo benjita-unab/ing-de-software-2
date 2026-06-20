@@ -19,10 +19,11 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/user.decorator';
 import { JwtGuard } from '../../common/guards/jwt.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { LicenseGuard } from '../../common/guards/license.guard';
 import type { AuthenticatedUser } from '../../common/strategies/jwt.strategy';
 
 @Controller('api/rutas')
-@UseGuards(JwtGuard, RolesGuard)
+@UseGuards(JwtGuard, RolesGuard, LicenseGuard)
 @Roles('ADMIN', 'OPERADOR', 'CONDUCTOR')
 export class RutasController {
   constructor(private rutasService: RutasService) {}

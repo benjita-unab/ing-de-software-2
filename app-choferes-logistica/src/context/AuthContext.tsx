@@ -14,10 +14,12 @@ import {
   type AccessKind,
   type AuthSession,
 } from '@/src/services/authSession';
+import { getDriverLicenseStatus } from '@/src/services/api';
 
-interface AuthContextValue {
+export interface AuthContextValue {
   session: AuthSession | null;
   isLoading: boolean;
+  licenseStatus: any | null;
   signIn: (
     email: string,
     password: string,
@@ -25,6 +27,7 @@ interface AuthContextValue {
   ) => Promise<AuthSession>;
   signOut: () => Promise<void>;
   refreshSession: () => Promise<void>;
+  refreshLicenseStatus: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -32,11 +35,26 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [licenseStatus, setLicenseStatus] = useState<any | null>(null);
+
+  const refreshLicenseStatus = useCallback(async (currentSession = session) => {
+    if (currentSession?.accessKind === 'chofer' && currentSession?.conductorId) {
+      try {
+        const status = await getDriverLicenseStatus(currentSession.conductorId, currentSession.accessToken);
+        setLicenseStatus(status);
+      } catch (err) {
+        console.error('Error fetching license status:', err);
+      }
+    } else {
+      setLicenseStatus(null);
+    }
+  }, [session]);
 
   const refreshSession = useCallback(async () => {
     const stored = await getStoredSession();
     setSession(stored);
-  }, []);
+    if (stored) await refreshLicenseStatus(stored);
+  }, [refreshLicenseStatus]);
 
   useEffect(() => {
     refreshSession().finally(() => setIsLoading(false));
@@ -53,6 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         expectedRole,
       );
       setSession(next);
+      await refreshLicenseStatus(next);
       return next;
     },
     [],
@@ -62,11 +81,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     await clearSession();
     setSession(null);
+    setLicenseStatus(null);
   }, []);
 
   const value = useMemo(
-    () => ({ session, isLoading, signIn, signOut, refreshSession }),
-    [session, isLoading, signIn, signOut, refreshSession],
+    () => ({ session, isLoading, licenseStatus, signIn, signOut, refreshSession, refreshLicenseStatus }),
+    [session, isLoading, licenseStatus, signIn, signOut, refreshSession, refreshLicenseStatus],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
