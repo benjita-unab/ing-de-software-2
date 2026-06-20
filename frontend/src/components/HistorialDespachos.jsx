@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { apiFetch } from "../lib/apiClient";
+import { getNombreRuta } from "../lib/rutasUtils";
 import Badge from "./ui/Badge";
 
 const ESTADOS_FINALIZADOS = ["ENTREGADO", "ENTREGADA"];
@@ -338,7 +339,7 @@ export default function HistorialDespachos() {
               <table className="lt-table">
                 <thead>
                   <tr>
-                    <th>ID</th>
+                    <th>Ruta</th>
                     <th>Cliente</th>
                     <th>Conductor / Vehículo</th>
                     <th>Destino</th>
@@ -352,7 +353,8 @@ export default function HistorialDespachos() {
                   {historial.map((despacho) => (
                     <tr key={despacho.id}>
                       <td>
-                        <span className="lt-card__subtitle">#{String(despacho.id).substring(0, 8)}</span>
+                        <strong>{getNombreRuta(despacho)}</strong>
+                        <div className="lt-card__subtitle">#{String(despacho.id).substring(0, 8)}</div>
                       </td>
                       <td>{despacho.clientes?.nombre || "N/A"}</td>
                       <td>

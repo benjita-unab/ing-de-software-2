@@ -13,7 +13,7 @@ import { UpdateCamionDto } from './dto/update-camion.dto';
 //   proxima_mantencion, created_at.
 
 const CAMION_SELECT =
-  'id, patente, capacidad_kg, estado, activo, ultima_mantencion, proxima_mantencion, created_at';
+  'id, patente, slots, rendimiento_km_l, estado, activo, ultima_mantencion, proxima_mantencion, created_at';
 
 @Injectable()
 export class CamionesService {
@@ -23,7 +23,8 @@ export class CamionesService {
     return {
       id: c.id,
       patente: c.patente,
-      capacidad_kg: c.capacidad_kg ?? null,
+      slots: c.slots ?? 96,
+      rendimiento_km_l: c.rendimiento_km_l ?? 4.5,
       estado: c.estado ?? 'DISPONIBLE',
       activo: c.activo ?? true,
       ultima_mantencion: c.ultima_mantencion ?? null,
@@ -96,7 +97,7 @@ export class CamionesService {
 
     const { data, error } = await supabase
       .from('camiones')
-      .select('id, patente, capacidad_kg, estado')
+      .select('id, patente, slots, rendimiento_km_l, estado')
       .eq('activo', true)
       .eq('estado', 'DISPONIBLE')
       .order('patente', { ascending: true });
@@ -143,9 +144,7 @@ export class CamionesService {
       throw new BadRequestException('La patente es obligatoria');
     }
 
-    if (!payload.capacidad_kg || payload.capacidad_kg <= 0) {
-      throw new BadRequestException('La capacidad debe ser mayor a 0');
-    }
+
 
     await this.assertPatenteUnica(patente);
 
@@ -153,7 +152,8 @@ export class CamionesService {
 
     const insertRow = {
       patente,
-      capacidad_kg: payload.capacidad_kg,
+      slots: payload.slots ?? 96,
+      rendimiento_km_l: payload.rendimiento_km_l ?? 4.5,
       estado: payload.estado ?? 'DISPONIBLE',
       activo: true,
       ultima_mantencion: this.normalizeDateOnly(payload.ultima_mantencion),
@@ -186,18 +186,12 @@ export class CamionesService {
 
     await this.getCamion(id);
 
-    if (
-      payload.capacidad_kg != null
-      && payload.capacidad_kg <= 0
-    ) {
-      throw new BadRequestException('La capacidad debe ser mayor a 0');
-    }
+
 
     const updateRow: Record<string, unknown> = {};
 
-    if (payload.capacidad_kg != null) {
-      updateRow.capacidad_kg = payload.capacidad_kg;
-    }
+      // removed capacidad update
+
     if (payload.estado != null) {
       updateRow.estado = payload.estado;
     }
