@@ -11,8 +11,13 @@ const ESTADOS_CAMION = ['DISPONIBLE', 'EN_RUTA', 'MANTENCION'] as const;
 export class UpdateCamionDto {
   @IsOptional()
   @IsNumber()
-  @Min(0.01)
-  capacidad_kg?: number;
+  @Min(1)
+  slots?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  slots_utilizados?: number;
 
   @IsOptional()
   @IsIn(ESTADOS_CAMION)
