@@ -178,7 +178,9 @@ export default function GuiasDespacho() {
                       <tr key={ruta.id}>
                         <td>
                           <strong>{getNombreRuta(ruta)}</strong>
-                          <div className="lt-card__subtitle">#{String(ruta.id).substring(0, 8)}</div>
+                          <div className="lt-card__subtitle">
+                            #{String(ruta.id).substring(0, 8)}
+                          </div>
                         </td>
                         <td>
                           <strong>{ruta.clientes?.nombre || "Sin Asignar"}</strong>

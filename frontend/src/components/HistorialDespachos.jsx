@@ -354,7 +354,9 @@ export default function HistorialDespachos() {
                     <tr key={despacho.id}>
                       <td>
                         <strong>{getNombreRuta(despacho)}</strong>
-                        <div className="lt-card__subtitle">#{String(despacho.id).substring(0, 8)}</div>
+                        <div className="lt-card__subtitle">
+                          #{String(despacho.id).substring(0, 8)}
+                        </div>
                       </td>
                       <td>{despacho.clientes?.nombre || "N/A"}</td>
                       <td>

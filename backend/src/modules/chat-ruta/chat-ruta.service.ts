@@ -53,9 +53,15 @@ export class ChatRutaService {
 
   private buildCodigoRuta(ruta: RutaRow): string {
     if (ruta.nombre_ruta) return ruta.nombre_ruta;
+
+    const origen = String(ruta.origen ?? '').trim();
     const destino = String(ruta.destino ?? '').trim();
-    if (destino) return `Ruta a ${destino}`;
-    return `Ruta Genérica (${String(ruta.id).substring(0, 8)})`;
+
+    if (origen && destino) return `${origen} → ${destino}`;
+    if (destino) return destino;
+    if (origen) return origen;
+
+    return `Ruta ${String(ruta.id).substring(0, 8)}`;
   }
 
   private extractConductor(ruta: RutaRow): string | null {

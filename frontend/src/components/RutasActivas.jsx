@@ -449,7 +449,7 @@ export default function RutasActivas() {
       camion_id: form.camionId.trim(),
       distancia_km: distanciaNormalizada,
     };
-    if (form.nombreRuta.trim()) {
+    if (form.nombreRuta?.trim()) {
       payload.nombre_ruta = form.nombreRuta.trim();
     }
 
@@ -631,7 +631,7 @@ export default function RutasActivas() {
                   className="lt-input"
                   value={form.nombreRuta}
                   onChange={(e) => actualizarCampo("nombreRuta", e.target.value)}
-                  placeholder="Ej: Ruta Norte 1"
+                  placeholder="Ej: Ruta Norte #2 (se autogenerará si se deja vacío)"
                 />
               </div>
               <div className="lt-field-group">
