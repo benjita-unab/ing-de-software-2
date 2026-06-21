@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { apiFetch } from "../lib/apiClient";
+import { getNombreRuta } from "../lib/rutasUtils";
 import Badge from "./ui/Badge";
 
 const ESTADOS_FINALIZADOS = ["ENTREGADO", "ENTREGADA"];
@@ -352,9 +353,10 @@ export default function HistorialDespachos() {
                   {historial.map((despacho) => (
                     <tr key={despacho.id}>
                       <td>
-                        <span style={{ fontWeight: 600, display: "block" }}>
-                          {despacho.nombre_ruta || (despacho.origen && despacho.destino ? `${despacho.origen.split(',')[0]} - ${despacho.destino.split(',')[0]}` : `Ruta #${String(despacho.id).substring(0, 6).toUpperCase()}`)}
-                        </span>
+                        <strong>{getNombreRuta(despacho)}</strong>
+                        <div className="lt-card__subtitle">
+                          #{String(despacho.id).substring(0, 8)}
+                        </div>
                       </td>
                       <td>{despacho.clientes?.nombre || "N/A"}</td>
                       <td>

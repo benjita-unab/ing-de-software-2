@@ -8,6 +8,7 @@ import {
   obtenerAnomaliasRuta,
 } from "../lib/rutasService";
 import { useGooglePlacesAutocomplete } from "../hooks/useGooglePlacesAutocomplete";
+import { getNombreRuta } from "../lib/rutasUtils";
 import Badge from "./ui/Badge";
 import Spinner from "./ui/Spinner";
 
@@ -448,7 +449,6 @@ export default function RutasActivas() {
       camion_id: form.camionId.trim(),
       distancia_km: distanciaNormalizada,
     };
-
     if (form.nombreRuta?.trim()) {
       payload.nombre_ruta = form.nombreRuta.trim();
     }
@@ -869,7 +869,9 @@ export default function RutasActivas() {
               <tbody>
                 {rutas.map((ruta) => (
                   <tr key={ruta.id}>
-                    <td style={{ fontWeight: 600 }}>{ruta.nombre_ruta || (ruta.origen && ruta.destino ? `${ruta.origen.split(',')[0]} - ${ruta.destino.split(',')[0]}` : `Ruta #${String(ruta.id).substring(0, 6).toUpperCase()}`)}</td>
+                    <td>
+                      <strong>{getNombreRuta(ruta)}</strong>
+                    </td>
                     <td>{ruta.origen || "—"}</td>
                     <td>{ruta.destino || "—"}</td>
                     <td>{ruta.clientes?.nombre || "—"}</td>

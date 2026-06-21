@@ -759,7 +759,7 @@ export class RutasService {
         notificacion_fecha_estimada_destinatario,
         clientes(id, nombre, contacto_email),
         conductores(id, rut, licencia_vencimiento),
-        camiones(id, patente, capacidad_kg)
+        camiones(id, patente, slots, slots_utilizados, talla)
       `)
       .eq('id', rutaId)
       .single();

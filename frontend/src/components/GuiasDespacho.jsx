@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch } from "../lib/apiClient";
+import { getNombreRuta } from "../lib/rutasUtils";
 import Badge from "./ui/Badge";
 
 const AUTO_REFRESH_MS = 15000;
@@ -159,7 +160,7 @@ export default function GuiasDespacho() {
               <table className="lt-table">
                 <thead>
                   <tr>
-                    <th>ID</th>
+                    <th>Ruta</th>
                     <th>Cliente / Destino</th>
                     <th>Vehículo / Conductor</th>
                     <th>Inicio</th>
@@ -176,7 +177,10 @@ export default function GuiasDespacho() {
                     return (
                       <tr key={ruta.id}>
                         <td>
-                          <span className="lt-card__subtitle">{ruta.nombre_ruta || (ruta.origen && ruta.destino ? `${ruta.origen.split(',')[0]} - ${ruta.destino.split(',')[0]}` : `Ruta #${String(ruta.id).substring(0, 6).toUpperCase()}`)}</span>
+                          <strong>{getNombreRuta(ruta)}</strong>
+                          <div className="lt-card__subtitle">
+                            #{String(ruta.id).substring(0, 8)}
+                          </div>
                         </td>
                         <td>
                           <strong>{ruta.clientes?.nombre || "Sin Asignar"}</strong>
