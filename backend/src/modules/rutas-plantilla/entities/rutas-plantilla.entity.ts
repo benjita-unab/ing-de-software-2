@@ -16,6 +16,7 @@ export interface RutasPlantillaEntity {
   destino_lat?: number | null;
   destino_lng?: number | null;
   activa: boolean;
+  cliente_id?: string | null;
   fecha_creacion: string;
   fecha_actualizacion: string;
 }

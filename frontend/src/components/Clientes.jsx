@@ -134,6 +134,13 @@ export default function Clientes() {
               >
                 <div className="lt-clientes-list__name">{cliente.nombre}</div>
                 <div className="lt-clientes-list__rut">{cliente.rut || "—"}</div>
+                {cliente.accesoPortal?.tieneAcceso ? (
+                  <Badge variant={cliente.accesoPortal.activo === false ? "warning" : "success"} showDot={false}>
+                    Portal {cliente.accesoPortal.activo === false ? "inactivo" : "activo"}
+                  </Badge>
+                ) : (
+                  <Badge variant="danger" showDot={false}>Sin acceso</Badge>
+                )}
               </button>
             ))}
           </aside>
@@ -160,7 +167,18 @@ export default function Clientes() {
                     <InfoItem icon={MapPin} label="Dirección" value={selectedCliente.direccion || "N/A"} />
                     <InfoItem icon={User} label="Contacto" value={selectedCliente.contacto_nombre || "N/A"} />
                     <InfoItem icon={Phone} label="Teléfono" value={selectedCliente.contacto_telefono || "N/A"} />
-                    <InfoItem icon={Mail} label="Email" value={selectedCliente.contacto_email || "N/A"} />
+                    <InfoItem icon={Mail} label="Email portal" value={selectedCliente.accesoPortal?.email || selectedCliente.contacto_email || "N/A"} />
+                    <InfoItem
+                      icon={Building2}
+                      label="Estado acceso"
+                      value={
+                        selectedCliente.accesoPortal?.tieneAcceso
+                          ? selectedCliente.accesoPortal.activo === false
+                            ? "Inactivo"
+                            : "Activo"
+                          : "Sin usuario vinculado"
+                      }
+                    />
                   </div>
                 </Card>
 

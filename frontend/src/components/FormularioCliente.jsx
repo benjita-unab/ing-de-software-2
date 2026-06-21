@@ -4,32 +4,48 @@ import { formatRut } from "../lib/formatRut";
 import { useGooglePlacesAutocomplete } from "../hooks/useGooglePlacesAutocomplete";
 import { loadGoogleMaps } from "../lib/googleMapsLoader";
 import SelectorCoordenadas from "./SelectorCoordenadas";
-import { createCliente, updateCliente } from "../lib/clientesService";
+import {
+  createCliente,
+  updateCliente,
+  generarPasswordTemporal,
+} from "../lib/clientesService";
 import Card from "./ui/Card";
 
 export default function FormularioCliente({ onGuardado, clienteInicial = null, onCancel }) {
   const direccionInputRef = useRef(null);
+  const esEdicion = Boolean(clienteInicial?.id);
   const [formData, setFormData] = useState({
     nombre: "",
     rut: "",
     telefono: "",
     direccion: "",
+    email: "",
+    password: "",
+    nuevaPassword: "",
+    accesoActivo: true,
     latitud: -33.4489,
     longitud: -70.6693,
   });
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [passwordGenerada, setPasswordGenerada] = useState("");
 
   useEffect(() => {
     if (clienteInicial) {
+      const acceso = clienteInicial.accesoPortal || {};
       setFormData({
         nombre: clienteInicial.nombre || "",
         rut: clienteInicial.rut || "",
         telefono: clienteInicial.contacto_telefono || "",
         direccion: clienteInicial.direccion || "",
+        email: acceso.email || clienteInicial.contacto_email || "",
+        password: "",
+        nuevaPassword: "",
+        accesoActivo: acceso.activo !== false && clienteInicial.activo !== false,
         latitud: clienteInicial.latitud || -33.4489,
         longitud: clienteInicial.longitud || -70.6693,
       });
+      setPasswordGenerada("");
       setErrorMsg("");
     }
   }, [clienteInicial]);
@@ -82,6 +98,16 @@ export default function FormularioCliente({ onGuardado, clienteInicial = null, o
     return `+56 ${numbers.slice(0, 1)} ${numbers.slice(1, 5)} ${numbers.slice(5, 9)}`;
   };
 
+  const handleGenerarPassword = () => {
+    const temp = generarPasswordTemporal();
+    if (esEdicion) {
+      setFormData((prev) => ({ ...prev, nuevaPassword: temp }));
+    } else {
+      setFormData((prev) => ({ ...prev, password: temp }));
+    }
+    setPasswordGenerada(temp);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -97,6 +123,16 @@ export default function FormularioCliente({ onGuardado, clienteInicial = null, o
       setLoading(false);
       return;
     }
+    if (!formData.email.trim()) {
+      setErrorMsg("El correo electrónico de acceso al portal es obligatorio.");
+      setLoading(false);
+      return;
+    }
+    if (!esEdicion && !formData.password.trim()) {
+      setErrorMsg("La contraseña inicial es obligatoria.");
+      setLoading(false);
+      return;
+    }
 
     try {
       const payload = {
@@ -104,27 +140,43 @@ export default function FormularioCliente({ onGuardado, clienteInicial = null, o
         rut: formData.rut,
         contacto_telefono: formData.telefono,
         direccion: formData.direccion,
+        email: formData.email.trim(),
+        accesoActivo: formData.accesoActivo,
       };
 
-      if (clienteInicial?.id) {
+      if (esEdicion) {
+        if (formData.nuevaPassword.trim()) {
+          payload.nuevaPassword = formData.nuevaPassword.trim();
+        }
         await updateCliente(clienteInicial.id, payload);
-        alert("✅ Cliente actualizado exitosamente");
+        alert("Cliente y acceso al portal actualizados correctamente.");
       } else {
-        await createCliente(payload);
-        alert("✅ Cliente guardado exitosamente");
+        payload.password = formData.password.trim();
+        const creado = await createCliente(payload);
+        const emailPortal = creado?.accesoPortal?.email || formData.email;
+        alert(
+          `Cliente creado con acceso al portal.\nCorreo: ${emailPortal}${
+            passwordGenerada ? `\nContraseña temporal: ${passwordGenerada}` : ""
+          }`,
+        );
         setFormData({
           nombre: "",
           rut: "",
           telefono: "",
           direccion: "",
+          email: "",
+          password: "",
+          nuevaPassword: "",
+          accesoActivo: true,
           latitud: -33.4489,
           longitud: -70.6693,
         });
+        setPasswordGenerada("");
       }
 
       if (onGuardado) onGuardado();
     } catch (err) {
-      alert(`❌ ${err.message}`);
+      setErrorMsg(err.message || "Error al guardar el cliente.");
     } finally {
       setLoading(false);
     }
@@ -149,7 +201,7 @@ export default function FormularioCliente({ onGuardado, clienteInicial = null, o
     <Card className="lt-module-card">
       <div className="lt-clientes-form-header">
         <h3 className="lt-module-card__title">
-          {clienteInicial ? "Editar cliente" : "Registrar nuevo cliente"}
+          {esEdicion ? "Editar cliente" : "Registrar nuevo cliente"}
         </h3>
         {onCancel && (
           <button type="button" className="lt-btn lt-btn--ghost" onClick={onCancel}>
@@ -198,6 +250,64 @@ export default function FormularioCliente({ onGuardado, clienteInicial = null, o
           </div>
         </div>
 
+        <div className="lt-module-card__subtitle" style={{ margin: "16px 0 8px" }}>
+          Acceso al portal cliente (HU-60)
+        </div>
+
+        <div className="lt-field-group">
+          <label className="lt-label">Correo electrónico de acceso *</label>
+          <input
+            type="email"
+            className="lt-input"
+            placeholder="contacto@empresa.cl"
+            value={formData.email}
+            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+            required
+          />
+        </div>
+
+        <div className="lt-field-group">
+          <label className="lt-label">
+            {esEdicion ? "Nueva contraseña (opcional)" : "Contraseña inicial *"}
+          </label>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input
+              type="text"
+              className="lt-input"
+              placeholder={esEdicion ? "Dejar vacío para no cambiar" : "Mínimo 6 caracteres"}
+              value={esEdicion ? formData.nuevaPassword : formData.password}
+              onChange={(e) =>
+                setFormData((prev) =>
+                  esEdicion
+                    ? { ...prev, nuevaPassword: e.target.value }
+                    : { ...prev, password: e.target.value },
+                )
+              }
+              required={!esEdicion}
+            />
+            <button
+              type="button"
+              className="lt-btn lt-btn--secondary"
+              onClick={handleGenerarPassword}
+            >
+              Generar
+            </button>
+          </div>
+        </div>
+
+        <div className="lt-field-group">
+          <label className="lt-label" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input
+              type="checkbox"
+              checked={formData.accesoActivo}
+              onChange={(e) =>
+                setFormData({ ...formData, accesoActivo: e.target.checked })
+              }
+            />
+            Acceso al portal activo
+          </label>
+        </div>
+
         <div className="lt-field-group">
           <label className="lt-label">Dirección base</label>
           {mapsError && (
@@ -235,7 +345,7 @@ export default function FormularioCliente({ onGuardado, clienteInicial = null, o
           className="lt-btn lt-btn--primary lt-btn--full"
           disabled={loading}
         >
-          {loading ? "Guardando..." : "Guardar cliente"}
+          {loading ? "Guardando..." : esEdicion ? "Actualizar cliente" : "Guardar cliente"}
         </button>
       </form>
     </Card>

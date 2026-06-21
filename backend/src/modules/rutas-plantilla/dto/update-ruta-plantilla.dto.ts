@@ -60,6 +60,10 @@ export class UpdateRutaPlantillaDto {
   @IsBoolean()
   activa?: boolean;
 
+  @IsOptional()
+  @IsString()
+  clienteId?: string | null;
+
   /** Si se envía, reemplaza todas las paradas existentes. */
   @IsOptional()
   @IsArray()

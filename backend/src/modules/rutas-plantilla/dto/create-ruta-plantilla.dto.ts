@@ -74,6 +74,11 @@ export class CreateRutaPlantillaDto {
   @IsBoolean()
   activa?: boolean;
 
+  /** HU-60: cliente al que pertenece la plantilla (null = global). */
+  @IsOptional()
+  @IsString()
+  clienteId?: string | null;
+
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
