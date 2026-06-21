@@ -183,7 +183,7 @@ export class RutasController {
 
   /**
    * GET /api/rutas
-   * Lista rutas con filtros opcionales.
+   * Lista rutas con filtros opcionales y paginación.
    * HU-26: CONDUCTOR solo ve rutas con su conductorId (JWT), ignora query conductorId.
    */
   @Get()
@@ -192,6 +192,9 @@ export class RutasController {
     @Query('estado') estado?: string,
     @Query('conductorId') conductorId?: string,
     @Query('clienteId') clienteId?: string,
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
     let effectiveConductorId = conductorId;
 
@@ -209,6 +212,9 @@ export class RutasController {
       estado,
       conductorId: effectiveConductorId,
       clienteId,
+      search,
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 10,
     };
 
     return await this.rutasService.listRoutes(filters);
