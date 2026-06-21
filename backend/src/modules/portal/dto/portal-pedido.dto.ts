@@ -5,6 +5,7 @@
 
 export interface PortalPedidoListItemDto {
   id: string;
+  nombre_ruta?: string | null;
   estado: string | null;
   origen: string | null;
   destino: string | null;
@@ -20,6 +21,7 @@ export interface PortalPedidoListResponseDto {
 
 export interface PortalRutaDetalleDto {
   id: string;
+  nombre_ruta?: string | null;
   estado: string | null;
   origen: string | null;
   destino: string | null;

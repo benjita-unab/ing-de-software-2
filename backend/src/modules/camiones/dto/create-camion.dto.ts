@@ -16,8 +16,8 @@ export class CreateCamionDto {
   patente: string;
 
   @IsNumber()
-  @Min(0.01)
-  capacidad_kg: number;
+  @Min(1)
+  slots: number;
 
   @IsOptional()
   @IsIn(ESTADOS_CAMION)

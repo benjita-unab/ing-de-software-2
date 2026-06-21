@@ -16,6 +16,7 @@ export type CreateRutaDto = {
   cliente_id: string;
   conductor_id?: string | null;
   camion_id?: string | null;
+  nombre_ruta?: string | null;
   origen: string;
   destino: string;
   estado?: string | null;
@@ -316,6 +317,13 @@ export class RutasService {
     if (camion_id) {
       insert.camion_id = camion_id;
     }
+    if (body.nombre_ruta != null && String(body.nombre_ruta).trim() !== '') {
+      insert.nombre_ruta = String(body.nombre_ruta).trim();
+    } else {
+      const supabase = this.supabaseConfig.getClient();
+      const { count } = await supabase.from('rutas').select('*', { count: 'exact', head: true });
+      insert.nombre_ruta = `Ruta #${(count || 0) + 1}`;
+    }
 
     if (body.fecha_inicio != null && String(body.fecha_inicio).trim() !== '') {
       insert.fecha_inicio = String(body.fecha_inicio).trim();
@@ -371,12 +379,39 @@ export class RutasService {
 
     const supabase = this.supabaseConfig.getClient();
 
+    // Validar capacidad del camión si se asigna desde la creación
+    if (camion_id && insert.bultos_despachados) {
+      const slotsRequeridos = insert.bultos_despachados as number;
+      const { data: camion, error: camionError } = await supabase
+        .from('camiones')
+        .select('id, slots, slots_utilizados, estado')
+        .eq('id', camion_id)
+        .single();
+
+      if (camionError || !camion) {
+        throw new NotFoundException('Camión no encontrado');
+      }
+      if (camion.estado !== 'DISPONIBLE') {
+        throw new ForbiddenException(`El camión no está disponible (estado: ${camion.estado})`);
+      }
+
+      const maxSlots = (camion.slots as number) ?? 96;
+      const slotsUtilizados = (camion.slots_utilizados as number) ?? 0;
+
+      if ((slotsUtilizados + slotsRequeridos) > maxSlots) {
+        throw new ForbiddenException(
+          `Capacidad insuficiente: el camión tiene ${maxSlots} slots en total y ${slotsUtilizados} ocupados. Se requieren ${slotsRequeridos} adicionales.`,
+        );
+      }
+    }
+
     const { data: created, error } = await supabase
       .from('rutas')
       .insert(insert)
       .select(
         `
         id,
+        nombre_ruta,
         cliente_id,
         conductor_id,
         camion_id,
@@ -422,6 +457,28 @@ export class RutasService {
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       console.warn('createRoute historial_estados omitido:', msg);
+    }
+
+    // Actualizar slots_utilizados si se asignó un camión con bultos en la creación
+    if (camion_id && insert.bultos_despachados) {
+      try {
+        const slotsRequeridos = insert.bultos_despachados as number;
+        // Obtenemos los slots actuales de nuevo para evitar desactualización,
+        // aunque ya lo vimos arriba, es mejor hacer la suma
+        const { data: camion } = await supabase
+          .from('camiones')
+          .select('slots_utilizados')
+          .eq('id', camion_id)
+          .single();
+          
+        const slotsUtilizados = (camion?.slots_utilizados as number) ?? 0;
+        await supabase
+          .from('camiones')
+          .update({ slots_utilizados: slotsUtilizados + slotsRequeridos })
+          .eq('id', camion_id);
+      } catch (e: unknown) {
+        console.warn('createRoute update camiones omitido:', e);
+      }
     }
 
     return created;
@@ -526,7 +583,7 @@ export class RutasService {
     conductorId: string,
     camionId: string,
     userId: string, // Usuario que hace la asignación (debe ser admin/dispatcher)
-    cargaRequeridaKg?: number,
+    slotsRequeridos?: number,
   ) {
     if (!rutaId || !conductorId || !camionId) {
       throw new BadRequestException(
@@ -547,10 +604,10 @@ export class RutasService {
       );
     }
 
-    // PASO 2: Validar capacidad del camión
+    // PASO 2: Validar capacidad del camión (Estrategia Defensiva)
     const { data: camion, error: camionError } = await supabase
       .from('camiones')
-      .select('id, patente, capacidad_kg, estado')
+      .select('id, patente, slots, slots_utilizados, estado')
       .eq('id', camionId)
       .single();
 
@@ -562,9 +619,12 @@ export class RutasService {
       throw new ForbiddenException(`El camión no está disponible (estado: ${camion.estado})`);
     }
 
-    if (cargaRequeridaKg && camion.capacidad_kg && camion.capacidad_kg < cargaRequeridaKg) {
+    const maxSlots = (camion.slots as number) ?? 96;
+    const slotsUtilizados = (camion.slots_utilizados as number) ?? 0;
+
+    if (slotsRequeridos && (slotsUtilizados + slotsRequeridos) > maxSlots) {
       throw new ForbiddenException(
-        `Capacidad insuficiente: requerida ${cargaRequeridaKg}kg, disponible ${camion.capacidad_kg}kg`,
+        `Capacidad insuficiente: el camión tiene ${maxSlots} slots en total y ${slotsUtilizados} ocupados. Se requieren ${slotsRequeridos} adicionales (Total proyectado: ${slotsUtilizados + slotsRequeridos}).`,
       );
     }
 
@@ -581,6 +641,18 @@ export class RutasService {
 
     if (ruta.conductor_id) {
       throw new ForbiddenException('La ruta ya tiene un conductor asignado');
+    }
+
+    // PASO 3.5: Actualizar capacidad utilizada del camión
+    if (slotsRequeridos && slotsRequeridos > 0) {
+      const { error: updateCamionError } = await supabase
+        .from('camiones')
+        .update({ slots_utilizados: slotsUtilizados + slotsRequeridos })
+        .eq('id', camionId);
+
+      if (updateCamionError) {
+        throw new BadRequestException('Error al actualizar la capacidad del camión');
+      }
     }
 
     // PASO 4: Actualizar ruta con conductor y camión.
@@ -631,6 +703,7 @@ export class RutasService {
       .from('rutas')
       .select(`
         id,
+        nombre_ruta,
         origen,
         destino,
         estado,
@@ -663,6 +736,7 @@ export class RutasService {
       .from('rutas')
       .select(`
         id,
+        nombre_ruta,
         origen,
         destino,
         estado,
@@ -685,7 +759,7 @@ export class RutasService {
         notificacion_fecha_estimada_destinatario,
         clientes(id, nombre, contacto_email),
         conductores(id, rut, licencia_vencimiento),
-        camiones(id, patente, capacidad_kg)
+        camiones(id, patente, slots, slots_utilizados, talla)
       `)
       .eq('id', rutaId)
       .single();
@@ -1001,6 +1075,7 @@ export class RutasService {
 
     let query = supabase.from('rutas').select(`
       id,
+      nombre_ruta,
       origen,
       destino,
       estado,

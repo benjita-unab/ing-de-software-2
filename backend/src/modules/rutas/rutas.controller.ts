@@ -8,6 +8,7 @@ import {
   Param,
   Query,
   ForbiddenException,
+  Req,
 } from '@nestjs/common';
 import {
   RutasService,
@@ -46,26 +47,27 @@ export class RutasController {
   }
 
   /**
-   * POST /api/rutas/assign
+   * POST /api/rutas/:id/assign
    * Asigna un conductor a una ruta
    */
-  @Post('assign')
+  @Post(':id/assign')
+  @Roles('ADMIN', 'OPERADOR')
   async assignDriver(
-    @CurrentUser('id') userId: string,
+    @Param('id') rutaId: string,
     @Body()
     body: {
-      rutaId: string;
       conductorId: string;
       camionId: string;
-      cargaRequeridaKg?: number;
+      slotsRequeridos?: number;
     },
+    @Req() req: any,
   ) {
     return await this.rutasService.assignDriverToRoute(
-      body.rutaId,
+      rutaId,
       body.conductorId,
       body.camionId,
-      userId,
-      body.cargaRequeridaKg,
+      req.user.id,
+      body.slotsRequeridos,
     );
   }
 
