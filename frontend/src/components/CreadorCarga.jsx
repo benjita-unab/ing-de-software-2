@@ -138,7 +138,7 @@ export default function CreadorCarga() {
     if(window.confirm("¿Estás seguro de que quieres borrar el pedido actual y empezar uno nuevo?")) {
       localStorage.removeItem('creadorCargaDraft');
       setModoCarga('CENTRAL'); setClienteId(""); setOrigen(""); setOrigenInput("");
-      setParadas([]); setBultos([]); setCostoTac(""); setPagoConductor("");
+      setParadas([]); setBultos([]); setCostoTac("");
       setFechaEntregaStr(""); setFechaEntregaTimestamp(""); setActiveSizeBrush(null);
       setIsTarifaManual(false); setCamionId(""); setActiveParadaId("");
       if(origenRef.current) origenRef.current.value = "";
@@ -149,8 +149,13 @@ export default function CreadorCarga() {
   const [rendimientoCamion, setRendimientoCamion] = useState(4.5);
 
   const [costoTac, setCostoTac] = useState("");
-  const [pagoConductor, setPagoConductor] = useState("");
   const [precioDiesel, setPrecioDiesel] = useState(1498);
+  const [tarifasConfig, setTarifasConfig] = useState({
+    precioPorRuta: 5000,
+    precioPorEntrega: 3000,
+    precioPorBulto: 500,
+    precioPorKm: 150
+  });
 
   const [isTarifaManual, setIsTarifaManual] = useState(false);
   const [tarifaManualTotal, setTarifaManualTotal] = useState("");
@@ -248,6 +253,11 @@ export default function CreadorCarga() {
       try {
         const resCli = await apiFetch("/api/clientes");
         if (resCli.ok) setClientes(Array.isArray(resCli.data) ? resCli.data : resCli.data?.data || []);
+
+        const resTarifas = await apiFetch("/api/configuracion-pagos");
+        if (resTarifas.ok && resTarifas.data) {
+          setTarifasConfig(resTarifas.data);
+        }
 
         const resCam = await apiFetch("/api/camiones");
         let trucks = [];
@@ -423,7 +433,14 @@ export default function CreadorCarga() {
 
   const tarifaFinalBase = isTarifaManual ? Number(tarifaManualTotal || 0) : tarifaCalculadaBultos;
 
-  const costosOperativosTerceros = Number(costoTac || 0) + Number(pagoConductor || 0);
+  const pagoConductorAutomatico = paradas.length === 0 ? 0 : (
+    tarifasConfig.precioPorRuta + 
+    (paradas.length * tarifasConfig.precioPorEntrega) + 
+    (bultos.length * tarifasConfig.precioPorBulto) + 
+    (distKmMax * tarifasConfig.precioPorKm)
+  );
+
+  const costosOperativosTerceros = Number(costoTac || 0) + pagoConductorAutomatico;
   const totalCostosOperativos = (modoCarga === 'RETORNO' ? 0 : costoCombustibleCalculado) + costosOperativosTerceros;
 
   const margenGanancia = tarifaFinalBase - totalCostosOperativos;
@@ -455,7 +472,7 @@ export default function CreadorCarga() {
           destino: destinoFinal,
           distancia_km: distKmMax,
           costo_tac_peajes_clp: Number(costoTac || 0),
-          pago_conductor_base_clp: Number(pagoConductor || 0),
+          pago_conductor_base_clp: pagoConductorAutomatico,
           tarifa_base_total: tarifaFinalBase,
           costo_servicio: tarifaFinalBase, // BYPASS: Guardamos la tarifa aquí porque el DB trigger sobrescribe total_pagar
           costo_combustible_calculado: modoCarga === 'RETORNO' ? 0 : costoCombustibleCalculado,
@@ -487,7 +504,7 @@ export default function CreadorCarga() {
       setMensaje({ tipo: "ok", texto: "¡Ruta guardada exitosamente! Visita Gestión de Rutas." });
 
       localStorage.removeItem('creadorCargaDraft');
-      setOrigen(""); setOrigenInput(""); setParadas([]); setCostoTac(""); setPagoConductor("");
+      setOrigen(""); setOrigenInput(""); setParadas([]); setCostoTac("");
       setFechaEntregaStr(""); setFechaEntregaTimestamp(""); setBultos([]); setActiveSizeBrush(null); setIsTarifaManual(false);
       setCamionId(""); setActiveParadaId("");
       if (origenRef.current) origenRef.current.value = "";
@@ -732,14 +749,10 @@ export default function CreadorCarga() {
         <div className="liquid-step-box" style={{ padding: '24px', borderRadius: '16px', opacity: (totalSlotsUsed > 0 && camionId) ? 1 : 0.5 }}>
           <div className="liquid-text" style={{ fontSize: '18px', fontWeight: '800', marginBottom: '16px', borderBottom: '2px solid rgba(128,128,128,0.1)', paddingBottom: '8px' }}>Paso 3: Simulador de Rentabilidad Interna</div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px', marginBottom: '16px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <label className="liquid-label" style={{ fontSize: '13px', fontWeight: '700' }}>Costo TAC / Peajes (CLP)</label>
               <input type="number" required disabled={!camionId} value={costoTac} onChange={e => setCostoTac(e.target.value)} className="liquid-input" style={{ padding: '12px', borderRadius: '8px', outline: 'none' }} placeholder="Ej: 5000" />
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <label className="liquid-label" style={{ fontSize: '13px', fontWeight: '700' }}>Pago al Conductor (CLP)</label>
-              <input type="number" required disabled={!camionId} value={pagoConductor} onChange={e => setPagoConductor(e.target.value)} className="liquid-input" style={{ padding: '12px', borderRadius: '8px', outline: 'none' }} placeholder="Ej: 45000" />
             </div>
           </div>
 
@@ -777,8 +790,12 @@ export default function CreadorCarga() {
               <span>{modoCarga === 'RETORNO' ? '$0 (-$' + costoCombustibleCalculado.toLocaleString() + ' Financiado por Ida)' : '-$' + costoCombustibleCalculado.toLocaleString()}</span>
             </div>
             <div className="liquid-text" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '4px', fontWeight: '500' }}>
-              <span>TAC + Pago Conductor</span>
-              <span>-${costosOperativosTerceros.toLocaleString()}</span>
+              <span>Pago Conductor</span>
+              <span>-${pagoConductorAutomatico.toLocaleString()}</span>
+            </div>
+            <div className="liquid-text" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '4px', fontWeight: '500' }}>
+              <span>Costo TAC / Peajes</span>
+              <span>-${Number(costoTac || 0).toLocaleString()}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', marginBottom: '20px', fontWeight: '900', color: '#EF4444', paddingTop: '8px' }}>
               <span>Gasto Total Estimado</span>

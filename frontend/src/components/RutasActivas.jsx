@@ -254,7 +254,6 @@ export default function RutasActivas() {
     cargarListas();
   }, [cargarRutas, cargarListas]);
 
-<<<<<<< HEAD
   const handleDelete = async (id) => {
     if (window.confirm("¿Estás seguro de que deseas eliminar esta ruta? Esta acción no se puede deshacer.")) {
       try {
@@ -272,7 +271,8 @@ export default function RutasActivas() {
         alert("Error al procesar eliminación: " + err.message);
       }
     }
-=======
+  };
+
   useEffect(() => {
     let cancelled = false;
 
@@ -329,7 +329,6 @@ export default function RutasActivas() {
       tipo: "ok",
       texto: `Plantilla "${plantilla.nombre}" aplicada al formulario.`,
     });
->>>>>>> main
   };
 
   const actualizarCampo = (campo, valor) => {
@@ -670,8 +669,7 @@ export default function RutasActivas() {
   return (
     <div className="lt-module-inner">
 
-<<<<<<< HEAD
-=======
+
         {mensaje?.tipo === "ok" && (
           <div className="lt-alert-banner lt-alert-banner--success" role="status">
             {mensaje.texto}
@@ -682,291 +680,12 @@ export default function RutasActivas() {
             {mensaje.texto}
           </div>
         )}
-
-        <div className="lt-form-actions" style={{ marginTop: 0 }}>
-          <button
-            type="button"
-            className="lt-btn lt-btn--primary"
-            onClick={() => {
-              setShowForm((v) => {
-                const next = !v;
-                if (next) setErroresFormulario({});
-                return next;
-              });
-              setMensaje(null);
-            }}
-          >
-            {showForm ? "Ocultar formulario" : "Crear nueva ruta"}
-          </button>
-        </div>
-
-        {showForm && (
-          <form
-            onSubmit={enviarFormulario}
-            noValidate
-            className="lt-card rutas-nueva-form"
-            style={{ marginTop: 16, marginBottom: 16, overflow: "visible" }}
-          >
-            <div className="lt-module-card__title" style={{ marginBottom: 12 }}>
-              Nueva ruta
-            </div>
-            <div className="lt-form-grid">
-              <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
-                <label className="lt-label" htmlFor="ruta-nombre">Nombre de la ruta (Opcional)</label>
-                <input
-                  id="ruta-nombre"
-                  className="lt-input"
-                  value={form.nombreRuta}
-                  onChange={(e) => actualizarCampo("nombreRuta", e.target.value)}
-                  placeholder="Ej: Ruta Norte #2 (se autogenerará si se deja vacío)"
-                />
-              </div>
-              <div className="lt-field-group">
-                <label className="lt-label" htmlFor="ruta-cliente">Cliente *</label>
-                <select
-                  id="ruta-cliente"
-                  className="lt-select"
-                  required
-                  value={form.clienteId}
-                  onChange={(e) => actualizarCampo("clienteId", e.target.value)}
-                  disabled={listsLoading}
-                >
-                  <option value="">Seleccionar…</option>
-                  {clientes.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.nombre || c.id}
-                    </option>
-                  ))}
-                </select>
-                {renderErrorFormulario("clienteId")}
-              </div>
-
-              {form.clienteId && (
-                <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
-                  <label className="lt-label" htmlFor="ruta-plantilla">
-                    Plantilla del cliente (opcional)
-                  </label>
-                  {cargandoPlantillas ? (
-                    <p className="lt-card__subtitle">Buscando plantillas adjudicadas…</p>
-                  ) : plantillasCliente.length === 0 ? (
-                    <p className="lt-card__subtitle">
-                      Este cliente no tiene plantillas adjudicadas. Puede completar la ruta manualmente.
-                    </p>
-                  ) : (
-                    <select
-                      id="ruta-plantilla"
-                      className="lt-select"
-                      value={plantillaSeleccionadaId}
-                      onChange={(e) => aplicarPlantilla(e.target.value)}
-                    >
-                      <option value="">Seleccionar plantilla para precargar datos…</option>
-                      {plantillasCliente.map((plantilla) => (
-                        <option key={plantilla.id} value={plantilla.id}>
-                          {plantilla.nombre} — {plantilla.origen} → {plantilla.destino}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-              )}
-
-              <div className="lt-field-group">
-                <label className="lt-label" htmlFor="ruta-conductor">Conductor *</label>
-                <select
-                  id="ruta-conductor"
-                  className="lt-select"
-                  required
-                  value={form.conductorId}
-                  onChange={(e) => actualizarCampo("conductorId", e.target.value)}
-                  disabled={listsLoading}
-                >
-                  <option value="">Seleccionar conductor…</option>
-                  {conductores.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.rut || c.id}
-                    </option>
-                  ))}
-                </select>
-                {renderErrorFormulario("conductorId")}
-              </div>
-              <div className="lt-field-group">
-                <label className="lt-label" htmlFor="ruta-camion">Camión *</label>
-                <select
-                  id="ruta-camion"
-                  className="lt-select"
-                  required
-                  value={form.camionId}
-                  onChange={(e) => actualizarCampo("camionId", e.target.value)}
-                  disabled={listsLoading}
-                >
-                  <option value="">Seleccionar camión…</option>
-                  {camiones.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.patente || c.id} {c.estado ? `(${c.estado})` : ""}
-                    </option>
-                  ))}
-                </select>
-                {renderErrorFormulario("camionId")}
-              </div>
-              <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
-                <label className="lt-label" htmlFor="ruta-origen">Origen *</label>
-                {mapsError && (
-                  <div className="lt-alert-banner lt-alert-banner--error" role="alert" style={{ marginBottom: 8 }}>
-                    {mapsError}
-                  </div>
-                )}
-                <input
-                  id="ruta-origen"
-                  ref={origenInputRef}
-                  className="lt-input"
-                  required
-                  autoComplete="off"
-                  value={form.origen}
-                  onChange={(e) => actualizarCampo("origen", e.target.value)}
-                  placeholder="Escribe y selecciona una dirección sugerida…"
-                />
-                {renderErrorFormulario("origen")}
-              </div>
-              <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
-                <label className="lt-label" htmlFor="ruta-destino">Destino *</label>
-                <input
-                  id="ruta-destino"
-                  ref={destinoInputRef}
-                  className="lt-input"
-                  required
-                  autoComplete="off"
-                  value={form.destino}
-                  onChange={(e) => actualizarCampo("destino", e.target.value)}
-                  placeholder="Escribe y selecciona una dirección sugerida…"
-                />
-                {renderErrorFormulario("destino")}
-              </div>
-              <div className="lt-field-group">
-                <label className="lt-label" htmlFor="ruta-fecha-inicio">Fecha inicio *</label>
-                <input
-                  id="ruta-fecha-inicio"
-                  className="lt-input"
-                  type="datetime-local"
-                  value={form.fechaInicio}
-                  onChange={(e) => actualizarCampo("fechaInicio", e.target.value)}
-                />
-                {renderErrorFormulario("fechaInicio")}
-              </div>
-              <div className="lt-field-group">
-                <label className="lt-label" htmlFor="ruta-eta">ETA *</label>
-                <input
-                  id="ruta-eta"
-                  className="lt-input"
-                  type="datetime-local"
-                  value={form.eta}
-                  onChange={(e) => actualizarCampo("eta", e.target.value)}
-                />
-                {renderErrorFormulario("eta")}
-              </div>
-              <div className="lt-field-group">
-                <label className="lt-label" htmlFor="ruta-bultos">Cantidad de bultos *</label>
-                <input
-                  id="ruta-bultos"
-                  className="lt-input"
-                  type="number"
-                  min="1"
-                  required
-                  value={form.bultosDespachos}
-                  onChange={(e) => actualizarCampo("bultosDespachos", e.target.value)}
-                  placeholder="Ej: 25"
-                />
-                {renderErrorFormulario("bultosDespachos")}
-              </div>
-              <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
-                <label className="lt-label" htmlFor="ruta-distancia">Distancia *</label>
-                <p className="lt-module-card__subtitle" style={{ marginTop: 0, marginBottom: 8 }}>
-                  {AYUDA_DISTANCIA_VIAL}
-                </p>
-                <input
-                  id="ruta-distancia"
-                  className="lt-input"
-                  type="text"
-                  inputMode="decimal"
-                  value={form.distanciaKm}
-                  onChange={(e) => actualizarCampo("distanciaKm", e.target.value)}
-                  placeholder="Vacío = calcular por carretera con origen y destino"
-                />
-                {renderErrorFormulario("distanciaKm")}
-              </div>
-              <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
-                <div className="lt-form-actions" style={{ marginTop: 0, flexWrap: "wrap" }}>
-                  <span className="lt-module-card__title" style={{ marginBottom: 0, fontSize: 13 }}>
-                    Fechas estimadas de entrega
-                  </span>
-                  <button
-                    type="button"
-                    className="lt-btn lt-btn--secondary"
-                    disabled={calculandoEstimacion || saving}
-                    onClick={calcularDistanciaYFechasForm}
-                  >
-                    {calculandoEstimacion
-                      ? "Calculando…"
-                      : "Calcular distancia y fechas"}
-                  </button>
-                </div>
-                {form.advertenciaEstimacion && (
-                  <div className="lt-alert-banner lt-alert-banner--warning" role="alert" style={{ marginTop: 10 }}>
-                    {form.advertenciaEstimacion}
-                  </div>
-                )}
-                <div className="lt-form-grid lt-form-grid--3" style={{ marginTop: 10 }}>
-                  <div className="lt-field-group">
-                    <label className="lt-label" htmlFor="ruta-fecha-est-inicio">Inicio rango estimado *</label>
-                    <input
-                      id="ruta-fecha-est-inicio"
-                      type="date"
-                      className="lt-input"
-                      value={form.fechasEstimadas.inicio}
-                      onChange={(e) => actualizarFechaForm("inicio", e.target.value)}
-                    />
-                    {renderErrorFormulario("fechaInicioEstimado")}
-                  </div>
-                  <div className="lt-field-group">
-                    <label className="lt-label" htmlFor="ruta-fecha-est-fin">Fin rango estimado *</label>
-                    <input
-                      id="ruta-fecha-est-fin"
-                      type="date"
-                      className="lt-input"
-                      value={form.fechasEstimadas.fin}
-                      onChange={(e) => actualizarFechaForm("fin", e.target.value)}
-                    />
-                    {renderErrorFormulario("finRangoEstimado")}
-                  </div>
-                  <div className="lt-field-group">
-                    <label className="lt-label" htmlFor="ruta-fecha-est-entrega">Día estimado de entrega *</label>
-                    <input
-                      id="ruta-fecha-est-entrega"
-                      type="date"
-                      className="lt-input"
-                      value={form.fechasEstimadas.entrega}
-                      onChange={(e) => actualizarFechaForm("entrega", e.target.value)}
-                    />
-                    {renderErrorFormulario("diaEstimadoEntrega")}
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="lt-form-actions">
-              <button type="submit" className="lt-btn lt-btn--primary" disabled={saving || listsLoading}>
-                {saving ? "Guardando…" : "Guardar ruta"}
-              </button>
-            </div>
-          </form>
-        )}
-      </div>
->>>>>>> main
-
       <div className="lt-card lt-module-card">
         <h3 className="lt-module-card__title" style={{ textAlign: 'center', padding: '10px', margin: '0' }}>Rutas registradas</h3>
         {loading ? (
           <Spinner message="Cargando rutas…" />
         ) : rutas.length === 0 ? (
-          <div className="lt-empty">No hay rutas para mostrar. Cree una con el botón superior.</div>
+          <div className="lt-empty">No hay rutas para mostrar. Las rutas creadas aparecerán aquí.</div>
         ) : (
           <div className="lt-table-wrap">
             <table className="lt-table">
@@ -1003,17 +722,25 @@ export default function RutasActivas() {
                       {ruta.total_pagar != null || ruta.tarifa_base_total != null ? (
                         <div style={{ fontSize: "12px", lineHeight: "1.4" }}>
                           {(() => {
-                            const totalCobrado = Number(ruta.costo_servicio) > 0 
+                            const totalCobrado = Math.round(Number(ruta.costo_servicio) > 0 
                               ? Number(ruta.costo_servicio) 
-                              : Number(ruta.total_pagar || ruta.tarifa_base_total || 0);
-                            const gastos = Number(ruta.costo_combustible_calculado || 0) + Number(ruta.costo_tac_peajes_clp || 0) + Number(ruta.pago_conductor_base_clp || 0);
-                            const ganancia = totalCobrado - gastos;
+                              : Number(ruta.total_pagar || ruta.tarifa_base_total || 0));
+                            
+                            let pagoConductor = Number(ruta.pago_conductor_base_clp || 0);
+                            if (pagoConductor === 0) {
+                              const bultosCount = ruta.bultos?.length || 1;
+                              const distKm = Number(ruta.distancia_km || 0);
+                              pagoConductor = 5000 + 3000 + (bultosCount * 500) + (distKm * 2 * 150); // HU-37 approx fallback
+                            }
+
+                            const gastos = Math.round(Number(ruta.costo_combustible_calculado || 0) + Number(ruta.costo_tac_peajes_clp || 0) + pagoConductor);
+                            const ganancia = Math.round(totalCobrado - gastos);
                             return (
                               <>
-                                <div>Cobrado: <strong>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(totalCobrado)}</strong></div>
-                                <div>Gastos Op.: <span style={{ color: "#ef4444" }}>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(gastos)}</span></div>
+                                <div>Cobrado: <strong>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(totalCobrado)}</strong></div>
+                                <div>Gastos Op.: <span style={{ color: "#ef4444" }}>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(gastos)}</span></div>
                                 <div style={{ borderTop: "1px dashed rgba(255,255,255,0.15)", marginTop: 4, paddingTop: 4 }}>
-                                  Ganancia Neta: <strong style={{color: "#10b981"}}>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(ganancia)}</strong>
+                                  Ganancia Neta: <strong style={{color: "#10b981"}}>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(ganancia)}</strong>
                                 </div>
                               </>
                             );

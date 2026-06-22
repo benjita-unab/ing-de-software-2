@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import PortalEvidenciasModal from "./PortalEvidenciasModal";
-import PortalPagos from "./PortalPagos";
 import {
   getPortalPedidoById,
   getPortalPedidoEvidencias,
@@ -8,15 +7,11 @@ import {
 } from "../lib/portalService";
 
 const SECCION_PEDIDOS = "pedidos";
-const SECCION_PAGOS = "pagos";
 
+const TAB_TODOS = "todos";
 const TAB_PENDIENTES = "pendientes";
+const TAB_EN_CURSO = "en_curso";
 const TAB_COMPLETADOS = "completados";
-
-/** HU-27 CA-4: ENTREGADO = completado; cualquier otro estado = pendiente. */
-function isPedidoCompletado(estado) {
-  return String(estado || "").trim().toUpperCase() === "ENTREGADO";
-}
 
 const styles = {
   page: {
@@ -366,21 +361,30 @@ export default function ClientPortalShell({ user, onSignOut }) {
     loadPedidos();
   }, [loadPedidos]);
 
-  const { pedidosPendientes, pedidosCompletados } = useMemo(() => {
+  const { pedidosTodos, pedidosPendientes, pedidosEnCurso, pedidosCompletados } = useMemo(() => {
+    const todos = pedidos;
     const pendientes = [];
+    const enCurso = [];
     const completados = [];
     for (const p of pedidos) {
-      if (isPedidoCompletado(p.estado)) {
+      if (p.estado === "PENDIENTE") {
+        pendientes.push(p);
+      } else if (p.estado === "ENTREGADO") {
         completados.push(p);
       } else {
-        pendientes.push(p);
+        enCurso.push(p);
       }
     }
-    return { pedidosPendientes: pendientes, pedidosCompletados: completados };
+    return { pedidosTodos: todos, pedidosPendientes: pendientes, pedidosEnCurso: enCurso, pedidosCompletados: completados };
   }, [pedidos]);
 
-  const pedidosVisibles =
-    activeTab === TAB_COMPLETADOS ? pedidosCompletados : pedidosPendientes;
+  const pedidosVisibles = useMemo(() => {
+    if (activeTab === TAB_TODOS) return pedidosTodos;
+    if (activeTab === TAB_PENDIENTES) return pedidosPendientes;
+    if (activeTab === TAB_EN_CURSO) return pedidosEnCurso;
+    if (activeTab === TAB_COMPLETADOS) return pedidosCompletados;
+    return [];
+  }, [activeTab, pedidosTodos, pedidosPendientes, pedidosEnCurso, pedidosCompletados]);
 
   async function handleSelectPedido(id) {
     setSelectedId(id);
@@ -423,46 +427,62 @@ export default function ClientPortalShell({ user, onSignOut }) {
     setEvidenciasLoading(false);
   }
 
-  function renderPedidoCard(p) {
-    return (
-      <div
-        key={p.id}
-        role="button"
-        tabIndex={0}
-        style={{
-          ...styles.card,
-          ...(selectedId === p.id ? styles.cardActive : {}),
-        }}
-        onClick={() => handleSelectPedido(p.id)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            handleSelectPedido(p.id);
-          }
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
-          <strong>
-            {p.nombre_ruta || `${p.origen || "—"} → ${p.destino || "—"}`}
-          </strong>
-          <span style={styles.badge(p.estado)}>{p.estado || "—"}</span>
-        </div>
-        <p style={{ margin: "8px 0 0", fontSize: "13px", opacity: 0.8 }}>
-          Entrega estimada: {formatDate(p.fecha_estimada_entrega)}
-          {p.bultos_despachados != null ? ` · ${p.bultos_despachados} bultos` : ""}
-        </p>
-      </div>
-    );
-  }
-
   function emptyMessageForTab() {
-    if (activeTab === TAB_COMPLETADOS) {
-      return "No hay pedidos completados en este momento.";
-    }
-    return "No hay pedidos en curso en este momento.";
+    if (activeTab === TAB_TODOS) return "No tienes pedidos en el sistema.";
+    if (activeTab === TAB_PENDIENTES) return "No tienes pedidos pendientes de pago.";
+    if (activeTab === TAB_EN_CURSO) return "No tienes pedidos en curso.";
+    if (activeTab === TAB_COMPLETADOS) return "No hay pedidos completados.";
+    return "No hay pedidos en esta sección.";
   }
 
-  const tituloSeccion =
-    seccionActiva === SECCION_PAGOS ? "Mis pagos" : "Mis pedidos";
+  const [pagandoBase, setPagandoBase] = useState(false);
+  const [pagandoRetraso, setPagandoRetraso] = useState(false);
+
+  const handlePagarBase = async (id, e) => {
+    e.stopPropagation();
+    setPagandoBase(true);
+    try {
+      const { pagarPortalPedidoBase } = await import("../lib/portalService");
+      const res = await pagarPortalPedidoBase(id);
+      if (res.ok) {
+        alert("Pago base procesado correctamente.");
+        await loadPedidos();
+        if (selectedId === id) {
+          handleSelectPedido(id);
+        }
+      } else {
+        alert("Error: " + res.error);
+      }
+    } catch(err) {
+      alert("Error inesperado: " + err.message);
+    } finally {
+      setPagandoBase(false);
+    }
+  };
+
+  const handlePagarRetraso = async (id, e) => {
+    e.stopPropagation();
+    setPagandoRetraso(true);
+    try {
+      const { pagarPortalPedidoRetraso } = await import("../lib/portalService");
+      const res = await pagarPortalPedidoRetraso(id);
+      if (res.ok) {
+        alert("Pago de retraso procesado correctamente.");
+        await loadPedidos();
+        if (selectedId === id) {
+          handleSelectPedido(id);
+        }
+      } else {
+        alert("Error: " + res.error);
+      }
+    } catch(err) {
+      alert("Error inesperado: " + err.message);
+    } finally {
+      setPagandoRetraso(false);
+    }
+  };
+
+  const tituloSeccion = "Mis pedidos";
 
   return (
     <div style={styles.page}>
@@ -474,46 +494,13 @@ export default function ClientPortalShell({ user, onSignOut }) {
           </p>
         </div>
         <div style={{ display: "flex", gap: "12px" }}>
-          <button
-            type="button"
-            style={{ ...styles.btn, background: "#0ea5e9", borderColor: "#0ea5e9", fontWeight: 600 }}
-            onClick={() => setShowCreateModal(true)}
-          >
-            Crear nuevo pedido
-          </button>
+
           <button type="button" style={styles.btn} onClick={onSignOut}>
             Cerrar sesión
           </button>
         </div>
       </header>
 
-      <div style={styles.tabs} role="tablist" aria-label="Secciones del portal">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={seccionActiva === SECCION_PEDIDOS}
-          style={styles.tab(seccionActiva === SECCION_PEDIDOS)}
-          onClick={() => setSeccionActiva(SECCION_PEDIDOS)}
-        >
-          Pedidos
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={seccionActiva === SECCION_PAGOS}
-          style={styles.tab(seccionActiva === SECCION_PAGOS)}
-          onClick={() => setSeccionActiva(SECCION_PAGOS)}
-        >
-          Pagos
-        </button>
-      </div>
-
-      {seccionActiva === SECCION_PAGOS ? (
-        <PortalPagos clienteId={user?.clienteId} />
-      ) : null}
-
-      {seccionActiva !== SECCION_PEDIDOS ? null : (
-        <>
       {error ? (
         <p style={{ color: "#f87171", marginBottom: "16px" }} role="alert">
           {error}
@@ -528,7 +515,17 @@ export default function ClientPortalShell({ user, onSignOut }) {
         </div>
       ) : (
         <>
-          <div style={styles.tabs} role="tablist" aria-label="Pedidos por estado">
+          <div style={{...styles.tabs, borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "12px"}} role="tablist" aria-label="Pedidos por estado">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === TAB_TODOS}
+              style={styles.tab(activeTab === TAB_TODOS)}
+              onClick={() => setActiveTab(TAB_TODOS)}
+            >
+              Todos
+              <span style={styles.tabCount("todos")}>{pedidosTodos.length}</span>
+            </button>
             <button
               type="button"
               role="tab"
@@ -536,8 +533,18 @@ export default function ClientPortalShell({ user, onSignOut }) {
               style={styles.tab(activeTab === TAB_PENDIENTES)}
               onClick={() => setActiveTab(TAB_PENDIENTES)}
             >
-              Pendientes
+              Pendientes de Pago
               <span style={styles.tabCount("pendientes")}>{pedidosPendientes.length}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === TAB_EN_CURSO}
+              style={styles.tab(activeTab === TAB_EN_CURSO)}
+              onClick={() => setActiveTab(TAB_EN_CURSO)}
+            >
+              En Curso
+              <span style={styles.tabCount("en_curso")}>{pedidosEnCurso.length}</span>
             </button>
             <button
               type="button"
@@ -550,122 +557,131 @@ export default function ClientPortalShell({ user, onSignOut }) {
               <span style={styles.tabCount("completados")}>{pedidosCompletados.length}</span>
             </button>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-            <div role="tabpanel">
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginTop: "16px" }}>
+            <div role="tabpanel" style={{ width: "100%", maxWidth: "800px", margin: "0 auto" }}>
               {pedidosVisibles.length === 0 ? (
-                <p style={{ opacity: 0.7 }}>{emptyMessageForTab()}</p>
+                <p style={{ opacity: 0.7, textAlign: "center", marginTop: "24px" }}>{emptyMessageForTab()}</p>
               ) : (
-                pedidosVisibles.map(renderPedidoCard)
-              )}
-            </div>
+                pedidosVisibles.map((p) => {
+                  const isExpanded = selectedId === p.id;
+                  return (
+                    <div key={p.id} style={{ marginBottom: "12px", background: "rgba(15,23,42,0.85)", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.12)", overflow: "hidden" }}>
+                      <div 
+                        role="button" 
+                        tabIndex={0} 
+                        style={{ padding: "16px", cursor: "pointer", display: "flex", justifyContent: "space-between", gap: "8px", background: isExpanded ? "rgba(14,165,233,0.1)" : "transparent" }}
+                        onClick={() => isExpanded ? setSelectedId(null) : handleSelectPedido(p.id)}
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { isExpanded ? setSelectedId(null) : handleSelectPedido(p.id); } }}
+                      >
+                        <div>
+                          <strong style={{ display: "block", fontSize: "16px", marginBottom: "4px", color: isExpanded ? "#38bdf8" : "#fff" }}>
+                            {p.nombre_ruta || `${p.origen || "—"} → ${p.destino || "—"}`}
+                          </strong>
+                          <div style={{ fontSize: "13px", opacity: 0.8 }}>
+                            Entrega estimada: {formatDate(p.fecha_estimada_entrega)}
+                            {p.bultos_despachados != null ? ` · ${p.bultos_despachados} bultos` : ""}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                          <span style={styles.badge(p.estado)}>{p.estado || "—"}</span>
+                          <span style={{ transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }}>▼</span>
+                        </div>
+                      </div>
 
-            <div style={styles.detail}>
-              {!selectedId ? (
-                <p style={{ opacity: 0.7 }}>Selecciona un pedido para ver el detalle.</p>
-              ) : loadingDetalle ? (
-                <p style={{ opacity: 0.7 }}>Cargando detalle…</p>
-              ) : detalle?.ruta ? (
-                <>
-                  <h2 style={{ marginTop: 0, fontSize: "18px" }}>Detalle del pedido</h2>
-                  <p>
-                    <span style={styles.badge(detalle.ruta.estado)}>
-                      {detalle.ruta.estado}
-                    </span>
-                  </p>
-<<<<<<< HEAD
-                  <p>
-                    <strong>Origen:</strong> {detalle.ruta.origen} <br />
-                    <strong>Destino:</strong> {detalle.ruta.destino} <br />
-                    {detalle.ruta.distancia_km != null ? (
-                      <><strong>Distancia:</strong> {detalle.ruta.distancia_km} km</>
-                    ) : null}
-=======
-                  <p style={{ fontWeight: 600 }}>
-                    {detalle.ruta.nombre_ruta || `${detalle.ruta.origen} → ${detalle.ruta.destino}`}
->>>>>>> main
-                  </p>
+                      {isExpanded && (
+                        <div style={{ padding: "16px", borderTop: "1px solid rgba(255,255,255,0.08)", background: "rgba(8,12,24,0.6)" }}>
+                          {loadingDetalle ? (
+                            <p style={{ opacity: 0.7, margin: 0 }}>Cargando detalle…</p>
+                          ) : !detalle?.ruta ? (
+                            <p style={{ opacity: 0.7, margin: 0 }}>Sin datos de detalle.</p>
+                          ) : (
+                            <>
+                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "20px" }}>
+                                <div>
+                                  <h3 style={{ fontSize: "14px", marginTop: 0, color: "#94a3b8", marginBottom: "8px" }}>Ruta</h3>
+                                  <p style={{ margin: "0 0 4px 0", fontSize: "14px" }}><strong>Origen:</strong> {detalle.ruta.origen}</p>
+                                  <p style={{ margin: "0 0 4px 0", fontSize: "14px" }}><strong>Destino:</strong> {detalle.ruta.destino}</p>
+                                  {detalle.ruta.distancia_km != null && <p style={{ margin: "0", fontSize: "14px" }}><strong>Distancia:</strong> {detalle.ruta.distancia_km} km</p>}
+                                </div>
+                                <div>
+                                  {detalle.bultos && detalle.bultos.length > 0 && (
+                                    <>
+                                      <h3 style={{ fontSize: "14px", marginTop: 0, color: "#94a3b8", marginBottom: "8px" }}>Bultos Registrados</h3>
+                                      {Object.entries(
+                                        detalle.bultos.reduce((acc, b) => {
+                                          const label = b.categoria ? `Tipo ${b.categoria}` : `${b.alto_cm}x${b.ancho_cm}x${b.largo_cm} cm (${b.peso_kg} kg)`;
+                                          acc[label] = (acc[label] || 0) + 1;
+                                          return acc;
+                                        }, {})
+                                      ).map(([desc, count]) => (
+                                        <div key={desc} style={{ fontSize: "13px", color: "#e2e8f0" }}>• {count}x {desc}</div>
+                                      ))}
+                                    </>
+                                  )}
+                                </div>
+                              </div>
 
-                  <h3 style={{ fontSize: "15px", marginTop: "20px" }}>Detalle Económico</h3>
-                  {detalle.ruta?.tarifa_base_total != null ? (
-                    <div style={{ fontSize: "14px", lineHeight: "1.6", background: "rgba(255,255,255,0.03)", padding: "12px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.06)", marginBottom: "16px" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between" }}>
-                        <span>Tarifa Base Bultos:</span>
-                        <strong>
-                          {new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(Number(detalle.ruta.tarifa_base_total))}
-                        </strong>
-                      </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px" }}>
-                        <span>Costo de Espera en Destino:</span>
-                        <strong style={{ color: Number(detalle.ruta.costo_espera_total) > 0 ? "#f87171" : "#e2e8f0" }}>
-                          {new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(Number(detalle.ruta.costo_espera_total || 0))}
-                        </strong>
-                      </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginTop: "8px", paddingTop: "8px", borderTop: "1px dashed rgba(255,255,255,0.12)" }}>
-                        <span>Total a Pagar:</span>
-                        <strong style={{ color: "#38bdf8", fontSize: "16px" }}>
-                          {new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(Number(detalle.ruta.total_pagar || detalle.ruta.tarifa_base_total))}
-                        </strong>
-                      </div>
+                              <h3 style={{ fontSize: "15px", marginTop: 0, color: "#94a3b8", marginBottom: "12px", borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "4px" }}>Detalle Económico</h3>
+                              {detalle.ruta?.tarifa_base_total != null ? (
+                                <div style={{ fontSize: "14px", lineHeight: "1.6", background: "rgba(255,255,255,0.03)", padding: "16px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.06)", marginBottom: "16px" }}>
+                                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                                    <span>Valor total base a pagar:</span>
+                                    <strong>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(Number(detalle.ruta.costo_servicio || detalle.ruta.tarifa_base_total || 0))}</strong>
+                                  </div>
+                                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px" }}>
+                                    <span>Costo de Espera en Destino (Retraso):</span>
+                                    <strong style={{ color: Number(detalle.ruta.costo_espera_total) > 0 ? "#f87171" : "#e2e8f0" }}>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(Number(detalle.ruta.costo_espera_total || 0))}</strong>
+                                  </div>
+                                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: "12px", paddingTop: "12px", borderTop: "1px dashed rgba(255,255,255,0.12)" }}>
+                                    <span>Total a Pagar:</span>
+                                    <strong style={{ color: "#38bdf8", fontSize: "18px" }}>
+                                      {new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(Number((detalle.ruta.costo_servicio || detalle.ruta.tarifa_base_total || 0) + (detalle.ruta.costo_espera_total || 0)))}
+                                    </strong>
+                                  </div>
+
+                                  <div style={{ marginTop: "20px", display: "flex", gap: "12px", justifyContent: "flex-end" }}>
+                                    {activeTab === TAB_PENDIENTES && (
+                                      <button type="button" disabled={pagandoBase} style={{ ...styles.btn, background: pagandoBase ? "#64748b" : "#10b981", borderColor: pagandoBase ? "#64748b" : "#10b981", fontWeight: 600, padding: "10px 24px" }} onClick={(e) => handlePagarBase(p.id, e)}>
+                                        {pagandoBase ? "Procesando..." : "Pagar Base"}
+                                      </button>
+                                    )}
+                                    {activeTab === TAB_COMPLETADOS && Number(detalle.ruta.costo_espera_total) > 0 && (
+                                      <button type="button" disabled={pagandoRetraso} style={{ ...styles.btn, background: pagandoRetraso ? "#64748b" : "#ef4444", borderColor: pagandoRetraso ? "#64748b" : "#ef4444", fontWeight: 600, padding: "10px 24px" }} onClick={(e) => handlePagarRetraso(p.id, e)}>
+                                        {pagandoRetraso ? "Procesando..." : "Pagar Retraso"}
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              ) : (
+                                <p style={{ opacity: 0.7, fontSize: "14px", marginBottom: "16px" }}>La tarifa se calculará automáticamente cuando se confirme el pedido.</p>
+                              )}
+
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "24px", marginBottom: "12px", borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "4px" }}>
+                                <h3 style={{ fontSize: "15px", margin: 0, color: "#94a3b8" }}>Historial de estados</h3>
+                                <button type="button" style={{ ...styles.btnEvidencias, margin: 0, padding: "6px 12px", fontSize: "12px" }} onClick={(e) => { e.stopPropagation(); handleVerEvidencias(); }}>
+                                  Ver Evidencias Fotográficas
+                                </button>
+                              </div>
+                              
+                              <div style={{ display: "flex", gap: "16px", overflowX: "auto", paddingBottom: "8px" }}>
+                                {(detalle.historial_estados || []).length === 0 ? (
+                                  <p style={{ opacity: 0.7, fontSize: "14px" }}>Sin historial.</p>
+                                ) : (
+                                  detalle.historial_estados.map((h) => (
+                                    <div key={h.id} style={{ ...styles.timelineItem, flexShrink: 0, minWidth: "140px" }}>
+                                      <strong>{h.estado}</strong>
+                                      <div style={{ opacity: 0.75, fontSize: "12px" }}>{formatDate(h.created_at)}</div>
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    <p style={{ opacity: 0.7, fontSize: "14px", marginBottom: "16px" }}>La tarifa se calculará automáticamente cuando el Administrador confirme y asigne el pedido.</p>
-                  )}
-
-                  <h3 style={{ fontSize: "15px", marginTop: "20px" }}>Historial de estados</h3>
-                  {(detalle.historial_estados || []).length === 0 ? (
-                    <p style={{ opacity: 0.7, fontSize: "14px" }}>Sin historial.</p>
-                  ) : (
-                    detalle.historial_estados.map((h) => (
-                      <div key={h.id} style={styles.timelineItem}>
-                        <strong>{h.estado}</strong>
-                        <div style={{ opacity: 0.75 }}>{formatDate(h.created_at)}</div>
-                      </div>
-                    ))
-                  )}
-
-                  <h3 style={{ fontSize: "15px", marginTop: "16px" }}>Entregas</h3>
-                  {(detalle.entregas || []).length === 0 ? (
-                    <p style={{ opacity: 0.7, fontSize: "14px" }}>Sin registro de entrega.</p>
-                  ) : (
-                    detalle.entregas.map((e) => (
-                      <div key={e.id} style={{ fontSize: "14px", marginBottom: "8px" }}>
-                        {e.estado || "—"} · validado: {e.validado ? "sí" : "no"}
-                        {e.fecha_entrega_real
-                          ? ` · ${formatDate(e.fecha_entrega_real)}`
-                          : ""}
-                      </div>
-                    ))
-                  )}
-
-                  <h3 style={{ fontSize: "15px", marginTop: "16px" }}>Rutas activas</h3>
-                  {(detalle.guias_despacho || []).length === 0 ? (
-                    <p style={{ opacity: 0.7, fontSize: "14px" }}>Sin rutas activas.</p>
-                  ) : (
-                    detalle.guias_despacho.map((g) => (
-                      <div key={g.id} style={{ fontSize: "14px", marginBottom: "8px" }}>
-                        {g.numero_guia} · {g.estado_recepcion || "—"}
-                        {g.url_pdf ? (
-                          <>
-                            {" · "}
-                            <a href={g.url_pdf} target="_blank" rel="noreferrer">
-                              PDF
-                            </a>
-                          </>
-                        ) : null}
-                      </div>
-                    ))
-                  )}
-
-                  <button
-                    type="button"
-                    style={styles.btnEvidencias}
-                    onClick={handleVerEvidencias}
-                  >
-                    Ver evidencias
-                  </button>
-                </>
-              ) : (
-                <p style={{ opacity: 0.7 }}>Sin datos de detalle.</p>
+                  );
+                })
               )}
             </div>
           </div>
@@ -681,7 +697,6 @@ export default function ClientPortalShell({ user, onSignOut }) {
           onClose={cerrarEvidencias}
         />
       ) : null}
-<<<<<<< HEAD
 
       {showCreateModal ? (
         <div style={styles.modalOverlay}>
@@ -840,10 +855,6 @@ export default function ClientPortalShell({ user, onSignOut }) {
           </div>
         </div>
       ) : null}
-=======
-        </>
-      )}
->>>>>>> main
     </div>
   );
 }

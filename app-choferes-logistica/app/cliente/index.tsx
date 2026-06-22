@@ -138,14 +138,7 @@ export default function ClienteHomeScreen() {
                   )}
                 </View>
 
-                {/* Desglose de Pago */}
-                <View style={[styles.detailSection, { borderBottomWidth: 0 }]}>
-                  <Text style={styles.sectionHeader}>Desglose Financiero</Text>
-                  <View style={styles.paymentRow}>
-                    <Text style={[styles.paymentLabel, { color: '#f8fafc', fontWeight: 'bold' }]}>Total a Pagar</Text>
-                    <Text style={[styles.paymentVal, { color: '#38bdf8', fontWeight: 'bold', fontSize: 18 }]}>{formatearCLP(Number(selectedRuta.costo_servicio) > 0 ? Number(selectedRuta.costo_servicio) : Number(selectedRuta.total_pagar))}</Text>
-                  </View>
-                </View>
+
               </ScrollView>
             )}
           </View>

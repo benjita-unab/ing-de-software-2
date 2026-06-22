@@ -9,11 +9,8 @@ import AlertQueue from "./AlertQueue";
 import AlertDetailPanel from "./AlertDetailPanel";
 import AlertasConductor from "./AlertasConductor";
 import MonitoreoLicencias from "./MonitoreoLicencias";
-import AsignacionRutas from "./AsignacionRutas";
-import GestionRutas from "./GestionRutas";
-=======
+
 import Flota from "./Flota";
->>>>>>> main
 import RutasActivas from "./RutasActivas";
 import GuiasDespacho from "./GuiasDespacho";
 import Clientes from "./Clientes";
@@ -118,23 +115,14 @@ export default function OperatorDashboard({ operator, onSignOut }) {
                   <RutasActivas />
                 </ModulePage>
               )}
-<<<<<<< HEAD
   {
     activeSection === "panol" && (
-      <ModulePage title="Creador de Carga" subtitle="Categorización y control de carga de 24 slots (100% capacidad)">
+      <ModulePage title="Creador de Carga" subtitle="Categorización y control de carga de 96 slots (100% capacidad)">
         <CreadorCarga />
       </ModulePage>
     )
   }
-  {
-    activeSection === "asignacion" && (
-      <ModulePage title="Gestión de Rutas" subtitle="Asignación de conductores e inicio de viajes">
-        <GestionRutas />
-      </ModulePage>
-    )
-  }
-=======
->>>>>>> main
+
   {
     activeSection === "clientes" && (
       <ModulePage title="Clientes" subtitle="Directorio de clientes y historial de despachos">

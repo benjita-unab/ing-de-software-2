@@ -37,11 +37,7 @@ export class PortalService {
     const { data: rutas, error } = await supabase
       .from('rutas')
       .select(
-<<<<<<< HEAD
-        'id, estado, origen, destino, fecha_estimada_entrega, distancia_km, bultos_despachados, tarifa_base_total, costo_espera_total, total_pagar',
-=======
-        'id, nombre_ruta, estado, origen, destino, eta, fecha_estimada_entrega, distancia_km, bultos_despachados',
->>>>>>> main
+        'id, nombre_ruta, estado, origen, destino, eta, fecha_estimada_entrega, distancia_km, bultos_despachados, tarifa_base_total, costo_servicio, costo_espera_total, total_pagar',
       )
       .eq('cliente_id', clienteId)
       .order('created_at', { ascending: false });
@@ -89,6 +85,7 @@ export class PortalService {
         distancia_km,
         bultos_despachados,
         tarifa_base_total,
+        costo_servicio,
         costo_espera_total,
         total_pagar,
         cliente_id,
@@ -137,14 +134,21 @@ export class PortalService {
       .maybeSingle();
 
     if (error || !row) {
+      console.error("Supabase Error GetPedidoById:", error);
       throw new NotFoundException('Pedido no encontrado');
     }
+
+    const { data: bultosData } = await supabase
+      .from('bultos')
+      .select('id, alto_cm, ancho_cm, largo_cm, peso_kg, categoria')
+      .eq('ruta_id', rutaId.trim());
 
     const historialRaw = this.normalizeRelation(row.historial_estados);
     const entregasRaw = this.normalizeRelation(row.entregas);
     const guiasRaw = this.normalizeRelation(row.guias_despacho);
     const incidenciasRaw = this.normalizeRelation(row.incidencias);
     const mensajesRaw = this.normalizeRelation(row.mensajes_conductor);
+    const bultosRaw = this.normalizeRelation(bultosData);
 
     historialRaw.sort((a, b) =>
       String(a.created_at || '').localeCompare(String(b.created_at || '')),
@@ -157,6 +161,7 @@ export class PortalService {
       guias_despacho: guiasRaw.map((g) => this.mapGuia(g)),
       incidencias: incidenciasRaw.map((i) => this.mapIncidencia(i)),
       mensajes: mensajesRaw.map((m) => this.mapMensaje(m)),
+      bultos: bultosRaw.map((b) => this.mapBulto(b)),
     };
   }
 
@@ -241,6 +246,7 @@ export class PortalService {
       bultos_despachados:
         row.bultos_despachados != null ? Number(row.bultos_despachados) : null,
       tarifa_base_total: row.tarifa_base_total != null ? Number(row.tarifa_base_total) : null,
+      costo_servicio: row.costo_servicio != null ? Number(row.costo_servicio) : null,
       costo_espera_total: row.costo_espera_total != null ? Number(row.costo_espera_total) : null,
       total_pagar: row.total_pagar != null ? Number(row.total_pagar) : null,
     };
@@ -285,7 +291,6 @@ export class PortalService {
     };
   }
 
-<<<<<<< HEAD
   async createPedido(clienteId: string, body: Omit<CreateRutaDto, 'cliente_id'>) {
     this.assertClienteId(clienteId);
     return this.rutasService.createRoute({
@@ -293,7 +298,70 @@ export class PortalService {
       cliente_id: clienteId,
       estado: 'PENDIENTE',
     });
-=======
+  }
+
+  async pagarBase(rutaId: string, clienteId: string) {
+    this.assertClienteId(clienteId);
+    await this.assertPedidoOwned(rutaId, clienteId);
+
+    const supabase = this.supabaseConfig.getClient();
+
+    // Actualizamos el estado a PAGADO. Si la BD es restrictiva, esto fallará
+    // y ajustaremos a un estado válido como ASIGNADO si es necesario.
+    const { error } = await supabase
+      .from('rutas')
+      .update({ estado: 'PAGADO' })
+      .eq('id', rutaId.trim())
+      .eq('cliente_id', clienteId);
+
+    if (error) {
+      // Intentamos con ASIGNADO como fallback si el enum no acepta PAGADO
+      const fallbackError = await supabase
+        .from('rutas')
+        .update({ estado: 'ASIGNADO' })
+        .eq('id', rutaId.trim())
+        .eq('cliente_id', clienteId);
+        
+      if (fallbackError.error) {
+        throw new BadRequestException(`No se pudo actualizar el estado: ${fallbackError.error.message}`);
+      }
+      
+      await supabase.from('historial_estados').insert([
+        { ruta_id: rutaId.trim(), estado: 'PAGADO_CLIENTE' }
+      ]);
+    } else {
+      await supabase.from('historial_estados').insert([
+        { ruta_id: rutaId.trim(), estado: 'PAGADO' }
+      ]);
+    }
+
+    return { ok: true, message: 'Pago base procesado correctamente' };
+  }
+
+  async pagarRetraso(rutaId: string, clienteId: string) {
+    this.assertClienteId(clienteId);
+    await this.assertPedidoOwned(rutaId, clienteId);
+
+    const supabase = this.supabaseConfig.getClient();
+
+    // Simulamos el pago y ponemos el costo de espera en 0 (ya está pagado)
+    const { error } = await supabase
+      .from('rutas')
+      .update({ costo_espera_total: 0 })
+      .eq('id', rutaId.trim())
+      .eq('cliente_id', clienteId);
+
+    if (error) {
+      throw new BadRequestException(`Error al procesar el pago por retraso: ${error.message}`);
+    }
+
+    await supabase.from('historial_estados').insert([
+      { ruta_id: rutaId.trim(), estado: 'RETRASO_PAGADO' }
+    ]);
+
+    return { ok: true, message: 'Pago por retraso procesado correctamente' };
+  }
+
   private mapIncidencia(row: Record<string, unknown>): PortalIncidenciaDto {
     return {
       id: String(row.id),
@@ -314,6 +382,16 @@ export class PortalService {
       timestamp_evento: (row.timestamp_evento as string) ?? null,
       created_at: (row.created_at as string) ?? null,
     };
->>>>>>> main
+  }
+
+  private mapBulto(row: Record<string, unknown>): any {
+    return {
+      id: String(row.id),
+      alto_cm: row.alto_cm != null ? Number(row.alto_cm) : null,
+      ancho_cm: row.ancho_cm != null ? Number(row.ancho_cm) : null,
+      largo_cm: row.largo_cm != null ? Number(row.largo_cm) : null,
+      peso_kg: row.peso_kg != null ? Number(row.peso_kg) : null,
+      categoria: (row.categoria as string) ?? null,
+    };
   }
 }

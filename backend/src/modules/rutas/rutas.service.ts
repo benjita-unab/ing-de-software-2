@@ -1176,6 +1176,7 @@ export class RutasService {
     clienteId?: string;
     page?: number;
     limit?: number;
+    search?: string;
   }) {
     const supabase = this.supabaseConfig.getClient();
 
