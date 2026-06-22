@@ -37,7 +37,7 @@ export class PortalService {
     const { data: rutas, error } = await supabase
       .from('rutas')
       .select(
-        'id, estado, origen, destino, eta, fecha_estimada_entrega, distancia_km, bultos_despachados',
+        'id, nombre_ruta, estado, origen, destino, eta, fecha_estimada_entrega, distancia_km, bultos_despachados',
       )
       .eq('cliente_id', clienteId)
       .order('created_at', { ascending: false });
@@ -76,6 +76,7 @@ export class PortalService {
       .select(
         `
         id,
+        nombre_ruta,
         estado,
         origen,
         destino,
@@ -224,6 +225,7 @@ export class PortalService {
   private mapPedidoListItem(row: Record<string, unknown>): PortalPedidoListItemDto {
     return {
       id: String(row.id),
+      nombre_ruta: (row.nombre_ruta as string) ?? null,
       estado: (row.estado as string) ?? null,
       origen: (row.origen as string) ?? null,
       destino: (row.destino as string) ?? null,

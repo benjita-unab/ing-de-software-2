@@ -1,10 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Eye, Plus, Search } from "lucide-react";
 import {
   FILTRO_ESTADO_TODOS,
   calcularDiasRestantesRevision,
-  filtrarYOrdenarCamiones,
-  formatCapacidadKg,
   formatDiasRestantesText,
   formatFechaCamion,
   estadoCamionBadge,
@@ -18,6 +16,7 @@ import Badge from "./ui/Badge";
 import DetalleCamionModal from "./DetalleCamionModal";
 import EmptyState from "./ui/EmptyState";
 import FormularioCamion from "./FormularioCamion";
+import OccupancyBar from "./ui/OccupancyBar";
 import Pagination from "./ui/Pagination";
 
 const OPCIONES_FILTRO = [
@@ -40,7 +39,7 @@ export default function CamionesFlota({ operator }) {
   const [mensaje, setMensaje] = useState({ tipo: "", texto: "" });
   const [camionDetalle, setCamionDetalle] = useState(null);
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
-    const [busqueda, setBusqueda] = useState("");
+  const [busqueda, setBusqueda] = useState("");
   const [debouncedBusqueda, setDebouncedBusqueda] = useState("");
   const [filtroEstado, setFiltroEstado] = useState(FILTRO_ESTADO_TODOS);
   const [orden, setOrden] = useState(ORDEN_CAMIONES.PATENTE_ASC);
@@ -48,13 +47,16 @@ export default function CamionesFlota({ operator }) {
   const [limit, setLimit] = useState(10);
   const [meta, setMeta] = useState(null);
   const puedeAgregar = puedeGestionarCamiones(operator?.role);
+
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedBusqueda(busqueda), 400);
     return () => clearTimeout(timer);
   }, [busqueda]);
+
   useEffect(() => {
     setPage(1);
   }, [debouncedBusqueda, filtroEstado, orden, limit]);
+
   const cargarCamiones = useCallback(async () => {
     setCargando(true);
     const res = await obtenerCamiones({
@@ -74,9 +76,11 @@ export default function CamionesFlota({ operator }) {
     }
     setCargando(false);
   }, [page, limit, debouncedBusqueda, filtroEstado, orden]);
+
   useEffect(() => {
     cargarCamiones();
   }, [cargarCamiones]);
+
   const hayFiltroActivo = debouncedBusqueda.trim() || filtroEstado !== FILTRO_ESTADO_TODOS;
 
   const alertClass =
@@ -197,7 +201,7 @@ export default function CamionesFlota({ operator }) {
                 <thead>
                   <tr>
                     <th>Patente</th>
-                    <th>Capacidad (kg)</th>
+                    <th>Capacidad (slots)</th>
                     <th>Estado</th>
                     <th>Próxima revisión técnica</th>
                     <th>Días restantes</th>
@@ -215,7 +219,15 @@ export default function CamionesFlota({ operator }) {
                     return (
                       <tr key={camion.id}>
                         <td>{camion.patente || "—"}</td>
-                        <td>{formatCapacidadKg(camion.capacidad_kg)}</td>
+                        <td>
+                          <OccupancyBar
+                            slotsTotales={camion.slots}
+                            slotsUtilizados={camion.slots_utilizados}
+                          />
+                          <div style={{ fontSize: "0.75rem", color: "#64748b", marginTop: "4px" }}>
+                            Talla: {camion.talla || "DESCONOCIDO"}
+                          </div>
+                        </td>
                         <td>
                           <Badge variant={estadoBadge.variant} showDot={false}>
                             {estadoBadge.texto}
@@ -277,4 +289,3 @@ export default function CamionesFlota({ operator }) {
     </>
   );
 }
-

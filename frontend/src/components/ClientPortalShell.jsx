@@ -287,7 +287,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
       >
         <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
           <strong>
-            {p.origen || "—"} → {p.destino || "—"}
+            {p.nombre_ruta || `${p.origen || "—"} → ${p.destino || "—"}`}
           </strong>
           <span style={styles.badge(p.estado)}>{p.estado || "—"}</span>
         </div>
@@ -406,8 +406,8 @@ export default function ClientPortalShell({ user, onSignOut }) {
                       {detalle.ruta.estado}
                     </span>
                   </p>
-                  <p>
-                    {detalle.ruta.origen} → {detalle.ruta.destino}
+                  <p style={{ fontWeight: 600 }}>
+                    {detalle.ruta.nombre_ruta || `${detalle.ruta.origen} → ${detalle.ruta.destino}`}
                   </p>
 
                   <h3 style={{ fontSize: "15px", marginTop: "20px" }}>Historial de estados</h3>

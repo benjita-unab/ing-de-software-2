@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch } from "../lib/apiClient";
+import { getNombreRuta } from "../lib/rutasUtils";
 import Badge from "./ui/Badge";
+import Pagination from "./ui/Pagination";
 
 const AUTO_REFRESH_MS = 15000;
 
@@ -48,13 +50,19 @@ export default function GuiasDespacho() {
   const [refreshing, setRefreshing] = useState(false);
   const mountedRef = useRef(true);
 
+  // Estado de paginación
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalItems, setTotalItems] = useState(0);
+
   const cargarRutasEnCurso = useCallback(async (opts = {}) => {
     const silent = opts.silent === true;
     if (!silent) setLoading(true);
     else setRefreshing(true);
 
     try {
-      const res = await apiFetch("/api/rutas");
+      const res = await apiFetch(`/api/rutas?page=${page}&limit=${limit}`);
 
       if (!mountedRef.current) return;
 
@@ -65,9 +73,9 @@ export default function GuiasDespacho() {
       }
 
       const payload = res.data;
-      const lista = Array.isArray(payload) ? payload : payload?.data ?? [];
+      const data = Array.isArray(payload.data) ? payload.data : (Array.isArray(payload) ? payload : payload?.data ?? []);
 
-      const activas = lista
+      const activas = data
         .filter(
           (ruta) =>
             ruta?.conductor_id != null || ruta?.conductores != null,
@@ -78,12 +86,17 @@ export default function GuiasDespacho() {
         );
 
       setRutas(activas);
+
+      if (payload.meta) {
+        setTotalPages(payload.meta.total_pages);
+        setTotalItems(payload.meta.total_items);
+      }
     } finally {
       if (!mountedRef.current) return;
       if (!silent) setLoading(false);
       else setRefreshing(false);
     }
-  }, []);
+  }, [page, limit]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -159,7 +172,7 @@ export default function GuiasDespacho() {
               <table className="lt-table">
                 <thead>
                   <tr>
-                    <th>ID</th>
+                    <th>Ruta</th>
                     <th>Cliente / Destino</th>
                     <th>Vehículo / Conductor</th>
                     <th>Inicio</th>
@@ -176,7 +189,10 @@ export default function GuiasDespacho() {
                     return (
                       <tr key={ruta.id}>
                         <td>
-                          <span className="lt-card__subtitle">#{String(ruta.id).substring(0, 8)}</span>
+                          <strong>{getNombreRuta(ruta)}</strong>
+                          <div className="lt-card__subtitle">
+                            #{String(ruta.id).substring(0, 8)}
+                          </div>
                         </td>
                         <td>
                           <strong>{ruta.clientes?.nombre || "Sin Asignar"}</strong>
@@ -251,6 +267,20 @@ export default function GuiasDespacho() {
                 </tbody>
               </table>
             </div>
+          )}
+
+          {!loading && rutas.length > 0 && (
+            <Pagination
+              currentPage={page}
+              totalPages={totalPages}
+              totalItems={totalItems}
+              limit={limit}
+              onPageChange={setPage}
+              onLimitChange={(newLimit) => {
+                setLimit(newLimit);
+                setPage(1); // Paginación no destructiva
+              }}
+            />
           )}
         </div>
       </div>
