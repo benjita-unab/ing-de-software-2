@@ -1063,6 +1063,7 @@ export class RutasService {
     estado?: string;
     conductorId?: string;
     clienteId?: string;
+    search?: string;
     page?: number;
     limit?: number;
   }) {

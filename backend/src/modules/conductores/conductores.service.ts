@@ -264,10 +264,15 @@ export class ConductoresService {
   /**
    * Lista conductores activos
    */
-  async listActiveDrivers() {
+  async listActiveDrivers(params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    orden?: string;
+  }) {
     const supabase = this.supabaseConfig.getClient();
 
-    const { data: conductores, error } = await supabase
+    let query = supabase
       .from('conductores')
       .select(
         `
@@ -276,11 +281,46 @@ export class ConductoresService {
         licencia_numero,
         licencia_vencimiento,
         telefono,
-        activo
+        activo,
+        usuarios(nombre)
       `,
+        { count: 'exact' }
       )
-      .eq('activo', true)
-      .order('created_at', { ascending: false });
+      .eq('activo', true);
+
+    if (params?.search) {
+      const term = `%${params.search.trim()}%`;
+      query = query.or(`rut.ilike.${term},telefono.ilike.${term},licencia_numero.ilike.${term}`);
+    }
+
+    if (params?.orden) {
+      switch (params.orden) {
+        case 'nombre-desc':
+        case 'nombre-asc':
+          // Supabase requiere un view o RPC para ordenar bien por relaciones. Fallback a created_at.
+          query = query.order('created_at', { ascending: params.orden === 'nombre-asc' });
+          break;
+        case 'vencimiento-proximo':
+          query = query.order('licencia_vencimiento', { ascending: true, nullsFirst: false });
+          break;
+        case 'vencimiento-lejano':
+          query = query.order('licencia_vencimiento', { ascending: false, nullsFirst: false });
+          break;
+        default:
+          query = query.order('created_at', { ascending: false });
+          break;
+      }
+    } else {
+      query = query.order('created_at', { ascending: false });
+    }
+
+    if (params?.page && params?.limit) {
+      const from = (params.page - 1) * params.limit;
+      const to = from + params.limit - 1;
+      query = query.range(from, to);
+    }
+
+    const { data: conductoresRaw, count, error } = await query;
 
     if (error) {
       throw new BadRequestException(`Error al obtener conductores: ${error.message}`);
@@ -288,11 +328,29 @@ export class ConductoresService {
 
     // Enriquecer con estado de licencia
     const conductoresWithStatus = await Promise.all(
-      (conductores || []).map(async (conductor) => ({
-        ...conductor,
-        licenseStatus: await this.validateDriverLicense(conductor.id),
-      })),
+      (conductoresRaw || []).map(async (conductor: any) => {
+        const nombre = Array.isArray(conductor.usuarios)
+          ? conductor.usuarios[0]?.nombre
+          : conductor.usuarios?.nombre;
+        return {
+          ...conductor,
+          nombre,
+          licenseStatus: await this.validateDriverLicense(conductor.id),
+        };
+      }),
     );
+
+    if (params?.page && params?.limit) {
+      return {
+        data: conductoresWithStatus,
+        meta: {
+          total_items: count || 0,
+          total_pages: Math.ceil((count || 0) / params.limit),
+          current_page: params.page,
+          limit: params.limit,
+        },
+      };
+    }
 
     return conductoresWithStatus;
   }
