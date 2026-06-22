@@ -41,6 +41,24 @@ export class ClientesController {
   }
 
   /**
+   * GET /api/clientes/:id/rutas-plantilla
+   * HU-60: plantillas adjudicadas al cliente.
+   */
+  @Get(':id/rutas-plantilla')
+  async getRutasPlantillaPorCliente(@Param('id') id: string) {
+    return await this.clientesService.getRutasPlantillaPorCliente(id);
+  }
+
+  /**
+   * GET /api/clientes/:id/despachos
+   * Obtiene el historial de despachos de un cliente.
+   */
+  @Get(':id/despachos')
+  async getHistorialDespachos(@Param('id') id: string) {
+    return await this.clientesService.getHistorialDespachos(id);
+  }
+
+  /**
    * GET /api/clientes/:id
    * Obtiene el detalle de un cliente.
    */
@@ -56,14 +74,5 @@ export class ClientesController {
   @Put(':id')
   async updateCliente(@Param('id') id: string, @Body() body: CreateClienteDto) {
     return await this.clientesService.updateCliente(id, body);
-  }
-
-  /**
-   * GET /api/clientes/:id/despachos
-   * Obtiene el historial de despachos de un cliente.
-   */
-  @Get(':id/despachos')
-  async getHistorialDespachos(@Param('id') id: string) {
-    return await this.clientesService.getHistorialDespachos(id);
   }
 }

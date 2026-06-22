@@ -14,6 +14,7 @@ export async function getRutasPlantilla(params = {}) {
   if (params.activa !== undefined && params.activa !== "") {
     qs.set("activa", String(params.activa));
   }
+  if (params.clienteId?.trim()) qs.set("clienteId", params.clienteId.trim());
   const query = qs.toString();
   const path = query ? `/api/rutas-plantilla?${query}` : "/api/rutas-plantilla";
 

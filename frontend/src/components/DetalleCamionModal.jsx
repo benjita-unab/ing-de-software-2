@@ -14,6 +14,7 @@ import {
 import { registrarRevisionTecnica } from "../lib/camionesService";
 import Badge from "./ui/Badge";
 import FormularioCamion from "./FormularioCamion";
+import OccupancyBar from "./ui/OccupancyBar";
 
 export default function DetalleCamionModal({
   camion,
@@ -47,7 +48,9 @@ export default function DetalleCamionModal({
 
   const filas = [
     { label: "Patente", value: camionActual.patente || "—" },
-    { label: "Capacidad (kg)", value: formatCapacidadKg(camionActual.capacidad_kg) },
+    { label: "Capacidad (slots)", value: camionActual.slots },
+    { label: "Talla", value: camionActual.talla || "DESCONOCIDO" },
+    { label: "Ocupación", customValue: <OccupancyBar slotsTotales={camionActual.slots} slotsUtilizados={camionActual.slots_utilizados} /> },
     {
       label: "Estado",
       badge: estadoBadge,

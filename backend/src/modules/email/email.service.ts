@@ -3,15 +3,56 @@ import {
   BadRequestException,
   InternalServerErrorException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import * as nodemailer from 'nodemailer';
+import type { Transporter } from 'nodemailer';
 import { ResendConfigService } from '../../config/resend.config';
 import { SupabaseConfigService } from '../../config/supabase.config';
 
 @Injectable()
 export class EmailService {
+  /** Gmail SMTP — exclusivo para portal web (HU-60 recuperación contraseña). */
+  private readonly smtpTransporter: Transporter | null;
+
   constructor(
     private readonly resendConfig: ResendConfigService,
     private readonly supabaseConfig: SupabaseConfigService,
-  ) {}
+    private readonly config: ConfigService,
+  ) {
+    this.smtpTransporter = this.createSmtpTransporter();
+  }
+
+  private createSmtpTransporter(): Transporter | null {
+    const host = this.config.get<string>('SMTP_HOST')?.trim();
+    const user = this.config.get<string>('SMTP_USER')?.trim();
+    const rawPass = this.config.get<string>('SMTP_PASS');
+    const pass = rawPass?.replace(/\s/g, '') || '';
+
+    if (!host || !user || !pass) {
+      console.warn(
+        '[EmailService] SMTP no configurado (SMTP_HOST/SMTP_USER/SMTP_PASS). ' +
+          'enviarRecuperacionPassword no podrá enviar correos.',
+      );
+      return null;
+    }
+
+    const port = Number(this.config.get<string>('SMTP_PORT')) || 465;
+
+    return nodemailer.createTransport({
+      host,
+      port,
+      secure: port === 465,
+      auth: { user, pass },
+    });
+  }
+
+  private getSmtpFromAddress(): string {
+    const displayName =
+      this.config.get<string>('SMTP_FROM_NAME')?.trim() || 'LogiTrack Web';
+    const user =
+      this.config.get<string>('SMTP_USER')?.trim() || 'noreply@logitrack.cl';
+    return `"${displayName}" <${user}>`;
+  }
 
   /**
    * Envía un correo al cliente con el QR de validación de entrega.
@@ -163,6 +204,83 @@ export class EmailService {
       });
       throw new InternalServerErrorException(
         `Error al enviar notificación por email: ${errMsg}`,
+      );
+    }
+  }
+
+  /**
+   * HU-60 CA-06: correo con enlace de recuperación de contraseña portal cliente.
+   * Envío vía Gmail SMTP (nodemailer), no Resend — evita límite del plan free.
+   */
+  async enviarRecuperacionPassword(
+    email: string,
+    nombreUsuario: string,
+    resetUrl: string,
+  ) {
+    if (!email?.trim()) {
+      throw new BadRequestException('email es requerido');
+    }
+    if (!resetUrl?.trim()) {
+      throw new BadRequestException('resetUrl es requerido');
+    }
+
+    if (!this.smtpTransporter) {
+      console.error(
+        '[EmailService] HU-60 recuperación contraseña — SMTP no inicializado. ' +
+          'Verifique SMTP_HOST, SMTP_USER y SMTP_PASS en .env',
+      );
+      throw new InternalServerErrorException(
+        'El servicio de correo del portal no está configurado',
+      );
+    }
+
+    const nombreSeguro = this.escapeHtml(nombreUsuario.trim());
+    const resetUrlRaw = resetUrl.trim();
+    const asunto = 'Recuperación de contraseña — Portal LogiTrack';
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <body style="font-family: Arial, sans-serif; padding: 24px; color: #111827;">
+          <h1 style="color: #1565c0;">Recuperación de contraseña</h1>
+          <p>Hola, <strong>${nombreSeguro}</strong>,</p>
+          <p>Recibimos una solicitud para restablecer la contraseña de su acceso al portal LogiTrack.</p>
+          <p style="margin: 24px 0;">
+            <a href="${resetUrlRaw}" style="background:#1565c0;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;">
+              Restablecer contraseña
+            </a>
+          </p>
+          <p style="color:#6B7280;font-size:13px;">Si el botón no funciona, copie este enlace en su navegador:<br/>
+            <a href="${resetUrlRaw}">${this.escapeHtml(resetUrlRaw)}</a>
+          </p>
+          <p style="color:#6B7280;">Este enlace expira en 1 hora. Si no solicitó el cambio, ignore este correo.</p>
+          <p style="color:#6B7280;">Saludos,<br/>LogiTrack</p>
+        </body>
+      </html>
+    `;
+
+    try {
+      const info = await this.smtpTransporter.sendMail({
+        from: this.getSmtpFromAddress(),
+        to: email.trim(),
+        subject: asunto,
+        html,
+      });
+
+      console.log('[EmailService] HU-60 recuperación contraseña — SMTP OK:', {
+        destinatario: email.trim(),
+        messageId: info.messageId,
+      });
+
+      return { message: 'Correo de recuperación enviado', messageId: info.messageId };
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      console.error(
+        '[EmailService] HU-60 recuperación contraseña — SMTP falló:',
+        { destinatario: email.trim(), error: errMsg },
+      );
+      throw new InternalServerErrorException(
+        `Error al enviar correo de recuperación: ${errMsg}`,
       );
     }
   }

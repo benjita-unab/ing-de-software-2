@@ -29,6 +29,7 @@ const PLANTILLA_SELECT = `
   destino_lat,
   destino_lng,
   activa,
+  cliente_id,
   fecha_creacion,
   fecha_actualizacion
 `;
@@ -40,6 +41,7 @@ export class RutasPlantillaService {
   async list(
     nombre?: string,
     activa?: string,
+    clienteId?: string,
   ): Promise<RutasPlantillaListResponse> {
     const supabase = this.supabaseConfig.getClient();
 
@@ -51,6 +53,11 @@ export class RutasPlantillaService {
     const filtroActiva = this.parseActivaFilter(activa);
     if (filtroActiva !== null) {
       query = query.eq('activa', filtroActiva);
+    }
+
+    const cliente = clienteId?.trim();
+    if (cliente) {
+      query = query.eq('cliente_id', cliente);
     }
 
     const q = nombre?.trim();
@@ -138,6 +145,7 @@ export class RutasPlantillaService {
         destino_lat: dto.destinoLat ?? null,
         destino_lng: dto.destinoLng ?? null,
         activa: dto.activa !== false,
+        cliente_id: dto.clienteId?.trim() || null,
         fecha_actualizacion: now,
       })
       .select(PLANTILLA_SELECT)
@@ -180,6 +188,9 @@ export class RutasPlantillaService {
     if (dto.destinoLat !== undefined) updateRow.destino_lat = dto.destinoLat;
     if (dto.destinoLng !== undefined) updateRow.destino_lng = dto.destinoLng;
     if (dto.activa !== undefined) updateRow.activa = dto.activa;
+    if (dto.clienteId !== undefined) {
+      updateRow.cliente_id = dto.clienteId?.trim() || null;
+    }
 
     const supabase = this.supabaseConfig.getClient();
 
@@ -216,6 +227,7 @@ export class RutasPlantillaService {
       destinoLat: original.destinoLat ?? undefined,
       destinoLng: original.destinoLng ?? undefined,
       activa: true,
+      clienteId: original.clienteId ?? undefined,
       paradas: original.paradas.map((p) => ({
         direccion: p.direccion,
         orden: p.orden,
@@ -396,6 +408,7 @@ export class RutasPlantillaService {
       destinoLat: this.parseNumeric(row.destino_lat),
       destinoLng: this.parseNumeric(row.destino_lng),
       activa: row.activa !== false,
+      clienteId: row.cliente_id != null ? String(row.cliente_id) : null,
       fechaCreacion: String(row.fecha_creacion),
       fechaActualizacion: String(row.fecha_actualizacion),
     };

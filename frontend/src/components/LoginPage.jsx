@@ -1,6 +1,10 @@
 // src/components/LoginPage.jsx
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { getDemoCredentials } from "../lib/apiClient";
+import {
+  restablecerPassword,
+  solicitarRecuperacionPassword,
+} from "../lib/clientesService";
 
 const ROLES = [
   {
@@ -26,13 +30,25 @@ const ROLES = [
   },
 ];
 
-export default function LoginPage({ onLogin }) {
+export default function LoginPage({ onLogin, resetToken = null }) {
   const demo = getDemoCredentials();
-  const [selectedRole, setSelectedRole] = useState("operador");
+  const [selectedRole, setSelectedRole] = useState(resetToken ? "cliente" : "operador");
   const [email, setEmail] = useState(demo.email || "");
   const [password, setPassword] = useState(demo.password || "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
+  const [modoRecuperacion, setModoRecuperacion] = useState(false);
+  const [modoReset, setModoReset] = useState(Boolean(resetToken));
+  const [nuevaPassword, setNuevaPassword] = useState("");
+  const [confirmarPassword, setConfirmarPassword] = useState("");
+
+  useEffect(() => {
+    if (resetToken) {
+      setSelectedRole("cliente");
+      setModoReset(true);
+    }
+  }, [resetToken]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -67,6 +83,52 @@ export default function LoginPage({ onLogin }) {
     }
     setError("");
   }
+
+  async function handleForgotPassword(e) {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+    setInfo("");
+    try {
+      const res = await solicitarRecuperacionPassword(email.trim());
+      setInfo(res.message || "Revise su correo para continuar.");
+      setModoRecuperacion(false);
+    } catch (err) {
+      setError(err.message || "No se pudo solicitar la recuperación.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleResetPassword(e) {
+    e.preventDefault();
+    if (nuevaPassword !== confirmarPassword) {
+      setError("Las contraseñas no coinciden.");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    setInfo("");
+    try {
+      const res = await restablecerPassword(resetToken, nuevaPassword);
+      setInfo(res.message || "Contraseña actualizada. Ya puede iniciar sesión.");
+      setModoReset(false);
+      setNuevaPassword("");
+      setConfirmarPassword("");
+      if (typeof window !== "undefined") {
+        window.history.replaceState({}, "", window.location.pathname);
+      }
+    } catch (err) {
+      setError(err.message || "No se pudo restablecer la contraseña.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const mostrarFormularioLogin =
+    selectedRole === "operador" ||
+    selectedRole === "admin" ||
+    selectedRole === "cliente";
 
   return (
     <div style={styles.wrapper}>
@@ -134,7 +196,92 @@ export default function LoginPage({ onLogin }) {
           ))}
         </div>
 
-        {selectedRole === "operador" && (
+        {modoReset && (
+          <form onSubmit={handleResetPassword}>
+            <p style={{ ...styles.roleDesc, marginBottom: 16, color: "#94a3b8" }}>
+              Ingrese su nueva contraseña para el portal cliente.
+            </p>
+            <div style={styles.field}>
+              <label style={styles.label}>Nueva contraseña</label>
+              <input
+                className="login-input"
+                type="password"
+                required
+                minLength={6}
+                value={nuevaPassword}
+                onChange={(e) => setNuevaPassword(e.target.value)}
+                style={styles.input}
+              />
+            </div>
+            <div style={styles.field}>
+              <label style={styles.label}>Confirmar contraseña</label>
+              <input
+                className="login-input"
+                type="password"
+                required
+                minLength={6}
+                value={confirmarPassword}
+                onChange={(e) => setConfirmarPassword(e.target.value)}
+                style={styles.input}
+              />
+            </div>
+            {error && (
+              <div style={styles.errorBox} role="alert">
+                ⚠️ {error}
+              </div>
+            )}
+            {info && (
+              <div style={{ ...styles.errorBox, background: "#22c55e14", borderColor: "#22c55e44", color: "#86efac" }}>
+                {info}
+              </div>
+            )}
+            <button className="login-btn" type="submit" disabled={loading} style={styles.button}>
+              {loading ? "Guardando..." : "Restablecer contraseña"}
+            </button>
+          </form>
+        )}
+
+        {!modoReset && modoRecuperacion && selectedRole === "cliente" && (
+          <form onSubmit={handleForgotPassword}>
+            <p style={{ ...styles.roleDesc, marginBottom: 16, color: "#94a3b8" }}>
+              Ingrese el correo de su cuenta portal. Le enviaremos un enlace de recuperación.
+            </p>
+            <div style={styles.field}>
+              <label style={styles.label}>Correo electrónico</label>
+              <input
+                className="login-input"
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                style={styles.input}
+              />
+            </div>
+            {error && (
+              <div style={styles.errorBox} role="alert">
+                ⚠️ {error}
+              </div>
+            )}
+            {info && (
+              <div style={{ ...styles.errorBox, background: "#22c55e14", borderColor: "#22c55e44", color: "#86efac" }}>
+                {info}
+              </div>
+            )}
+            <button className="login-btn" type="submit" disabled={loading} style={styles.button}>
+              {loading ? "Enviando..." : "Enviar enlace"}
+            </button>
+            <button
+              type="button"
+              className="login-btn"
+              onClick={() => setModoRecuperacion(false)}
+              style={{ ...styles.button, background: "transparent", border: "1px solid #1e2a3a", marginTop: 8 }}
+            >
+              Volver al login
+            </button>
+          </form>
+        )}
+
+        {!modoReset && !modoRecuperacion && mostrarFormularioLogin && (
           <form onSubmit={handleSubmit}>
             <div style={styles.field}>
               <label style={styles.label}>Correo electrónico</label>
@@ -145,7 +292,11 @@ export default function LoginPage({ onLogin }) {
                 autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="operador@empresa.cl"
+                placeholder={
+                  selectedRole === "cliente"
+                    ? "portal.cliente@empresa.cl"
+                    : "operador@empresa.cl"
+                }
                 style={styles.input}
               />
             </div>
@@ -164,9 +315,36 @@ export default function LoginPage({ onLogin }) {
               />
             </div>
 
+            {selectedRole === "cliente" && (
+              <button
+                type="button"
+                onClick={() => {
+                  setModoRecuperacion(true);
+                  setError("");
+                  setInfo("");
+                }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#60a5fa",
+                  fontSize: 12,
+                  cursor: "pointer",
+                  marginBottom: 12,
+                  padding: 0,
+                }}
+              >
+                ¿Olvidó su contraseña?
+              </button>
+            )}
+
             {error && (
               <div style={styles.errorBox} role="alert">
                 ⚠️ {error}
+              </div>
+            )}
+            {info && (
+              <div style={{ ...styles.errorBox, background: "#22c55e14", borderColor: "#22c55e44", color: "#86efac" }}>
+                {info}
               </div>
             )}
 
@@ -185,7 +363,7 @@ export default function LoginPage({ onLogin }) {
           </form>
         )}
 
-        {selectedRole !== "operador" && error && (
+        {!modoReset && !modoRecuperacion && !mostrarFormularioLogin && error && (
           <div style={{ ...styles.errorBox, marginTop: 0 }} role="alert">
             ⚠️ {error}
           </div>

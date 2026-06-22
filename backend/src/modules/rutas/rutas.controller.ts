@@ -8,6 +8,7 @@ import {
   Param,
   Query,
   ForbiddenException,
+  Req,
 } from '@nestjs/common';
 import {
   RutasService,
@@ -47,26 +48,27 @@ export class RutasController {
   }
 
   /**
-   * POST /api/rutas/assign
+   * POST /api/rutas/:id/assign
    * Asigna un conductor a una ruta
    */
-  @Post('assign')
+  @Post(':id/assign')
+  @Roles('ADMIN', 'OPERADOR')
   async assignDriver(
-    @CurrentUser('id') userId: string,
+    @Param('id') rutaId: string,
     @Body()
     body: {
-      rutaId: string;
       conductorId: string;
       camionId: string;
-      cargaRequeridaKg?: number;
+      slotsRequeridos?: number;
     },
+    @Req() req: any,
   ) {
     return await this.rutasService.assignDriverToRoute(
-      body.rutaId,
+      rutaId,
       body.conductorId,
       body.camionId,
-      userId,
-      body.cargaRequeridaKg,
+      req.user.id,
+      body.slotsRequeridos,
     );
   }
 
@@ -182,7 +184,7 @@ export class RutasController {
 
   /**
    * GET /api/rutas
-   * Lista rutas con filtros opcionales.
+   * Lista rutas con filtros opcionales y paginación.
    * HU-26: CONDUCTOR solo ve rutas con su conductorId (JWT), ignora query conductorId.
    */
   @Get()
@@ -191,6 +193,9 @@ export class RutasController {
     @Query('estado') estado?: string,
     @Query('conductorId') conductorId?: string,
     @Query('clienteId') clienteId?: string,
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
     let effectiveConductorId = conductorId;
 
@@ -208,6 +213,9 @@ export class RutasController {
       estado,
       conductorId: effectiveConductorId,
       clienteId,
+      search,
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 10,
     };
 
     return await this.rutasService.listRoutes(filters);

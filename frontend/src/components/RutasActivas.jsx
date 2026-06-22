@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch } from "../lib/apiClient";
+import { getPlantillasPorCliente } from "../lib/clientesService";
+import { getRutaPlantillaById } from "../lib/rutasPlantillaService";
 import {
   crearRuta,
   estimarFechasEstimadas,
@@ -8,6 +10,7 @@ import {
   obtenerAnomaliasRuta,
 } from "../lib/rutasService";
 import { useGooglePlacesAutocomplete } from "../hooks/useGooglePlacesAutocomplete";
+import { getNombreRuta } from "../lib/rutasUtils";
 import Badge from "./ui/Badge";
 import Spinner from "./ui/Spinner";
 
@@ -130,9 +133,14 @@ export default function RutasActivas() {
   const [notifyingId, setNotifyingId] = useState(null);
   const [calculandoEstimacion, setCalculandoEstimacion] = useState(false);
   const [calculandoEstimacionRutaId, setCalculandoEstimacionRutaId] = useState(null);
+  const [plantillasCliente, setPlantillasCliente] = useState([]);
+  const [plantillaSeleccionadaId, setPlantillaSeleccionadaId] = useState("");
+  const [cargandoPlantillas, setCargandoPlantillas] = useState(false);
 
   const [form, setForm] = useState({
+    nombreRuta: "",
     clienteId: "",
+    plantillaId: "",
     conductorId: "",
     camionId: "",
     origen: "",
@@ -239,6 +247,64 @@ export default function RutasActivas() {
     cargarRutas();
     cargarListas();
   }, [cargarRutas, cargarListas]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function cargarPlantillas() {
+      if (!form.clienteId) {
+        setPlantillasCliente([]);
+        setPlantillaSeleccionadaId("");
+        setForm((prev) => ({ ...prev, plantillaId: "" }));
+        return;
+      }
+
+      setCargandoPlantillas(true);
+      const res = await getPlantillasPorCliente(form.clienteId);
+      if (cancelled) return;
+
+      setPlantillasCliente(res.data || []);
+      setPlantillaSeleccionadaId("");
+      setForm((prev) => ({ ...prev, plantillaId: "" }));
+      setCargandoPlantillas(false);
+    }
+
+    cargarPlantillas();
+    return () => {
+      cancelled = true;
+    };
+  }, [form.clienteId]);
+
+  const aplicarPlantilla = async (plantillaId) => {
+    setPlantillaSeleccionadaId(plantillaId);
+    if (!plantillaId) {
+      setForm((prev) => ({ ...prev, plantillaId: "" }));
+      return;
+    }
+
+    const res = await getRutaPlantillaById(plantillaId);
+    if (res.error || !res.data) {
+      setMensaje({ tipo: "error", texto: res.error || "No se pudo cargar la plantilla." });
+      return;
+    }
+
+    const plantilla = res.data;
+    setForm((prev) => ({
+      ...prev,
+      plantillaId,
+      origen: plantilla.origen || prev.origen,
+      destino: plantilla.destino || prev.destino,
+      distanciaKm:
+        plantilla.distanciaEstimada != null
+          ? String(plantilla.distanciaEstimada)
+          : prev.distanciaKm,
+      advertenciaEstimacion: "",
+    }));
+    setMensaje({
+      tipo: "ok",
+      texto: `Plantilla "${plantilla.nombre}" aplicada al formulario.`,
+    });
+  };
 
   const actualizarCampo = (campo, valor) => {
     setForm((prev) => ({ ...prev, [campo]: valor }));
@@ -447,6 +513,9 @@ export default function RutasActivas() {
       camion_id: form.camionId.trim(),
       distancia_km: distanciaNormalizada,
     };
+    if (form.nombreRuta?.trim()) {
+      payload.nombre_ruta = form.nombreRuta.trim();
+    }
 
     const fi = localDatetimeToIso(form.fechaInicio);
     const eta = localDatetimeToIso(form.eta);
@@ -473,6 +542,7 @@ export default function RutasActivas() {
 
     setMensaje({ tipo: "ok", texto: "Ruta creada correctamente." });
     setForm({
+      nombreRuta: "",
       clienteId: "",
       conductorId: "",
       camionId: "",
@@ -618,6 +688,16 @@ export default function RutasActivas() {
               Nueva ruta
             </div>
             <div className="lt-form-grid">
+              <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
+                <label className="lt-label" htmlFor="ruta-nombre">Nombre de la ruta (Opcional)</label>
+                <input
+                  id="ruta-nombre"
+                  className="lt-input"
+                  value={form.nombreRuta}
+                  onChange={(e) => actualizarCampo("nombreRuta", e.target.value)}
+                  placeholder="Ej: Ruta Norte #2 (se autogenerará si se deja vacío)"
+                />
+              </div>
               <div className="lt-field-group">
                 <label className="lt-label" htmlFor="ruta-cliente">Cliente *</label>
                 <select
@@ -637,6 +717,36 @@ export default function RutasActivas() {
                 </select>
                 {renderErrorFormulario("clienteId")}
               </div>
+
+              {form.clienteId && (
+                <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
+                  <label className="lt-label" htmlFor="ruta-plantilla">
+                    Plantilla del cliente (opcional)
+                  </label>
+                  {cargandoPlantillas ? (
+                    <p className="lt-card__subtitle">Buscando plantillas adjudicadas…</p>
+                  ) : plantillasCliente.length === 0 ? (
+                    <p className="lt-card__subtitle">
+                      Este cliente no tiene plantillas adjudicadas. Puede completar la ruta manualmente.
+                    </p>
+                  ) : (
+                    <select
+                      id="ruta-plantilla"
+                      className="lt-select"
+                      value={plantillaSeleccionadaId}
+                      onChange={(e) => aplicarPlantilla(e.target.value)}
+                    >
+                      <option value="">Seleccionar plantilla para precargar datos…</option>
+                      {plantillasCliente.map((plantilla) => (
+                        <option key={plantilla.id} value={plantilla.id}>
+                          {plantilla.nombre} — {plantilla.origen} → {plantilla.destino}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
+
               <div className="lt-field-group">
                 <label className="lt-label" htmlFor="ruta-conductor">Conductor *</label>
                 <select
@@ -838,6 +948,7 @@ export default function RutasActivas() {
             <table className="lt-table">
               <thead>
                 <tr>
+                  <th>Nombre Ruta</th>
                   <th>Origen</th>
                   <th>Destino</th>
                   <th>Cliente</th>
@@ -852,6 +963,9 @@ export default function RutasActivas() {
               <tbody>
                 {rutas.map((ruta) => (
                   <tr key={ruta.id}>
+                    <td>
+                      <strong>{getNombreRuta(ruta)}</strong>
+                    </td>
                     <td>{ruta.origen || "—"}</td>
                     <td>{ruta.destino || "—"}</td>
                     <td>{ruta.clientes?.nombre || "—"}</td>
