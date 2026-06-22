@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from '@supabase/supabase-js';
 import { apiFetch } from "../lib/apiClient";
@@ -1190,3 +1191,4 @@ export default function RutasActivas() {
     </div>
   );
 }
+

@@ -9,7 +9,6 @@ import AlertQueue from "./AlertQueue";
 import AlertDetailPanel from "./AlertDetailPanel";
 import AlertasConductor from "./AlertasConductor";
 import MonitoreoLicencias from "./MonitoreoLicencias";
-<<<<<<< HEAD
 import AsignacionRutas from "./AsignacionRutas";
 import GestionRutas from "./GestionRutas";
 =======
@@ -22,7 +21,6 @@ import HistorialDespachos from "./HistorialDespachos";
 import PagosCliente from "./PagosCliente";
 import RutasPlantilla from "./RutasPlantilla";
 import ModulePage from "./ui/ModulePage";
-import FormularioOperadorSimplificado from "./FormularioOperadorSimplificado";
 import CreadorCarga from "./CreadorCarga";
 import PageHeader from "./ui/PageHeader";
 import { useAlerts } from "../hooks/useAlerts";
@@ -121,50 +119,65 @@ export default function OperatorDashboard({ operator, onSignOut }) {
                 </ModulePage>
               )}
 <<<<<<< HEAD
-              {activeSection === "panol" && (
-                <ModulePage title="Creador de Carga" subtitle="Categorización y control de carga de 24 slots (100% capacidad)">
-                  <CreadorCarga />
-                </ModulePage>
-              )}
-              {activeSection === "asignacion" && (
-                <ModulePage title="Gestión de Rutas" subtitle="Asignación de conductores e inicio de viajes">
-                  <GestionRutas />
-                </ModulePage>
-              )}
+  {
+    activeSection === "panol" && (
+      <ModulePage title="Creador de Carga" subtitle="Categorización y control de carga de 24 slots (100% capacidad)">
+        <CreadorCarga />
+      </ModulePage>
+    )
+  }
+  {
+    activeSection === "asignacion" && (
+      <ModulePage title="Gestión de Rutas" subtitle="Asignación de conductores e inicio de viajes">
+        <GestionRutas />
+      </ModulePage>
+    )
+  }
 =======
 >>>>>>> main
-              {activeSection === "clientes" && (
-                <ModulePage title="Clientes" subtitle="Directorio de clientes y historial de despachos">
-                  <Clientes />
-                </ModulePage>
-              )}
-              {activeSection === "pagos" && (
-                <ModulePage
-                  title="Pagos de clientes"
-                  subtitle="Consulta y gestión de cobros B2B asociados a pedidos"
-                >
-                  <PagosCliente />
-                </ModulePage>
-              )}
-              {activeSection === "historial" && (
-                <ModulePage title="Historial de despachos" subtitle="Consulta de entregas completadas y evidencias">
-                  <HistorialDespachos />
-                </ModulePage>
-              )}
-              {activeSection === "despachos" && (
-                <ModulePage title="Rutas Activas" subtitle="Seguimiento de rutas activas y cierre de despachos">
-                  <GuiasDespacho />
-                </ModulePage>
-              )}
-              {activeSection === "camiones" && (
-                <ModulePage title="Flota" subtitle="Gestión de choferes y vehículos">
-                  <Flota operator={operator} />
-                </ModulePage>
-              )}
-            </div>
-          )}
-      </main>
-    </div>
+  {
+    activeSection === "clientes" && (
+      <ModulePage title="Clientes" subtitle="Directorio de clientes y historial de despachos">
+        <Clientes />
+      </ModulePage>
+    )
+  }
+  {
+    activeSection === "pagos" && (
+      <ModulePage
+        title="Pagos de clientes"
+        subtitle="Consulta y gestión de cobros B2B asociados a pedidos"
+      >
+        <PagosCliente />
+      </ModulePage>
+    )
+  }
+  {
+    activeSection === "historial" && (
+      <ModulePage title="Historial de despachos" subtitle="Consulta de entregas completadas y evidencias">
+        <HistorialDespachos />
+      </ModulePage>
+    )
+  }
+  {
+    activeSection === "despachos" && (
+      <ModulePage title="Rutas Activas" subtitle="Seguimiento de rutas activas y cierre de despachos">
+        <GuiasDespacho />
+      </ModulePage>
+    )
+  }
+  {
+    activeSection === "camiones" && (
+      <ModulePage title="Flota" subtitle="Gestión de choferes y vehículos">
+        <Flota operator={operator} />
+      </ModulePage>
+    )
+  }
+            </div >
+          )
+}
+      </main >
+    </div >
   );
 }
 
@@ -209,3 +222,4 @@ export function LegacyIncidenciasAlertPanel({
     </div>
   );
 }
+

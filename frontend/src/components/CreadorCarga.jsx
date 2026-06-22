@@ -51,7 +51,6 @@ export default function CreadorCarga() {
   const [clientes, setClientes] = useState([]);
   const [camiones, setCamiones] = useState([]);
   const [camionesDisponibilidad, setCamionesDisponibilidad] = useState({});
-  const [loadingInitial, setLoadingInitial] = useState(false);
 
   // Recuperar estado desde localStorage o usar valores por defecto
   const loadDraft = () => {
@@ -246,7 +245,6 @@ export default function CreadorCarga() {
 
   useEffect(() => {
     const initData = async () => {
-      setLoadingInitial(true);
       try {
         const resCli = await apiFetch("/api/clientes");
         if (resCli.ok) setClientes(Array.isArray(resCli.data) ? resCli.data : resCli.data?.data || []);
@@ -295,8 +293,6 @@ export default function CreadorCarga() {
         setCamionesDisponibilidad(availability);
       } catch (err) {
         console.error("Error init:", err);
-      } finally {
-        setLoadingInitial(false);
       }
     };
     initData();
@@ -807,3 +803,4 @@ export default function CreadorCarga() {
     </div>
   );
 }
+
