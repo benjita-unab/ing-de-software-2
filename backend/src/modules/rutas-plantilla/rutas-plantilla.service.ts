@@ -307,14 +307,13 @@ export class RutasPlantillaService {
   }
 
   /**
-   * HU-58: contará pedidos cuando exista tabla `pedidos` con columna `ruta_plantilla_id`.
-   * Si la tabla/columna no existe aún, retorna 0 sin bloquear la operación.
+   * HU-58: cuenta pedidos (rutas operativas) originados desde esta plantilla.
    */
   private async countPedidosAsociados(rutaPlantillaId: string): Promise<number> {
     const supabase = this.supabaseConfig.getClient();
 
     const { count, error } = await supabase
-      .from('pedidos')
+      .from('rutas')
       .select('id', { count: 'exact', head: true })
       .eq('ruta_plantilla_id', rutaPlantillaId);
 
