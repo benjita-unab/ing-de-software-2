@@ -135,6 +135,24 @@ export class ConductoresController {
     });
   }
 
+
+  /**
+   * POST /api/conductores/:id/licencias/:licenseId/approve
+   * Aprobar o rechazar la licencia de un conductor
+   */
+  @Post(':id/licencias/:licenseId/status')
+  @UseGuards(JwtGuard)
+  async updateLicenseStatus(
+    @Param('id') conductorId: string,
+    @Param('licenseId') licenseId: string,
+    @Body('status') status: 'approved' | 'rejected',
+  ) {
+    if (!['approved', 'rejected'].includes(status)) {
+      throw new BadRequestException('Estado inválido');
+    }
+    return await this.conductoresService.updateLicenseStatus(conductorId, licenseId, status);
+  }
+
   private parsePeriodoPago(periodo?: string): PeriodoPago {
     const value = (periodo || 'mensual').trim().toLowerCase();
     if (['diario', 'semanal', 'mensual', 'rango'].includes(value)) {

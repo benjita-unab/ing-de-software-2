@@ -30,6 +30,12 @@ function licenciaBadgeFromStatus(licenseStatus) {
   if (status === "EXPIRING_SOON" || (typeof dias === "number" && dias <= 30)) {
     return { texto: dias != null ? `Por vencer (${dias}d)` : "Por vencer", variant: "warning" };
   }
+  if (status === "PENDING") {
+    return { texto: "En revisión", variant: "warning" };
+  }
+  if (status === "REJECTED") {
+    return { texto: "Rechazada", variant: "danger" };
+  }
   if (status === "NO_LICENSE") {
     return { texto: "Sin licencia", variant: "muted" };
   }

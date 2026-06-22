@@ -14,6 +14,7 @@ import {
   obtenerConductorDetalle,
   obtenerRutasPorConductor,
 } from "../lib/rutasService";
+import { getAuthToken as getToken } from "../lib/apiClient";
 import Badge from "./ui/Badge";
 import FormularioConductor from "./FormularioConductor";
 import MetricasPagoConductor from "./MetricasPagoConductor";
@@ -145,6 +146,31 @@ export default function DetalleConductorModal({
     setModoEdicion(false);
     await cargarDetalle();
     onConductorActualizado?.();
+  };
+
+  const updateLicenseStatus = async (licenseId, status) => {
+    try {
+      const token = getToken();
+      // use the correct backend URL if needed or relative if proxy is setup
+      const apiUrl = process.env.REACT_APP_API_URL || "http://localhost:3001";
+      const res = await fetch(`${apiUrl}/api/conductores/${conductorResumen.id}/licencias/${licenseId}/status`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status })
+      });
+      
+      if (!res.ok) {
+        throw new Error("No se pudo actualizar la licencia");
+      }
+      
+      await cargarDetalle();
+      onConductorActualizado?.();
+    } catch (err) {
+      setError(err.message);
+    }
   };
 
   if (!conductorResumen) return null;
@@ -284,7 +310,26 @@ export default function DetalleConductorModal({
                 <div className="lt-modal-section">
                   <div className="lt-modal-section__title">Documento de licencia</div>
                   {licenciaDocumentoUrl ? (
-                    <p className="lt-module-card__subtitle">Documento disponible en el sistema.</p>
+                    <>
+                      <p className="lt-module-card__subtitle">Documento disponible en el sistema.</p>
+                      {licenseStatus?.status === "PENDING" && licenses[0] && (
+                        <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
+                          <button 
+                            className="lt-btn lt-btn--primary" 
+                            style={{ backgroundColor: "#22c55e", borderColor: "#22c55e", color: "white" }}
+                            onClick={() => updateLicenseStatus(licenses[0].id, "approved")}
+                          >
+                            Aprobar Licencia
+                          </button>
+                          <button 
+                            className="lt-btn lt-btn--danger"
+                            onClick={() => updateLicenseStatus(licenses[0].id, "rejected")}
+                          >
+                            Rechazar Licencia
+                          </button>
+                        </div>
+                      )}
+                    </>
                   ) : (
                     <p className="lt-empty">Sin documento cargado</p>
                   )}
