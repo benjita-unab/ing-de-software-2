@@ -5,6 +5,7 @@
 
 export interface PortalPedidoListItemDto {
   id: string;
+  nombre_ruta?: string | null;
   estado: string | null;
   origen: string | null;
   destino: string | null;
@@ -23,6 +24,7 @@ export interface PortalPedidoListResponseDto {
 
 export interface PortalRutaDetalleDto {
   id: string;
+  nombre_ruta?: string | null;
   estado: string | null;
   origen: string | null;
   destino: string | null;
@@ -59,9 +61,29 @@ export interface PortalGuiaDespachoDto {
   created_at: string | null;
 }
 
+export interface PortalIncidenciaDto {
+  id: string;
+  tipo_incidencia: string | null;
+  descripcion: string | null;
+  estado: string | null;
+  severidad: string | null;
+  created_at: string | null;
+}
+
+export interface PortalMensajeDto {
+  id: string;
+  mensaje: string;
+  tipo: string | null;
+  prioridad: string | null;
+  timestamp_evento: string | null;
+  created_at: string | null;
+}
+
 export interface PortalPedidoDetalleResponseDto {
   ruta: PortalRutaDetalleDto;
   historial_estados: PortalHistorialEstadoDto[];
   entregas: PortalEntregaDto[];
   guias_despacho: PortalGuiaDespachoDto[];
+  incidencias: PortalIncidenciaDto[];
+  mensajes: PortalMensajeDto[];
 }

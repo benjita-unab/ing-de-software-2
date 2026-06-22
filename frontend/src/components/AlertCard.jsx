@@ -2,6 +2,8 @@ import React, { useState } from "react";
 import { MapPin, User, Truck, Clock, CheckCircle, ExternalLink } from "lucide-react";
 import Badge from "./ui/Badge";
 
+/** @legacy Tarjeta de incidencia. Usada solo por AlertQueue (incidencias legacy). */
+
 const PRIORITY_VARIANT = {
   CRITICA: { variant: "danger", cardClass: "lt-alert-card--critical" },
   ALTA: { variant: "warning", cardClass: "lt-alert-card--high" },

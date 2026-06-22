@@ -29,3 +29,15 @@ services:
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     restart: unless-stopped
+  
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: logitrack-mosquitto
+    ports:
+      - "1883:1883"   # Puerto MQTT estándar (para el Backend y la App Móvil)
+      - "9001:9001"   # Puerto MQTT sobre WebSockets (¡ESTE ES EL QUE USA REACT!)
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    restart: always

@@ -31,7 +31,11 @@ export default function App() {
   }
 
   if (!session) {
-    return <LoginPage onLogin={signIn} />;
+    const resetToken =
+      typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("resetToken")
+        : null;
+    return <LoginPage onLogin={signIn} resetToken={resetToken} />;
   }
 
   if (operator?.role === "CLIENTE") {

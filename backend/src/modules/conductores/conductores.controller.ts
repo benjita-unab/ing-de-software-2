@@ -7,17 +7,25 @@ import {
   UploadedFile,
   Body,
   Param,
+  Query,
   BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { ConductoresService } from './conductores.service';
+import {
+  PagoConductoresService,
+  PeriodoPago,
+} from './pago-conductores.service';
 import { JwtGuard } from '../../common/guards/jwt.guard';
 import { CurrentUser } from '../../common/decorators/user.decorator';
 
 @Controller('api/conductores')
 export class ConductoresController {
-  constructor(private conductoresService: ConductoresService) {}
+  constructor(
+    private conductoresService: ConductoresService,
+    private pagoConductoresService: PagoConductoresService,
+  ) {}
 
   /**
    * POST /api/conductores/upload-license
@@ -44,6 +52,44 @@ export class ConductoresController {
       file,
       body.expiryDate,
       body.conductorId,
+    );
+  }
+
+  /**
+   * GET /api/conductores/metricas-pago/comparativa
+   * HU-37 CA-08: comparativa de rendimiento entre conductores activos.
+   */
+  @Get('metricas-pago/comparativa')
+  @UseGuards(JwtGuard)
+  async getComparativaMetricasPago(
+    @Query('periodo') periodo?: string,
+    @Query('fechaInicio') fechaInicio?: string,
+    @Query('fechaFin') fechaFin?: string,
+  ) {
+    return await this.pagoConductoresService.getComparativaMetricas(
+      this.parsePeriodoPago(periodo),
+      fechaInicio,
+      fechaFin,
+    );
+  }
+
+  /**
+   * GET /api/conductores/:id/metricas-pago
+   * HU-37: métricas operacionales y cálculo de pago por período.
+   */
+  @Get(':id/metricas-pago')
+  @UseGuards(JwtGuard)
+  async getMetricasPagoConductor(
+    @Param('id') conductorId: string,
+    @Query('periodo') periodo?: string,
+    @Query('fechaInicio') fechaInicio?: string,
+    @Query('fechaFin') fechaFin?: string,
+  ) {
+    return await this.pagoConductoresService.getMetricasPagoConductor(
+      conductorId,
+      this.parsePeriodoPago(periodo),
+      fechaInicio,
+      fechaFin,
     );
   }
 
@@ -75,5 +121,15 @@ export class ConductoresController {
   @UseGuards(JwtGuard)
   async listActiveDrivers() {
     return await this.conductoresService.listActiveDrivers();
+  }
+
+  private parsePeriodoPago(periodo?: string): PeriodoPago {
+    const value = (periodo || 'mensual').trim().toLowerCase();
+    if (['diario', 'semanal', 'mensual', 'rango'].includes(value)) {
+      return value as PeriodoPago;
+    }
+    throw new BadRequestException(
+      'periodo inválido. Valores: diario, semanal, mensual, rango',
+    );
   }
 }

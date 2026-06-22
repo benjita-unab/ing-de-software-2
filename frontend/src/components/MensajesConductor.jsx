@@ -58,13 +58,40 @@ function tituloGrupoRuta(rutaId, rutasMap = {}) {
   return "Ruta sin identificar";
 }
 
+const COPY = {
+  mensajes: {
+    loading: "Cargando mensajes...",
+    emptyListTitle: "Sin conversaciones",
+    emptyListDescription: "No hay mensajes para la ruta indicada.",
+    emptyDetailTitle: "Selecciona una conversación",
+    emptyDetailDescription: "Elige una ruta a la izquierda para ver los mensajes del conductor.",
+    urgentSuffix: " · contiene emergencias",
+    polling: "Actualización automática cada 10 segundos",
+    searchPlaceholder: "Buscar por ruta o ID...",
+    messageCount: (n) => `${n} mensaje${n !== 1 ? "s" : ""}`,
+  },
+  alertas: {
+    loading: "Cargando alertas...",
+    emptyListTitle: "Sin alertas",
+    emptyListDescription: "No hay estados ni emergencias para la ruta indicada.",
+    emptyDetailTitle: "Selecciona una ruta",
+    emptyDetailDescription: "Elige una ruta a la izquierda para ver el historial de alertas del conductor.",
+    urgentSuffix: " · contiene emergencias sin confirmar",
+    polling: "Actualización automática cada 10 segundos",
+    searchPlaceholder: "Buscar ruta o ID...",
+    messageCount: (n) => `${n} alerta${n !== 1 ? "s" : ""}`,
+  },
+};
+
 export default function MensajesConductor({
   mensajes,
   rutasMap = {},
   loading,
   error,
   acknowledgeMensaje,
+  variant = "mensajes",
 }) {
+  const copy = COPY[variant] || COPY.mensajes;
   const [searchRuta, setSearchRuta] = useState("");
   const [selectedRouteId, setSelectedRouteId] = useState(null);
 
@@ -97,12 +124,12 @@ export default function MensajesConductor({
             className="lt-input"
             value={searchRuta}
             onChange={(e) => setSearchRuta(e.target.value)}
-            placeholder="Buscar por ruta o ID..."
+            placeholder={copy.searchPlaceholder}
           />
         </div>
 
         {loading && mensajes.length === 0 && (
-          <Spinner message="Cargando mensajes..." />
+          <Spinner message={copy.loading} />
         )}
 
         {error && (
@@ -113,8 +140,8 @@ export default function MensajesConductor({
           {routeGroups.length === 0 && !loading ? (
             <EmptyState
               icon={MessageSquare}
-              title="Sin conversaciones"
-              description="No hay mensajes para la ruta indicada."
+              title={copy.emptyListTitle}
+              description={copy.emptyListDescription}
             />
           ) : (
             routeGroups.map((route) => (
@@ -126,7 +153,7 @@ export default function MensajesConductor({
               >
                 <div className="lt-mensajes-conv-item__title">{route.rutaLabel}</div>
                 <div className="lt-mensajes-conv-item__meta">
-                  <span>{route.mensajes.length} mensaje{route.mensajes.length !== 1 ? "s" : ""}</span>
+                  <span>{copy.messageCount(route.mensajes.length)}</span>
                   {route.hasUrgent && (
                     <Badge variant="danger" showDot={false}>Emergencia</Badge>
                   )}
@@ -141,8 +168,8 @@ export default function MensajesConductor({
         {!selectedRoute ? (
           <EmptyState
             icon={MessageSquare}
-            title="Selecciona una conversación"
-            description="Elige una ruta a la izquierda para ver los mensajes del conductor."
+            title={copy.emptyDetailTitle}
+            description={copy.emptyDetailDescription}
           />
         ) : (
           <>
@@ -150,8 +177,8 @@ export default function MensajesConductor({
               <div>
                 <h3 className="lt-mensajes-detail__title">{selectedRoute.rutaLabel}</h3>
                 <p className="lt-mensajes-detail__sub">
-                  {selectedRoute.mensajes.length} mensaje{selectedRoute.mensajes.length !== 1 ? "s" : ""}
-                  {selectedRoute.hasUrgent && " · contiene emergencias"}
+                  {copy.messageCount(selectedRoute.mensajes.length)}
+                  {selectedRoute.hasUrgent && copy.urgentSuffix}
                 </p>
               </div>
               {selectedRoute.hasUrgent && (
@@ -215,7 +242,7 @@ export default function MensajesConductor({
               </table>
             </div>
 
-            <p className="lt-mensajes-polling">Actualización automática cada 10 segundos</p>
+            <p className="lt-mensajes-polling">{copy.polling}</p>
           </>
         )}
       </div>

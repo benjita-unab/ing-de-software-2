@@ -14,6 +14,8 @@ import type {
   PortalPedidoListItemDto,
   PortalPedidoListResponseDto,
   PortalRutaDetalleDto,
+  PortalIncidenciaDto,
+  PortalMensajeDto,
 } from './dto/portal-pedido.dto';
 
 @Injectable()
@@ -35,7 +37,11 @@ export class PortalService {
     const { data: rutas, error } = await supabase
       .from('rutas')
       .select(
+<<<<<<< HEAD
         'id, estado, origen, destino, fecha_estimada_entrega, distancia_km, bultos_despachados, tarifa_base_total, costo_espera_total, total_pagar',
+=======
+        'id, nombre_ruta, estado, origen, destino, eta, fecha_estimada_entrega, distancia_km, bultos_despachados',
+>>>>>>> main
       )
       .eq('cliente_id', clienteId)
       .order('created_at', { ascending: false });
@@ -74,9 +80,11 @@ export class PortalService {
       .select(
         `
         id,
+        nombre_ruta,
         estado,
         origen,
         destino,
+        eta,
         fecha_estimada_entrega,
         distancia_km,
         bultos_despachados,
@@ -105,6 +113,22 @@ export class PortalService {
           url_pdf,
           observaciones,
           created_at
+        ),
+        incidencias (
+          id,
+          tipo,
+          descripcion,
+          estado,
+          prioridad,
+          created_at
+        ),
+        mensajes_conductor (
+          id,
+          mensaje,
+          tipo,
+          prioridad,
+          timestamp_evento,
+          created_at
         )
       `,
       )
@@ -119,6 +143,8 @@ export class PortalService {
     const historialRaw = this.normalizeRelation(row.historial_estados);
     const entregasRaw = this.normalizeRelation(row.entregas);
     const guiasRaw = this.normalizeRelation(row.guias_despacho);
+    const incidenciasRaw = this.normalizeRelation(row.incidencias);
+    const mensajesRaw = this.normalizeRelation(row.mensajes_conductor);
 
     historialRaw.sort((a, b) =>
       String(a.created_at || '').localeCompare(String(b.created_at || '')),
@@ -129,6 +155,8 @@ export class PortalService {
       historial_estados: historialRaw.map((h) => this.mapHistorial(h)),
       entregas: entregasRaw.map((e) => this.mapEntrega(e)),
       guias_despacho: guiasRaw.map((g) => this.mapGuia(g)),
+      incidencias: incidenciasRaw.map((i) => this.mapIncidencia(i)),
+      mensajes: mensajesRaw.map((m) => this.mapMensaje(m)),
     };
   }
 
@@ -204,10 +232,11 @@ export class PortalService {
   private mapPedidoListItem(row: Record<string, unknown>): PortalPedidoListItemDto {
     return {
       id: String(row.id),
+      nombre_ruta: (row.nombre_ruta as string) ?? null,
       estado: (row.estado as string) ?? null,
       origen: (row.origen as string) ?? null,
       destino: (row.destino as string) ?? null,
-      fecha_estimada_entrega: (row.fecha_estimada_entrega as string) ?? null,
+      fecha_estimada_entrega: (row.eta as string) || (row.fecha_estimada_entrega as string) || null,
       distancia_km: row.distancia_km != null ? Number(row.distancia_km) : null,
       bultos_despachados:
         row.bultos_despachados != null ? Number(row.bultos_despachados) : null,
@@ -256,6 +285,7 @@ export class PortalService {
     };
   }
 
+<<<<<<< HEAD
   async createPedido(clienteId: string, body: Omit<CreateRutaDto, 'cliente_id'>) {
     this.assertClienteId(clienteId);
     return this.rutasService.createRoute({
@@ -263,5 +293,27 @@ export class PortalService {
       cliente_id: clienteId,
       estado: 'PENDIENTE',
     });
+=======
+  private mapIncidencia(row: Record<string, unknown>): PortalIncidenciaDto {
+    return {
+      id: String(row.id),
+      tipo_incidencia: (row.tipo as string) ?? null,
+      descripcion: (row.descripcion as string) ?? null,
+      estado: (row.estado as string) ?? null,
+      severidad: (row.prioridad as string) ?? null,
+      created_at: (row.created_at as string) ?? null,
+    };
+  }
+
+  private mapMensaje(row: Record<string, unknown>): PortalMensajeDto {
+    return {
+      id: String(row.id),
+      mensaje: String(row.mensaje ?? ''),
+      tipo: (row.tipo as string) ?? null,
+      prioridad: (row.prioridad as string) ?? null,
+      timestamp_evento: (row.timestamp_evento as string) ?? null,
+      created_at: (row.created_at as string) ?? null,
+    };
+>>>>>>> main
   }
 }

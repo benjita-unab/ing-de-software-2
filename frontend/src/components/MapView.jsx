@@ -24,8 +24,11 @@ export default function MapView({
   const alertMarkersRef = useRef({});
   const routeMarkersRef = useRef({});
   const vehicleMarkersRef = useRef({});
+  const focusedVehicleMarkerRef = useRef(null);
   const polylinesRef = useRef({});
   const endpointMarkersRef = useRef({});
+  const rutaCentradaRef = useRef(null);
+  const [panelesVisibles, setPanelesVisibles] = useState(true);
   const [apiState, setApiState] = useState("loading");
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -275,18 +278,103 @@ export default function MapView({
     });
   }, [vehicleMarkers, selectedRouteId, apiState, onRouteSelect]);
 
+  /* ── Focused route live marker (from backend tracking) ── */
+  useEffect(() => {
+    if (!googleMapRef.current || apiState !== "ready") return;
+    const fr = focusedRoute;
+    if (fr && fr.vehicleGps) {
+      const pos = { lat: Number(fr.vehicleGps.lat), lng: Number(fr.vehicleGps.lng) };
+      if (focusedVehicleMarkerRef.current) {
+        focusedVehicleMarkerRef.current.setPosition(pos);
+        focusedVehicleMarkerRef.current.setIcon(buildVehicleIcon(fr.hasAlert, true));
+        focusedVehicleMarkerRef.current.setZIndex(200);
+      } else {
+        focusedVehicleMarkerRef.current = new window.google.maps.Marker({
+          position: pos,
+          map: googleMapRef.current,
+          icon: buildVehicleIcon(fr.hasAlert, true),
+          title: fr.patente || "Vehículo",
+          zIndex: 200,
+        });
+      }
+    } else if (focusedVehicleMarkerRef.current) {
+      focusedVehicleMarkerRef.current.setMap(null);
+      focusedVehicleMarkerRef.current = null;
+    }
+  }, [focusedRoute, apiState]);
+
+  /* ── Historial (tracking) polyline for focused route ── */
+  useEffect(() => {
+    if (!googleMapRef.current || apiState !== "ready") return;
+    const fr = focusedRoute;
+    const activeIds = new Set();
+    if (fr && fr.tracking && Array.isArray(fr.tracking.historial) && fr.tracking.historial.length >= 2) {
+      // Build ordered path by timestamp_evento (ascending)
+      const pts = fr.tracking.historial
+        .map((p) => ({
+          lat: Number(p.latitud ?? p.lat ?? p.latitude),
+          lng: Number(p.longitud ?? p.lng ?? p.longitude),
+          ts: p.timestamp_evento ? Date.parse(String(p.timestamp_evento)) : null,
+        }))
+        .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
+
+      pts.sort((a, b) => (a.ts || 0) - (b.ts || 0));
+
+      const path = pts.map((p) => ({ lat: p.lat, lng: p.lng }));
+      const id = `tracking-${fr.id}`;
+      activeIds.add(id);
+
+      const dashSymbol = {
+        path: "M 0,-1 0,1",
+        strokeOpacity: 1,
+        scale: 4,
+      };
+
+      if (polylinesRef.current[id]) {
+        polylinesRef.current[id].setPath(path);
+      } else {
+        polylinesRef.current[id] = new window.google.maps.Polyline({
+          path,
+          geodesic: true,
+          strokeColor: "#00a3ff",
+          strokeOpacity: 0.9,
+          strokeWeight: 3,
+          map: googleMapRef.current,
+          zIndex: 180,
+          icons: [
+            {
+              icon: dashSymbol,
+              offset: "0",
+              repeat: "10px",
+            },
+          ],
+        });
+      }
+    }
+
+    // remove stale tracking polylines
+    Object.keys(polylinesRef.current).forEach((key) => {
+      if (key.startsWith("tracking-") && !activeIds.has(key)) {
+        polylinesRef.current[key].setMap(null);
+        delete polylinesRef.current[key];
+      }
+    });
+  }, [focusedRoute, apiState]);
+
   /* ── Vista regional cuando no hay ruta seleccionada ── */
   useEffect(() => {
     if (!googleMapRef.current || apiState !== "ready") return;
-    if (selectedRouteId) return;
-
-    googleMapRef.current.setCenter(REGION_CENTER);
-    googleMapRef.current.setZoom(REGION_ZOOM);
+    if (!selectedRouteId) {
+      rutaCentradaRef.current = null;
+      googleMapRef.current.setCenter(REGION_CENTER);
+      googleMapRef.current.setZoom(REGION_ZOOM);
+    }
   }, [selectedRouteId, apiState]);
 
   /* ── Encuadrar ruta seleccionada (origen, destino, GPS) ── */
   useEffect(() => {
     if (!focusedRoute || !googleMapRef.current || apiState !== "ready") return;
+    if (rutaCentradaRef.current === focusedRoute.id) return;
 
     const bounds = new window.google.maps.LatLngBounds();
     let hasPoint = false;
@@ -318,11 +406,12 @@ export default function MapView({
           map.setZoom(MAX_ROUTE_ZOOM);
         }
       });
-      return;
+    } else {
+      map.panTo(bounds.getCenter());
+      map.setZoom(Math.min(12, MAX_ROUTE_ZOOM));
     }
 
-    map.panTo(bounds.getCenter());
-    map.setZoom(Math.min(12, MAX_ROUTE_ZOOM));
+    rutaCentradaRef.current = focusedRoute.id;
   }, [focusedRoute, apiState]);
 
   if (apiState === "error") {
@@ -346,8 +435,30 @@ export default function MapView({
           <span>Cargando mapa...</span>
         </div>
       )}
-      {apiState === "ready" && <MapLegend />}
-      {apiState === "ready" && overlay}
+      {apiState === "ready" && (
+        <button
+          type="button"
+          onClick={() => setPanelesVisibles((prev) => !prev)}
+          style={{
+            position: "absolute",
+            top: 12,
+            right: 60,
+            zIndex: 420,
+            background: "rgba(255,255,255,0.92)",
+            border: "1px solid rgba(15,23,42,0.08)",
+            borderRadius: 999,
+            padding: "6px 10px",
+            fontSize: 12,
+            color: "#111827",
+            boxShadow: "0 10px 24px rgba(15,23,42,0.12)",
+            cursor: "pointer",
+          }}
+        >
+          {panelesVisibles ? "Ocultar paneles" : "Mostrar paneles"}
+        </button>
+      )}
+      {apiState === "ready" && panelesVisibles && <MapLegend />}
+      {apiState === "ready" && panelesVisibles && overlay}
     </div>
   );
 }

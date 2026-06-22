@@ -659,6 +659,17 @@ body {
   border-color: var(--lt-accent);
 }
 
+.lt-input::placeholder {
+  color: var(--lt-text-muted);
+  opacity: 1;
+}
+
+.lt-input--readonly {
+  background: var(--lt-bg-muted);
+  color: var(--lt-text-secondary);
+  cursor: not-allowed;
+}
+
 .lt-label {
   display: block;
   font-size: 10px;
@@ -1065,7 +1076,7 @@ body {
 }
 
 .lt-map-overlay--top-right {
-  top: 12px;
+  top: 70px;
   right: 12px;
   display: flex;
   flex-direction: column;
@@ -1330,8 +1341,8 @@ body {
 
 .lt-map-route-panel {
   position: absolute;
-  top: 52px;
-  right: 12px;
+  bottom: 24px;
+  left: 24px;
   z-index: 5;
   background: var(--lt-bg-surface);
   border: 1px solid var(--lt-border);
@@ -1669,11 +1680,24 @@ body {
   }
 }
 
-.lt-form-field,
-.lt-field-group {
+.lt-field-group,
+.lt-form-field {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.lt-field-group--full {
+  grid-column: 1 / -1;
+}
+
+.lt-form-calc-status {
+  display: flex;
+  align-items: center;
+  gap: var(--lt-space-2);
+  font-size: 13px;
+  color: var(--lt-text-muted);
+  margin-bottom: var(--lt-space-3);
 }
 
 .lt-form-actions {
@@ -1681,6 +1705,78 @@ body {
   gap: var(--lt-space-3);
   align-items: center;
   margin-top: var(--lt-space-4);
+}
+
+.lt-form-subsection {
+  margin-top: var(--lt-space-4);
+  margin-bottom: var(--lt-space-4);
+}
+
+.lt-form-subsection__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--lt-space-3);
+  margin-bottom: var(--lt-space-2);
+}
+
+.lt-form-subsection__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--lt-text-primary);
+  margin: 0;
+}
+
+.lt-form-subsection__hint {
+  font-size: 13px;
+  color: var(--lt-text-muted);
+  margin: 0;
+}
+
+.lt-form-row {
+  display: flex;
+  gap: var(--lt-space-2);
+  align-items: center;
+  margin-bottom: var(--lt-space-2);
+}
+
+.lt-form-row:last-child {
+  margin-bottom: 0;
+}
+
+.lt-input--orden {
+  width: 72px;
+  flex-shrink: 0;
+}
+
+.lt-input--grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.lt-checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: var(--lt-space-2);
+  min-height: 42px;
+}
+
+.lt-checkbox-field .lt-label {
+  margin-bottom: 0;
+  text-transform: none;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: normal;
+  color: var(--lt-text-secondary);
+  cursor: pointer;
+}
+
+.lt-checkbox-field input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--lt-accent);
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
 /* ── Alert banners ── */

@@ -1,7 +1,8 @@
 // src/hooks/useAlerts.js
 // ─────────────────────────────────────────────────────────────────────────────
-// Hook principal: fetches alerts from backend API and normalizes data
-// to the format expected by the UI.
+// @legacy HU-40: incidencias (tabla incidencias). Sigue activo para dashboard KPIs,
+// ticker y marcadores legacy. Las emergencias del conductor viven en useAlertasConductor.
+// Polling independiente (5s) — no duplica mensajes_conductor (10s en useMensajesConductor).
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useState, useCallback } from "react";

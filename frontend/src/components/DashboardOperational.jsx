@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import mqtt from "mqtt";
 import {
   Truck,
   Package,
@@ -112,14 +113,23 @@ function routeStatusLabel(estado) {
   return String(estado).replace(/_/g, " ");
 }
 
+/**
+ * Dashboard operacional con mapa en vivo.
+ *
+ * Dependencias HU-40:
+ * - alerts / alertsLoading → incidencias legacy (useAlerts, tabla incidencias).
+ * - eventosConductor → mensajes_conductor vía useAlertasConductor: GPS en mapa y urgencias en rutas.
+ */
 export default function DashboardOperational({
   alerts = [],
   alertsLoading = false,
-  mensajes = [],
+  eventosConductor = [],
+  mensajes,
   operator,
   onNavigate,
   isDark = false,
 }) {
+  const conductorEventos = mensajes ?? eventosConductor;
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [showFilters, setShowFilters] = useState(false);
   const [clientes, setClientes] = useState([]);
@@ -135,6 +145,8 @@ export default function DashboardOperational({
   const [geocoding, setGeocoding] = useState(false);
   const [mapFilter, setMapFilter] = useState("todos");
   const [selectedRouteId, setSelectedRouteId] = useState(null);
+  const [routeTracking, setRouteTracking] = useState({});
+  const [routeTrackingLoading, setRouteTrackingLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -251,8 +263,8 @@ export default function DashboardOperational({
   }, [alerts, mapFilter]);
 
   const mapRoutes = useMemo(
-    () => buildMapRoutes(activeRoutesRaw, geocodeMap, alerts, mensajes),
-    [activeRoutesRaw, geocodeMap, alerts, mensajes],
+    () => buildMapRoutes(activeRoutesRaw, geocodeMap, alerts, conductorEventos),
+    [activeRoutesRaw, geocodeMap, alerts, conductorEventos],
   );
 
   const vehicleMarkers = useMemo(
@@ -261,8 +273,8 @@ export default function DashboardOperational({
   );
 
   const mapStats = useMemo(
-    () => countMapStats(mapRoutes, camiones, alerts, vehicleMarkers),
-    [mapRoutes, camiones, alerts, vehicleMarkers],
+    () => countMapStats(mapRoutes, camiones, alerts, vehicleMarkers, conductorEventos),
+    [mapRoutes, camiones, alerts, vehicleMarkers, conductorEventos],
   );
 
   const selectedRoute = useMemo(
@@ -275,7 +287,18 @@ export default function DashboardOperational({
     [rutas, selectedRouteId],
   );
 
-  const focusedRoute = selectedRoute;
+  const focusedRoute = useMemo(() => {
+    if (!selectedRoute) return null;
+    const tracking = routeTracking[selectedRouteId];
+    if (!tracking) return selectedRoute;
+
+    const ubic = tracking.ubicacion_actual;
+    const vehicleGps = ubic && ubic.latitud != null && ubic.longitud != null
+      ? { lat: Number(ubic.latitud), lng: Number(ubic.longitud), timestamp_evento: ubic.timestamp_evento }
+      : selectedRoute.vehicleGps || null;
+
+    return { ...selectedRoute, vehicleGps, tracking };
+  }, [selectedRoute, routeTracking, selectedRouteId]);
 
   /** Solo la ruta seleccionada se dibuja en el mapa (visor individual). */
   const visibleMapRoutes = useMemo(
@@ -295,7 +318,117 @@ export default function DashboardOperational({
 
   const handleRouteSelect = (routeId) => {
     setSelectedRouteId((prev) => (prev === routeId ? null : routeId));
+    // Fire-and-forget: fetch tracking for the newly selected route
+    if (routeId) {
+      (async () => {
+        setRouteTrackingLoading(true);
+        try {
+          const res = await apiFetch(`/api/rutas/${routeId}/tracking`);
+          if (res.ok && res.data) {
+            setRouteTracking((prev) => ({ ...prev, [routeId]: res.data }));
+          } else {
+            setRouteTracking((prev) => ({ ...prev, [routeId]: { ubicacion_actual: null, historial: [] } }));
+          }
+        } catch (e) {
+          setRouteTracking((prev) => ({ ...prev, [routeId]: { ubicacion_actual: null, historial: [] } }));
+        } finally {
+          setRouteTrackingLoading(false);
+        }
+      })();
+    }
   };
+
+  /* Realtime tracking via MQTT: subscribe to per-route topics when a route is selected */
+  useEffect(() => {
+    if (!selectedRouteId) return undefined;
+    let mounted = true;
+
+    const topics = [`logitrack/rutas/${selectedRouteId}/gps`, `logitrack/rutas/${selectedRouteId}/estado`];
+
+    const brokerUrl = process.env.REACT_APP_MQTT_BROKER_URL || "ws://localhost:9001";
+    const client = mqtt.connect(brokerUrl, { reconnectPeriod: 5000 });
+
+    const safeJson = (buf) => {
+      try {
+        return JSON.parse(Buffer.isBuffer(buf) ? buf.toString() : String(buf));
+      } catch {
+        try { return JSON.parse(String(buf)); } catch { return null; }
+      }
+    };
+
+    client.on("connect", () => {
+      client.subscribe(topics, (err) => {
+        if (err) {
+          // subscribe error — keep client alive for retries
+          console.error("MQTT subscribe error", err);
+        }
+      });
+    });
+
+    client.on("reconnect", () => {
+      console.debug("MQTT reconnecting...");
+    });
+
+    client.on("error", (err) => {
+      console.error("MQTT error", err);
+    });
+
+    client.on("message", (topic, message) => {
+      if (!mounted) return;
+      const payload = safeJson(message);
+      if (!payload) return;
+
+      if (topic.endsWith("/gps")) {
+        // Normalize possible field names
+        const lat = payload.lat ?? payload.latitude ?? payload.latitud;
+        const lng = payload.lng ?? payload.longitude ?? payload.longitud;
+        const timestamp = payload.timestamp ?? payload.timestamp_evento ?? new Date().toISOString();
+        const ubic = lat != null && lng != null ? { latitud: Number(lat), longitud: Number(lng), timestamp_evento: timestamp } : null;
+        if (ubic) {
+          setRouteTracking((prev) => {
+            const prevItem = prev[selectedRouteId] || { ubicacion_actual: null, historial: [] };
+            const newHist = Array.isArray(prevItem.historial) ? prevItem.historial.concat([ubic]) : [ubic];
+            return { ...prev, [selectedRouteId]: { ...prevItem, ubicacion_actual: ubic, historial: newHist } };
+          });
+        }
+      } else if (topic.endsWith("/estado")) {
+        const estado = payload.estado ?? payload.status ?? payload;
+        if (estado) {
+          setRutas((prev) => prev.map((r) => (r.id === selectedRouteId ? { ...r, estado } : r)));
+        }
+      }
+    });
+
+    // initial fetch so UI has baseline data (keeps existing behavior)
+    (async () => {
+      setRouteTrackingLoading(true);
+      try {
+        const res = await apiFetch(`/api/rutas/${selectedRouteId}/tracking`);
+        if (mounted) {
+          if (res.ok && res.data) setRouteTracking((prev) => ({ ...prev, [selectedRouteId]: res.data }));
+          else setRouteTracking((prev) => ({ ...prev, [selectedRouteId]: { ubicacion_actual: null, historial: [] } }));
+        }
+      } catch (e) {
+        if (mounted) setRouteTracking((prev) => ({ ...prev, [selectedRouteId]: { ubicacion_actual: null, historial: [] } }));
+      } finally {
+        if (mounted) setRouteTrackingLoading(false);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+      try {
+        client.unsubscribe(topics, () => { /* noop */ });
+      } catch (e) {
+        /* ignore */
+      }
+      try {
+        client.end(true);
+      } catch (e) {
+        /* ignore */
+      }
+    };
+  }, [selectedRouteId]);
 
   const kpiValues = KPI_CONFIG.map((cfg) => ({
     ...cfg,
@@ -351,7 +484,7 @@ export default function DashboardOperational({
           </button>
           <div className="lt-map-route-panel__header">
             <span className="lt-map-route-panel__id">
-              {selectedRuta.id?.slice?.(0, 8) ?? selectedRuta.id}
+              {selectedRuta.nombre_ruta || (selectedRuta.origen && selectedRuta.destino ? `${selectedRuta.origen.split(',')[0]} - ${selectedRuta.destino.split(',')[0]}` : `Ruta #${String(selectedRuta.id).substring(0, 6).toUpperCase()}`)}
             </span>
             <Badge variant={routeBadgeVariant(selectedRoute.estado)}>
               {routeStatusLabel(selectedRoute.estado)}
@@ -543,6 +676,24 @@ export default function DashboardOperational({
                 const mapRoute = mapRoutes.find((mr) => mr.id === ruta.id);
                 const progress = mapRoute?.progress ?? routeProgress(ruta.estado);
                 const hasAlert = mapRoute?.hasAlert;
+                const tracking = routeTracking[ruta.id];
+                let onlineStatus = { label: "Sin señal", color: "#9ca3af" };
+                if (tracking) {
+                  const ubic = tracking.ubicacion_actual;
+                  if (!ubic) {
+                    onlineStatus = { label: "Sin señal", color: "#9ca3af" };
+                  } else if (ubic.timestamp_evento) {
+                    const ageMs = Date.now() - Date.parse(String(ubic.timestamp_evento));
+                    const ageMin = ageMs / 60000;
+                    if (Number.isFinite(ageMin) && ageMin <= 5) {
+                      onlineStatus = { label: "Online", color: "#16a34a" };
+                    } else {
+                      onlineStatus = { label: "Offline", color: "#ef4444" };
+                    }
+                  } else {
+                    onlineStatus = { label: "Sin señal", color: "#9ca3af" };
+                  }
+                }
                 return (
                   <div
                     key={ruta.id}
@@ -552,12 +703,16 @@ export default function DashboardOperational({
                     <div className="lt-list-item__row">
                       <div>
                         <div className="lt-list-item__title">
-                          <span>{ruta.id?.slice?.(0, 8) ?? ruta.id}</span>
+                          <span>{ruta.nombre_ruta || (ruta.origen && ruta.destino ? `${ruta.origen.split(',')[0]} - ${ruta.destino.split(',')[0]}` : `Ruta #${String(ruta.id).substring(0, 6).toUpperCase()}`)}</span>
                           <Badge variant={routeBadgeVariant(ruta.estado)}>{routeStatusLabel(ruta.estado)}</Badge>
                           {hasAlert && <Badge variant="danger">!</Badge>}
                         </div>
                         <div className="lt-list-item__sub">
                           <MapPin size={10} /> {ruta.origen || "—"} → {ruta.destino || "—"}
+                          <span style={{ marginLeft: 8, display: "inline-flex", alignItems: "center", gap: 6 }}>
+                            <span style={{ width: 10, height: 10, borderRadius: 10, background: onlineStatus.color, display: "inline-block" }} />
+                            <small style={{ color: "#6b7280" }}>{onlineStatus.label}</small>
+                          </span>
                         </div>
                       </div>
                       <div className="lt-list-item__eta">{fmtEta(ruta.eta)}</div>

@@ -1,10 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import PortalEvidenciasModal from "./PortalEvidenciasModal";
+import PortalPagos from "./PortalPagos";
 import {
   getPortalPedidoById,
   getPortalPedidoEvidencias,
   getPortalPedidos,
 } from "../lib/portalService";
+
+const SECCION_PEDIDOS = "pedidos";
+const SECCION_PAGOS = "pagos";
 
 const TAB_PENDIENTES = "pendientes";
 const TAB_COMPLETADOS = "completados";
@@ -218,6 +222,7 @@ function formatDate(value) {
 }
 
 export default function ClientPortalShell({ user, onSignOut }) {
+  const [seccionActiva, setSeccionActiva] = useState(SECCION_PEDIDOS);
   const [pedidos, setPedidos] = useState([]);
   const [activeTab, setActiveTab] = useState(TAB_PENDIENTES);
   const [selectedId, setSelectedId] = useState(null);
@@ -437,7 +442,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
       >
         <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
           <strong>
-            {p.origen || "—"} → {p.destino || "—"}
+            {p.nombre_ruta || `${p.origen || "—"} → ${p.destino || "—"}`}
           </strong>
           <span style={styles.badge(p.estado)}>{p.estado || "—"}</span>
         </div>
@@ -456,11 +461,14 @@ export default function ClientPortalShell({ user, onSignOut }) {
     return "No hay pedidos en curso en este momento.";
   }
 
+  const tituloSeccion =
+    seccionActiva === SECCION_PAGOS ? "Mis pagos" : "Mis pedidos";
+
   return (
     <div style={styles.page}>
       <header style={styles.header}>
         <div>
-          <h1 style={{ margin: 0, fontSize: "22px" }}>Mis pedidos</h1>
+          <h1 style={{ margin: 0, fontSize: "22px" }}>{tituloSeccion}</h1>
           <p style={{ margin: "6px 0 0", opacity: 0.7, fontSize: "14px" }}>
             {user?.email}
           </p>
@@ -479,6 +487,33 @@ export default function ClientPortalShell({ user, onSignOut }) {
         </div>
       </header>
 
+      <div style={styles.tabs} role="tablist" aria-label="Secciones del portal">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={seccionActiva === SECCION_PEDIDOS}
+          style={styles.tab(seccionActiva === SECCION_PEDIDOS)}
+          onClick={() => setSeccionActiva(SECCION_PEDIDOS)}
+        >
+          Pedidos
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={seccionActiva === SECCION_PAGOS}
+          style={styles.tab(seccionActiva === SECCION_PAGOS)}
+          onClick={() => setSeccionActiva(SECCION_PAGOS)}
+        >
+          Pagos
+        </button>
+      </div>
+
+      {seccionActiva === SECCION_PAGOS ? (
+        <PortalPagos clienteId={user?.clienteId} />
+      ) : null}
+
+      {seccionActiva !== SECCION_PEDIDOS ? null : (
+        <>
       {error ? (
         <p style={{ color: "#f87171", marginBottom: "16px" }} role="alert">
           {error}
@@ -537,12 +572,17 @@ export default function ClientPortalShell({ user, onSignOut }) {
                       {detalle.ruta.estado}
                     </span>
                   </p>
+<<<<<<< HEAD
                   <p>
                     <strong>Origen:</strong> {detalle.ruta.origen} <br />
                     <strong>Destino:</strong> {detalle.ruta.destino} <br />
                     {detalle.ruta.distancia_km != null ? (
                       <><strong>Distancia:</strong> {detalle.ruta.distancia_km} km</>
                     ) : null}
+=======
+                  <p style={{ fontWeight: 600 }}>
+                    {detalle.ruta.nombre_ruta || `${detalle.ruta.origen} → ${detalle.ruta.destino}`}
+>>>>>>> main
                   </p>
 
                   <h3 style={{ fontSize: "15px", marginTop: "20px" }}>Detalle Económico</h3>
@@ -597,9 +637,9 @@ export default function ClientPortalShell({ user, onSignOut }) {
                     ))
                   )}
 
-                  <h3 style={{ fontSize: "15px", marginTop: "16px" }}>Guías de despacho</h3>
+                  <h3 style={{ fontSize: "15px", marginTop: "16px" }}>Rutas activas</h3>
                   {(detalle.guias_despacho || []).length === 0 ? (
-                    <p style={{ opacity: 0.7, fontSize: "14px" }}>Sin guías.</p>
+                    <p style={{ opacity: 0.7, fontSize: "14px" }}>Sin rutas activas.</p>
                   ) : (
                     detalle.guias_despacho.map((g) => (
                       <div key={g.id} style={{ fontSize: "14px", marginBottom: "8px" }}>
@@ -641,6 +681,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
           onClose={cerrarEvidencias}
         />
       ) : null}
+<<<<<<< HEAD
 
       {showCreateModal ? (
         <div style={styles.modalOverlay}>
@@ -799,6 +840,10 @@ export default function ClientPortalShell({ user, onSignOut }) {
           </div>
         </div>
       ) : null}
+=======
+        </>
+      )}
+>>>>>>> main
     </div>
   );
 }

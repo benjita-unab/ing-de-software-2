@@ -9,7 +9,8 @@ import {
   MessageSquare,
   Package,
   History,
-  UserCheck,
+  DollarSign,
+  Map,
   ChevronLeft,
   ChevronRight,
   LogOut,
@@ -20,14 +21,19 @@ import {
 const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "alertas", label: "Alertas", icon: Bell, badgeKey: "urgent" },
+  { id: "rutas-plantilla", label: "Plantillas", icon: Map },
   { id: "rutas", label: "Rutas", icon: Route },
+<<<<<<< HEAD
   { id: "panol", label: "Creador de Carga", icon: Package },
   { id: "asignacion", label: "Gestión de Rutas", icon: UserCheck },
+=======
+>>>>>>> main
   { id: "camiones", label: "Flota", icon: Truck },
   { id: "clientes", label: "Clientes", icon: Users },
+  { id: "pagos", label: "Pagos", icon: DollarSign },
   { id: "rrhh", label: "RRHH", icon: UserCog },
-  { id: "mensajes", label: "Mensajes", icon: MessageSquare, badgeKey: "messages" },
-  { id: "despachos", label: "Guías", icon: Package },
+  { id: "mensajes", label: "Mensajes", icon: MessageSquare },
+  { id: "despachos", label: "Rutas Activas", icon: Package },
   { id: "historial", label: "Historial", icon: History },
 ];
 
@@ -37,7 +43,6 @@ export default function Sidebar({
   collapsed = false,
   onToggle,
   urgentCount = 0,
-  hasUnreadEmergencies = false,
   operator,
   onSignOut,
   isDark = false,
@@ -64,7 +69,6 @@ export default function Sidebar({
           const Icon = item.icon;
           const isActive = activeSection === item.id;
           const showUrgentBadge = item.badgeKey === "urgent" && urgentCount > 0;
-          const showMsgBadge = item.badgeKey === "messages" && hasUnreadEmergencies;
 
           return (
             <button
@@ -79,9 +83,9 @@ export default function Sidebar({
                   size={18}
                   color={isActive ? "var(--lt-accent)" : "var(--lt-sidebar-muted)"}
                 />
-                {(showUrgentBadge || showMsgBadge) && (
+                {showUrgentBadge && (
                   <span className="lt-sidebar__badge">
-                    {showUrgentBadge ? (urgentCount > 9 ? "9+" : urgentCount) : "!"}
+                    {urgentCount > 9 ? "9+" : urgentCount}
                   </span>
                 )}
               </div>

@@ -8,10 +8,14 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { apiFetch } from "./apiClient";
+import {
+  parseRutasPayload,
+  rutaAsignadaAConductor,
+} from "./conductorUtils";
 
 /**
  * Crea una ruta (POST /api/rutas).
- * @param {object} payload — cliente_id, origen, destino obligatorios; conductor_id, camion_id, fecha_inicio, eta opcionales (ISO string).
+ * @param {object} payload — cliente_id, origen, destino, conductor_id y camion_id obligatorios; fecha_inicio, eta opcionales (ISO string).
  * @returns {Promise<{ success: boolean, data?: object, error?: string }>}
  */
 export async function crearRuta(payload) {
@@ -20,6 +24,16 @@ export async function crearRuta(payload) {
       success: false,
       error: "cliente_id, origen y destino son obligatorios",
     };
+  }
+
+  const conductorId = String(payload?.conductor_id ?? "").trim();
+  const camionId = String(payload?.camion_id ?? "").trim();
+
+  if (!conductorId) {
+    return { success: false, error: "Debe seleccionar un conductor." };
+  }
+  if (!camionId) {
+    return { success: false, error: "Debe seleccionar un camión." };
   }
 
   const res = await apiFetch("/api/rutas", {
@@ -320,6 +334,72 @@ export async function notificarFechaEstimada(rutaId) {
 }
 
 /**
+ * Obtiene el detalle de un conductor (GET /api/conductores/:id).
+ * @param {string} conductorId
+ * @returns {Promise<{data: object|null, error?: string}>}
+ */
+export async function obtenerConductorDetalle(conductorId) {
+  if (!conductorId) {
+    return { data: null, error: "conductorId es requerido" };
+  }
+
+  const res = await apiFetch(`/api/conductores/${conductorId}`);
+
+  if (!res.ok) {
+    return { data: null, error: res.error || "Error al obtener conductor" };
+  }
+
+  return { data: res.data?.data ?? res.data };
+}
+
+/**
+ * Obtiene rutas asignadas a un conductor.
+ * Usa filtro server-side por UUID y fallback por relación anidada o RUT.
+ * @param {string} conductorId
+ * @param {string} [conductorRut]
+ * @returns {Promise<{data: array, error?: string}>}
+ */
+export async function obtenerRutasPorConductor(conductorId, conductorRut) {
+  if (!conductorId && !conductorRut) {
+    return { data: [], error: "conductorId es requerido" };
+  }
+
+  const conductorRef = { id: conductorId, rut: conductorRut };
+  const rutasPorId = new Map();
+
+  const agregarRutas = (lista) => {
+    (lista || []).forEach((ruta) => {
+      if (ruta?.id && rutaAsignadaAConductor(ruta, conductorRef)) {
+        rutasPorId.set(ruta.id, ruta);
+      }
+    });
+  };
+
+  const resTodas = await apiFetch("/api/rutas");
+  if (resTodas.ok) {
+    agregarRutas(parseRutasPayload(resTodas.data));
+  }
+
+  if (conductorId) {
+    const resFiltrado = await apiFetch(
+      `/api/rutas?conductorId=${encodeURIComponent(conductorId)}`,
+    );
+    if (resFiltrado.ok) {
+      agregarRutas(parseRutasPayload(resFiltrado.data));
+    }
+  }
+
+  if (!resTodas.ok && rutasPorId.size === 0) {
+    return {
+      data: [],
+      error: resTodas.error || "Error al obtener rutas del conductor",
+    };
+  }
+
+  return { data: Array.from(rutasPorId.values()) };
+}
+
+/**
  * Obtiene el estado de la licencia de un conductor (días para vencer, etc.).
  * Mantiene el contrato de la versión anterior para no romper la UI.
  * @param {string} conductorId
@@ -365,4 +445,57 @@ export async function obtenerEstadoLicencia(conductorId) {
         (diasRestantes > 0 && diasRestantes <= 30),
     },
   };
+}
+
+/**
+ * HU-37: métricas operacionales y pago de un conductor por período.
+ * @param {string} conductorId
+ * @param {{ periodo?: string, fechaInicio?: string, fechaFin?: string }} [filtros]
+ */
+export async function obtenerMetricasPagoConductor(conductorId, filtros = {}) {
+  if (!conductorId) {
+    return { data: null, error: "conductorId es requerido" };
+  }
+
+  const params = new URLSearchParams();
+  if (filtros.periodo) params.set("periodo", filtros.periodo);
+  if (filtros.fechaInicio) params.set("fechaInicio", filtros.fechaInicio);
+  if (filtros.fechaFin) params.set("fechaFin", filtros.fechaFin);
+
+  const qs = params.toString();
+  const path = qs
+    ? `/api/conductores/${conductorId}/metricas-pago?${qs}`
+    : `/api/conductores/${conductorId}/metricas-pago`;
+
+  const res = await apiFetch(path);
+
+  if (!res.ok) {
+    return { data: null, error: res.error || "Error al obtener métricas de pago" };
+  }
+
+  return { data: res.data?.data ?? res.data };
+}
+
+/**
+ * HU-37 CA-08: comparativa de rendimiento entre conductores activos.
+ * @param {{ periodo?: string, fechaInicio?: string, fechaFin?: string }} [filtros]
+ */
+export async function obtenerComparativaMetricasPago(filtros = {}) {
+  const params = new URLSearchParams();
+  if (filtros.periodo) params.set("periodo", filtros.periodo);
+  if (filtros.fechaInicio) params.set("fechaInicio", filtros.fechaInicio);
+  if (filtros.fechaFin) params.set("fechaFin", filtros.fechaFin);
+
+  const qs = params.toString();
+  const path = qs
+    ? `/api/conductores/metricas-pago/comparativa?${qs}`
+    : "/api/conductores/metricas-pago/comparativa";
+
+  const res = await apiFetch(path);
+
+  if (!res.ok) {
+    return { data: null, error: res.error || "Error al obtener comparativa" };
+  }
+
+  return { data: res.data?.data ?? res.data };
 }
