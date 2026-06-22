@@ -1,7 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { Plus } from "lucide-react";
 import { apiFetch } from "../lib/apiClient";
 import { getPlantillasPorCliente } from "../lib/clientesService";
-import { getRutaPlantillaById } from "../lib/rutasPlantillaService";
+import {
+  getRutaPlantillaById,
+  getRutasPlantilla,
+  calcularRutaPlantilla,
+} from "../lib/rutasPlantillaService";
 import {
   crearRuta,
   estimarFechasEstimadas,
@@ -11,8 +16,12 @@ import {
 } from "../lib/rutasService";
 import { useGooglePlacesAutocomplete } from "../hooks/useGooglePlacesAutocomplete";
 import { getNombreRuta } from "../lib/rutasUtils";
+import ParadaPlantillaInput from "./ParadaPlantillaInput";
 import Badge from "./ui/Badge";
 import Spinner from "./ui/Spinner";
+
+const MODO_PLANTILLA = "plantilla";
+const MODO_MANUAL = "manual";
 
 function mensajeFilaClass(tipo) {
   if (tipo === "ok") return "lt-alert-banner lt-alert-banner--success";
@@ -77,6 +86,18 @@ function fechasFromRuta(ruta) {
   };
 }
 
+function buildParadasPayload(paradas) {
+  return (paradas || [])
+    .filter((p) => String(p.direccion ?? "").trim())
+    .map((p, idx) => ({
+      direccion: String(p.direccion).trim(),
+      orden: Number(p.orden) || idx + 1,
+      latitud: p.latitud ?? null,
+      longitud: p.longitud ?? null,
+      es_temporal: p.es_temporal !== false,
+    }))
+    .sort((a, b) => a.orden - b.orden);
+}
 function buildEstimarPayload({ origen, destino, distanciaKm, fechaInicioIso }) {
   const payload = {};
   const o = String(origen ?? "").trim();
@@ -136,6 +157,12 @@ export default function RutasActivas() {
   const [plantillasCliente, setPlantillasCliente] = useState([]);
   const [plantillaSeleccionadaId, setPlantillaSeleccionadaId] = useState("");
   const [cargandoPlantillas, setCargandoPlantillas] = useState(false);
+  const [modoCreacion, setModoCreacion] = useState(MODO_PLANTILLA);
+  const [rutasReutilizables, setRutasReutilizables] = useState([]);
+  const [cargandoRutasReutilizables, setCargandoRutasReutilizables] = useState(false);
+  const [paradas, setParadas] = useState([]);
+  const [guardarComoPlantilla, setGuardarComoPlantilla] = useState(false);
+  const [nombrePlantilla, setNombrePlantilla] = useState("");
 
   const [form, setForm] = useState({
     nombreRuta: "",
@@ -151,6 +178,7 @@ export default function RutasActivas() {
     fechasEstimadas: { ...FECHAS_VACIAS },
     advertenciaEstimacion: "",
     bultosDespachos: "",
+    observaciones: "",
   });
 
   const origenInputRef = useRef(null);
@@ -275,23 +303,59 @@ export default function RutasActivas() {
     };
   }, [form.clienteId]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function cargarRutasReutilizables() {
+      if (modoCreacion !== MODO_PLANTILLA) {
+        setRutasReutilizables([]);
+        return;
+      }
+
+      setCargandoRutasReutilizables(true);
+      const params = { activa: "true" };
+      if (form.clienteId) params.clienteId = form.clienteId;
+      const res = await getRutasPlantilla(params);
+      if (cancelled) return;
+
+      const lista = res.data?.data ?? res.data ?? [];
+      setRutasReutilizables(Array.isArray(lista) ? lista : []);
+      setCargandoRutasReutilizables(false);
+    }
+
+    cargarRutasReutilizables();
+    return () => {
+      cancelled = true;
+    };
+  }, [modoCreacion, form.clienteId]);
+
   const aplicarPlantilla = async (plantillaId) => {
     setPlantillaSeleccionadaId(plantillaId);
     if (!plantillaId) {
       setForm((prev) => ({ ...prev, plantillaId: "" }));
+      setParadas([]);
       return;
     }
 
     const res = await getRutaPlantillaById(plantillaId);
     if (res.error || !res.data) {
-      setMensaje({ tipo: "error", texto: res.error || "No se pudo cargar la plantilla." });
+      setMensaje({ tipo: "error", texto: res.error || "No se pudo cargar la ruta." });
       return;
     }
 
     const plantilla = res.data;
+    const paradasPlantilla = (plantilla.paradas || []).map((p) => ({
+      direccion: p.direccion || "",
+      orden: p.orden,
+      latitud: p.latitud ?? null,
+      longitud: p.longitud ?? null,
+      es_temporal: false,
+    }));
+    setParadas(paradasPlantilla);
     setForm((prev) => ({
       ...prev,
-      plantillaId,
+      plantillaId: modoCreacion === MODO_PLANTILLA ? plantillaId : "",
+      nombreRuta: plantilla.nombre || prev.nombreRuta,
       origen: plantilla.origen || prev.origen,
       destino: plantilla.destino || prev.destino,
       distanciaKm:
@@ -302,8 +366,57 @@ export default function RutasActivas() {
     }));
     setMensaje({
       tipo: "ok",
-      texto: `Plantilla "${plantilla.nombre}" aplicada al formulario.`,
+      texto: `Ruta "${plantilla.nombre}" cargada. Origen y destino autocompletados.`,
     });
+  };
+
+  const agregarParada = () => {
+    setParadas((prev) => [
+      ...prev,
+      {
+        direccion: "",
+        orden: prev.length + 1,
+        latitud: null,
+        longitud: null,
+        es_temporal: true,
+      },
+    ]);
+  };
+
+  const actualizarParada = (index, campo, valor) => {
+    setParadas((prev) =>
+      prev.map((p, i) => (i === index ? { ...p, [campo]: valor } : p)),
+    );
+  };
+
+  const actualizarParadaDesdePlaces = (index, datos) => {
+    setParadas((prev) =>
+      prev.map((p, i) => (i === index ? { ...p, ...datos, es_temporal: true } : p)),
+    );
+  };
+
+  const eliminarParada = (index) => {
+    setParadas((prev) =>
+      prev
+        .filter((_, i) => i !== index)
+        .map((p, i) => ({ ...p, orden: i + 1 })),
+    );
+  };
+
+  const cambiarModoCreacion = (modo) => {
+    setModoCreacion(modo);
+    setPlantillaSeleccionadaId("");
+    setParadas([]);
+    setGuardarComoPlantilla(false);
+    setNombrePlantilla("");
+    setForm((prev) => ({
+      ...prev,
+      plantillaId: "",
+      origen: modo === MODO_MANUAL ? prev.origen : "",
+      destino: modo === MODO_MANUAL ? prev.destino : "",
+      advertenciaEstimacion: "",
+    }));
+    setErroresFormulario({});
   };
 
   const actualizarCampo = (campo, valor) => {
@@ -338,6 +451,7 @@ export default function RutasActivas() {
   const calcularDistanciaYFechasForm = async () => {
     setForm((prev) => ({ ...prev, advertenciaEstimacion: "" }));
     const tieneKm = String(form.distanciaKm ?? "").trim() !== "";
+    const paradasValidas = buildParadasPayload(paradas);
     if (!tieneKm && (!form.origen.trim() || !form.destino.trim())) {
       setForm((prev) => ({
         ...prev,
@@ -349,6 +463,60 @@ export default function RutasActivas() {
 
     setCalculandoEstimacion(true);
     const fi = localDatetimeToIso(form.fechaInicio);
+
+    if (paradasValidas.length > 0 && form.origen.trim() && form.destino.trim()) {
+      const resCalc = await calcularRutaPlantilla({
+        origen: form.origen.trim(),
+        destino: form.destino.trim(),
+        paradas: paradasValidas.map((p) => ({
+          direccion: p.direccion,
+          orden: p.orden,
+        })),
+      });
+      setCalculandoEstimacion(false);
+
+      if (resCalc.error || resCalc.data?.distanciaEstimada == null) {
+        setForm((prev) => ({
+          ...prev,
+          advertenciaEstimacion: resCalc.error || ADVERTENCIA_DISTANCIA_VIAL,
+        }));
+        return;
+      }
+
+      const distancia = resCalc.data.distanciaEstimada;
+      const resFechas = await estimarFechasEstimadas(
+        buildEstimarPayload({
+          origen: form.origen,
+          destino: form.destino,
+          distanciaKm: distancia,
+          fechaInicioIso: fi,
+        }),
+      );
+
+      if (!resFechas.success || !resFechas.data?.ok) {
+        setForm((prev) => ({
+          ...prev,
+          distanciaKm: String(distancia),
+          advertenciaEstimacion:
+            resFechas.error || resFechas.data?.advertencia || ADVERTENCIA_DISTANCIA_VIAL,
+        }));
+        return;
+      }
+
+      const data = resFechas.data;
+      setForm((prev) => ({
+        ...prev,
+        advertenciaEstimacion: "",
+        distanciaKm: String(distancia),
+        fechasEstimadas: {
+          inicio: data.fecha_estimada_inicio || "",
+          fin: data.fecha_estimada_fin || "",
+          entrega: data.fecha_estimada_entrega || "",
+        },
+      }));
+      return;
+    }
+
     const res = await estimarFechasEstimadas(
       buildEstimarPayload({
         origen: form.origen,
@@ -456,6 +624,11 @@ export default function RutasActivas() {
     setErroresFormulario({});
 
     const nuevosErrores = {};
+
+    if (modoCreacion === MODO_PLANTILLA && !form.plantillaId) {
+      nuevosErrores.plantillaId = "Debe seleccionar una ruta existente";
+    }
+
     const requeridos = [
       ["clienteId", form.clienteId],
       ["conductorId", form.conductorId],
@@ -496,6 +669,10 @@ export default function RutasActivas() {
       nuevosErrores.distanciaKm = "Distancia inválida";
     }
 
+    if (guardarComoPlantilla && modoCreacion === MODO_MANUAL && !nombrePlantilla.trim() && !form.nombreRuta.trim()) {
+      nuevosErrores.nombrePlantilla = "Indique un nombre para la nueva ruta reutilizable";
+    }
+
     if (Object.keys(nuevosErrores).length > 0) {
       setErroresFormulario(nuevosErrores);
       setSaving(false);
@@ -529,6 +706,22 @@ export default function RutasActivas() {
       payload.fecha_estimada_entrega = entrega.trim();
     }
 
+    const paradasPayload = buildParadasPayload(paradas);
+    if (paradasPayload.length > 0) {
+      payload.paradas = paradasPayload;
+    }
+    if (modoCreacion === MODO_PLANTILLA && form.plantillaId?.trim()) {
+      payload.ruta_plantilla_id = form.plantillaId.trim();
+    }
+    if (form.observaciones?.trim()) {
+      payload.observaciones = form.observaciones.trim();
+    }
+    if (modoCreacion === MODO_MANUAL && guardarComoPlantilla) {
+      payload.guardar_como_plantilla = true;
+      payload.nombre_plantilla =
+        nombrePlantilla.trim() || form.nombreRuta.trim() || undefined;
+    }
+
     const resultado = await crearRuta(payload);
     setSaving(false);
 
@@ -540,10 +733,15 @@ export default function RutasActivas() {
       return;
     }
 
-    setMensaje({ tipo: "ok", texto: "Ruta creada correctamente." });
+    const pagoInfo = resultado.data?.pago;
+    const textoOk = pagoInfo
+      ? `Pedido creado correctamente (ID: ${resultado.data?.id?.slice(0, 8) || "—"}…). Pago pendiente generado.`
+      : "Pedido creado correctamente.";
+    setMensaje({ tipo: "ok", texto: textoOk });
     setForm({
       nombreRuta: "",
       clienteId: "",
+      plantillaId: "",
       conductorId: "",
       camionId: "",
       origen: "",
@@ -554,7 +752,12 @@ export default function RutasActivas() {
       fechasEstimadas: { ...FECHAS_VACIAS },
       advertenciaEstimacion: "",
       bultosDespachos: "",
+      observaciones: "",
     });
+    setParadas([]);
+    setPlantillaSeleccionadaId("");
+    setGuardarComoPlantilla(false);
+    setNombrePlantilla("");
     setErroresFormulario({});
     setShowForm(false);
     await cargarRutas();
@@ -685,8 +888,29 @@ export default function RutasActivas() {
             style={{ marginTop: 16, marginBottom: 16, overflow: "visible" }}
           >
             <div className="lt-module-card__title" style={{ marginBottom: 12 }}>
-              Nueva ruta
+              Nuevo pedido / ruta
             </div>
+
+            <div className="lt-field-group" style={{ gridColumn: "1 / -1", marginBottom: 16 }}>
+              <span className="lt-label">Modo de creación</span>
+              <div className="lt-form-actions" style={{ marginTop: 8, gap: 8 }}>
+                <button
+                  type="button"
+                  className={`lt-btn ${modoCreacion === MODO_PLANTILLA ? "lt-btn--primary" : "lt-btn--secondary"}`}
+                  onClick={() => cambiarModoCreacion(MODO_PLANTILLA)}
+                >
+                  Usar ruta existente
+                </button>
+                <button
+                  type="button"
+                  className={`lt-btn ${modoCreacion === MODO_MANUAL ? "lt-btn--primary" : "lt-btn--secondary"}`}
+                  onClick={() => cambiarModoCreacion(MODO_MANUAL)}
+                >
+                  Crear ruta manual
+                </button>
+              </div>
+            </div>
+
             <div className="lt-form-grid">
               <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
                 <label className="lt-label" htmlFor="ruta-nombre">Nombre de la ruta (Opcional)</label>
@@ -718,20 +942,47 @@ export default function RutasActivas() {
                 {renderErrorFormulario("clienteId")}
               </div>
 
-              {form.clienteId && (
+              {modoCreacion === MODO_PLANTILLA && (
                 <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
                   <label className="lt-label" htmlFor="ruta-plantilla">
-                    Plantilla del cliente (opcional)
+                    Ruta reutilizable *
                   </label>
-                  {cargandoPlantillas ? (
-                    <p className="lt-card__subtitle">Buscando plantillas adjudicadas…</p>
-                  ) : plantillasCliente.length === 0 ? (
+                  {cargandoRutasReutilizables ? (
+                    <p className="lt-card__subtitle">Cargando rutas disponibles…</p>
+                  ) : rutasReutilizables.length === 0 ? (
                     <p className="lt-card__subtitle">
-                      Este cliente no tiene plantillas adjudicadas. Puede completar la ruta manualmente.
+                      No hay rutas reutilizables activas
+                      {form.clienteId ? " para este cliente" : ""}. Cree una en Rutas plantilla o use el modo manual.
                     </p>
                   ) : (
                     <select
                       id="ruta-plantilla"
+                      className="lt-select"
+                      value={plantillaSeleccionadaId}
+                      onChange={(e) => aplicarPlantilla(e.target.value)}
+                    >
+                      <option value="">Seleccionar ruta…</option>
+                      {rutasReutilizables.map((ruta) => (
+                        <option key={ruta.id} value={ruta.id}>
+                          {ruta.nombre} — {ruta.origen} → {ruta.destino}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {renderErrorFormulario("plantillaId")}
+                </div>
+              )}
+
+              {modoCreacion === MODO_MANUAL && form.clienteId && plantillasCliente.length > 0 && (
+                <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
+                  <label className="lt-label" htmlFor="ruta-plantilla-cliente">
+                    Precargar desde plantilla del cliente (opcional)
+                  </label>
+                  {cargandoPlantillas ? (
+                    <p className="lt-card__subtitle">Buscando plantillas adjudicadas…</p>
+                  ) : (
+                    <select
+                      id="ruta-plantilla-cliente"
                       className="lt-select"
                       value={plantillaSeleccionadaId}
                       onChange={(e) => aplicarPlantilla(e.target.value)}
@@ -798,6 +1049,7 @@ export default function RutasActivas() {
                   className="lt-input"
                   required
                   autoComplete="off"
+                  readOnly={modoCreacion === MODO_PLANTILLA && !!form.plantillaId}
                   value={form.origen}
                   onChange={(e) => actualizarCampo("origen", e.target.value)}
                   placeholder="Escribe y selecciona una dirección sugerida…"
@@ -812,12 +1064,79 @@ export default function RutasActivas() {
                   className="lt-input"
                   required
                   autoComplete="off"
+                  readOnly={modoCreacion === MODO_PLANTILLA && !!form.plantillaId}
                   value={form.destino}
                   onChange={(e) => actualizarCampo("destino", e.target.value)}
                   placeholder="Escribe y selecciona una dirección sugerida…"
                 />
                 {renderErrorFormulario("destino")}
               </div>
+
+              <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
+                <div className="lt-form-actions" style={{ justifyContent: "space-between", marginTop: 0 }}>
+                  <span className="lt-label" style={{ marginBottom: 0 }}>
+                    Paradas temporales del pedido
+                  </span>
+                  <button type="button" className="lt-btn lt-btn--secondary lt-btn--sm" onClick={agregarParada}>
+                    <Plus size={14} style={{ marginRight: 4 }} />
+                    Agregar parada
+                  </button>
+                </div>
+                <p className="lt-module-card__subtitle" style={{ marginTop: 4 }}>
+                  Las paradas solo afectan a este pedido; la ruta reutilizable original no se modifica.
+                </p>
+                {paradas.length === 0 ? (
+                  <p className="lt-card__subtitle">Sin paradas intermedias.</p>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+                    {paradas.map((parada, index) => (
+                      <ParadaPlantillaInput
+                        key={`parada-${index}-${parada.orden}`}
+                        index={index}
+                        parada={parada}
+                        onChange={actualizarParada}
+                        onPlaceSelected={actualizarParadaDesdePlaces}
+                        onRemove={eliminarParada}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
+                <label className="lt-label" htmlFor="ruta-observaciones">Observaciones</label>
+                <textarea
+                  id="ruta-observaciones"
+                  className="lt-input"
+                  rows={2}
+                  value={form.observaciones}
+                  onChange={(e) => actualizarCampo("observaciones", e.target.value)}
+                  placeholder="Notas operativas del pedido (opcional)"
+                />
+              </div>
+
+              {modoCreacion === MODO_MANUAL && (
+                <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
+                  <label className="lt-label" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={guardarComoPlantilla}
+                      onChange={(e) => setGuardarComoPlantilla(e.target.checked)}
+                    />
+                    Guardar como nueva ruta reutilizable para futuros pedidos
+                  </label>
+                  {guardarComoPlantilla && (
+                    <input
+                      className="lt-input"
+                      style={{ marginTop: 8 }}
+                      value={nombrePlantilla}
+                      onChange={(e) => setNombrePlantilla(e.target.value)}
+                      placeholder="Nombre de la nueva ruta (opcional si completó nombre de ruta)"
+                    />
+                  )}
+                  {renderErrorFormulario("nombrePlantilla")}
+                </div>
+              )}
               <div className="lt-field-group">
                 <label className="lt-label" htmlFor="ruta-fecha-inicio">Fecha inicio *</label>
                 <input
@@ -930,7 +1249,7 @@ export default function RutasActivas() {
             </div>
             <div className="lt-form-actions">
               <button type="submit" className="lt-btn lt-btn--primary" disabled={saving || listsLoading}>
-                {saving ? "Guardando…" : "Guardar ruta"}
+                {saving ? "Guardando…" : "Crear pedido"}
               </button>
             </div>
           </form>

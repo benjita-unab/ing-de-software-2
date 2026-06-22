@@ -14,8 +14,9 @@ import {
 } from "./conductorUtils";
 
 /**
- * Crea una ruta (POST /api/rutas).
- * @param {object} payload — cliente_id, origen, destino, conductor_id y camion_id obligatorios; fecha_inicio, eta opcionales (ISO string).
+ * Crea un pedido/ruta operativa (POST /api/rutas) — HU-58.
+ * @param {object} payload — cliente_id, origen, destino, conductor_id, camion_id, fecha_inicio;
+ *   opcionales: ruta_plantilla_id, paradas[], observaciones, guardar_como_plantilla.
  * @returns {Promise<{ success: boolean, data?: object, error?: string }>}
  */
 export async function crearRuta(payload) {
