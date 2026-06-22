@@ -3,6 +3,7 @@ import {
   Injectable,
   InternalServerErrorException,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { RutasService, CreateRutaDto } from '../rutas/rutas.service';
 import { SupabaseConfigService } from '../../config/supabase.config';

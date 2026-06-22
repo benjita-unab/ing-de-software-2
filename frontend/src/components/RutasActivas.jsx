@@ -139,6 +139,10 @@ export default function RutasActivas() {
   const [notifyingId, setNotifyingId] = useState(null);
   const [calculandoEstimacion, setCalculandoEstimacion] = useState(false);
   const [calculandoEstimacionRutaId, setCalculandoEstimacionRutaId] = useState(null);
+  const [verBultosRutaId, setVerBultosRutaId] = useState(null);
+  
+  const [showDetalleModal, setShowDetalleModal] = useState(false);
+  const [rutaDetalle, setRutaDetalle] = useState(null);
   const [plantillasCliente, setPlantillasCliente] = useState([]);
   const [plantillaSeleccionadaId, setPlantillaSeleccionadaId] = useState("");
   const [cargandoPlantillas, setCargandoPlantillas] = useState(false);
@@ -722,26 +726,32 @@ export default function RutasActivas() {
                       {ruta.total_pagar != null || ruta.tarifa_base_total != null ? (
                         <div style={{ fontSize: "12px", lineHeight: "1.4" }}>
                           {(() => {
-                            const totalCobrado = Math.round(Number(ruta.costo_servicio) > 0 
+                            const totalCobradoBruto = Math.round(Number(ruta.costo_servicio) > 0 
                               ? Number(ruta.costo_servicio) 
                               : Number(ruta.total_pagar || ruta.tarifa_base_total || 0));
                             
+                            // Extraer el Neto para la ganancia real de la empresa (sin IVA)
+                            const totalCobradoNeto = Math.round(Number(ruta.tarifa_base_total || 0) > 0 
+                              ? Number(ruta.tarifa_base_total) 
+                              : (totalCobradoBruto / 1.19));
+
                             let pagoConductor = Number(ruta.pago_conductor_base_clp || 0);
                             if (pagoConductor === 0) {
-                              const bultosCount = ruta.bultos?.length || 1;
+                              const totalSlots = ruta.bultos?.reduce((acc, b) => acc + (Number(b.cuadrados_equivalentes) || 0), 0) || 1;
                               const distKm = Number(ruta.distancia_km || 0);
-                              pagoConductor = 5000 + 3000 + (bultosCount * 500) + (distKm * 2 * 150); // HU-37 approx fallback
+                              pagoConductor = 5000 + 3000 + (totalSlots * 500) + (distKm * 2 * 150); // HU-37 approx fallback
                             }
 
                             const gastos = Math.round(Number(ruta.costo_combustible_calculado || 0) + Number(ruta.costo_tac_peajes_clp || 0) + pagoConductor);
-                            const ganancia = Math.round(totalCobrado - gastos);
+                            const ganancia = Math.round(totalCobradoNeto - gastos);
                             return (
                               <>
-                                <div>Cobrado: <strong>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(totalCobrado)}</strong></div>
+                                <div>Cobrado (Cliente): <strong>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(totalCobradoBruto)}</strong></div>
                                 <div>Gastos Op.: <span style={{ color: "#ef4444" }}>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(gastos)}</span></div>
                                 <div style={{ borderTop: "1px dashed rgba(255,255,255,0.15)", marginTop: 4, paddingTop: 4 }}>
-                                  Ganancia Neta: <strong style={{color: "#10b981"}}>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(ganancia)}</strong>
+                                  Ganancia Neta (s/IVA): <strong style={{color: "#10b981"}}>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(ganancia)}</strong>
                                 </div>
+                                <button type="button" onClick={() => { setRutaDetalle({ ...ruta, totalCobradoBruto, totalCobradoNeto, gastos, ganancia, pagoConductor }); setShowDetalleModal(true); }} className="lt-btn lt-btn--secondary" style={{ padding: '4px 8px', fontSize: '11px', marginTop: '8px', width: '100%' }}>Ver Detalle</button>
                               </>
                             );
                           })()}
@@ -914,7 +924,59 @@ export default function RutasActivas() {
             </table>
           </div>
         )}
-      </div>
+      {/* Modal Detalle Financiero */}
+      {showDetalleModal && rutaDetalle && (
+        <div className="lt-modal-overlay">
+          <div className="lt-modal" style={{ maxWidth: '450px' }}>
+            <div className="lt-modal__header">
+              <h3>Simulador de Rentabilidad Interna</h3>
+              <button type="button" className="lt-modal__close" onClick={() => setShowDetalleModal(false)}>×</button>
+            </div>
+            <div className="lt-modal__content" style={{ fontSize: '13px', background: '#111827', color: '#fff', padding: '16px', borderRadius: '8px' }}>
+              <div style={{ fontWeight: 'bold', color: '#9CA3AF', marginBottom: '8px' }}>INGRESOS (COBRO A CLIENTES)</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span>Subtotal Neto</span>
+                <strong>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(rutaDetalle.totalCobradoNeto)}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span>IVA (19%)</span>
+                <span style={{ color: '#38BDF8' }}>+{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(rutaDetalle.totalCobradoBruto - rutaDetalle.totalCobradoNeto)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '4px' }}>
+                <strong>Total Recaudado (Total a Pagar)</strong>
+                <strong>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(rutaDetalle.totalCobradoBruto)}</strong>
+              </div>
+
+              <div style={{ fontWeight: 'bold', color: '#9CA3AF', marginBottom: '8px' }}>COSTOS OPERATIVOS (INTERNOS)</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span>Costo Combustible Físico</span>
+                <span style={{ color: '#F87171' }}>-{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(Number(rutaDetalle.costo_combustible_calculado || 0))}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span>Pago Conductor</span>
+                <span style={{ color: '#F87171' }}>-{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(rutaDetalle.pagoConductor)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span>Costo TAC / Peajes</span>
+                <span style={{ color: '#F87171' }}>-{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(Number(rutaDetalle.costo_tac_peajes_clp || 0))}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '4px' }}>
+                <strong>Gasto Total Estimado</strong>
+                <strong style={{ color: '#F87171' }}>-{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(rutaDetalle.gastos)}</strong>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(16, 185, 129, 0.1)', padding: '12px', borderRadius: '6px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                <strong style={{ color: '#9CA3AF' }}>MARGEN DE GANANCIA (PROFIT)</strong>
+                <strong style={{ color: '#10B981', fontSize: '15px' }}>+{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(rutaDetalle.ganancia)} CLP</strong>
+              </div>
+            </div>
+            <div className="lt-modal__footer" style={{ marginTop: '16px' }}>
+              <button type="button" className="lt-btn lt-btn--secondary" onClick={() => setShowDetalleModal(false)}>Cerrar</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
     </div>
   );
 }

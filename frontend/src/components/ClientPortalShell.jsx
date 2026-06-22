@@ -13,7 +13,7 @@ const TAB_PENDIENTES = "pendientes";
 const TAB_EN_CURSO = "en_curso";
 const TAB_COMPLETADOS = "completados";
 
-const styles = {
+const getStyles = (isLight) => ({
   page: {
     minHeight: "100vh",
     background: "#0a0e1a",
@@ -188,19 +188,18 @@ const styles = {
     gridTemplateColumns: "1fr 1fr 1fr 1fr auto",
     gap: "10px",
     alignItems: "end",
-    marginBottom: "10px",
   },
-};
+});
 
 /** HU-27 CA-6: estado vacío cuando el cliente no tiene pedidos. */
-function PortalPedidosEmptyState() {
+function PortalPedidosEmptyState({ stylesObj }) {
   return (
-    <div style={styles.emptyState} role="status" aria-live="polite">
-      <div style={styles.emptyIcon} aria-hidden="true">
+    <div style={stylesObj.emptyState} role="status" aria-live="polite">
+      <div style={stylesObj.emptyIcon} aria-hidden="true">
         📦
       </div>
-      <h2 style={styles.emptyTitle}>No tienes pedidos disponibles</h2>
-      <p style={styles.emptyMessage}>
+      <h2 style={stylesObj.emptyTitle}>No tienes pedidos disponibles</h2>
+      <p style={stylesObj.emptyMessage}>
         Los despachos asignados aparecerán aquí
       </p>
     </div>
@@ -217,6 +216,9 @@ function formatDate(value) {
 }
 
 export default function ClientPortalShell({ user, onSignOut }) {
+  const [isLight, setIsLight] = useState(false);
+  const stylesObj = useMemo(() => getStyles(isLight), [isLight]);
+
   const [seccionActiva, setSeccionActiva] = useState(SECCION_PEDIDOS);
   const [pedidos, setPedidos] = useState([]);
   const [activeTab, setActiveTab] = useState(TAB_PENDIENTES);
@@ -485,8 +487,8 @@ export default function ClientPortalShell({ user, onSignOut }) {
   const tituloSeccion = "Mis pedidos";
 
   return (
-    <div style={styles.page}>
-      <header style={styles.header}>
+    <div style={stylesObj.page}>
+      <header style={stylesObj.header}>
         <div>
           <h1 style={{ margin: 0, fontSize: "22px" }}>{tituloSeccion}</h1>
           <p style={{ margin: "6px 0 0", opacity: 0.7, fontSize: "14px" }}>
@@ -495,7 +497,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
         </div>
         <div style={{ display: "flex", gap: "12px" }}>
 
-          <button type="button" style={styles.btn} onClick={onSignOut}>
+          <button type="button" style={stylesObj.btn} onClick={onSignOut}>
             Cerrar sesión
           </button>
         </div>
@@ -511,50 +513,50 @@ export default function ClientPortalShell({ user, onSignOut }) {
         <p style={{ opacity: 0.7 }}>Cargando pedidos…</p>
       ) : pedidos.length === 0 ? (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-          <PortalPedidosEmptyState />
+          <PortalPedidosEmptyState stylesObj={stylesObj} />
         </div>
       ) : (
         <>
-          <div style={{...styles.tabs, borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "12px"}} role="tablist" aria-label="Pedidos por estado">
+          <div style={{...stylesObj.tabs, borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "12px"}} role="tablist" aria-label="Pedidos por estado">
             <button
               type="button"
               role="tab"
               aria-selected={activeTab === TAB_TODOS}
-              style={styles.tab(activeTab === TAB_TODOS)}
+              style={stylesObj.tab(activeTab === TAB_TODOS)}
               onClick={() => setActiveTab(TAB_TODOS)}
             >
               Todos
-              <span style={styles.tabCount("todos")}>{pedidosTodos.length}</span>
+              <span style={stylesObj.tabCount("todos")}>{pedidosTodos.length}</span>
             </button>
             <button
               type="button"
               role="tab"
               aria-selected={activeTab === TAB_PENDIENTES}
-              style={styles.tab(activeTab === TAB_PENDIENTES)}
+              style={stylesObj.tab(activeTab === TAB_PENDIENTES)}
               onClick={() => setActiveTab(TAB_PENDIENTES)}
             >
               Pendientes de Pago
-              <span style={styles.tabCount("pendientes")}>{pedidosPendientes.length}</span>
+              <span style={stylesObj.tabCount("pendientes")}>{pedidosPendientes.length}</span>
             </button>
             <button
               type="button"
               role="tab"
               aria-selected={activeTab === TAB_EN_CURSO}
-              style={styles.tab(activeTab === TAB_EN_CURSO)}
+              style={stylesObj.tab(activeTab === TAB_EN_CURSO)}
               onClick={() => setActiveTab(TAB_EN_CURSO)}
             >
               En Curso
-              <span style={styles.tabCount("en_curso")}>{pedidosEnCurso.length}</span>
+              <span style={stylesObj.tabCount("en_curso")}>{pedidosEnCurso.length}</span>
             </button>
             <button
               type="button"
               role="tab"
               aria-selected={activeTab === TAB_COMPLETADOS}
-              style={styles.tab(activeTab === TAB_COMPLETADOS)}
+              style={stylesObj.tab(activeTab === TAB_COMPLETADOS)}
               onClick={() => setActiveTab(TAB_COMPLETADOS)}
             >
               Completados
-              <span style={styles.tabCount("completados")}>{pedidosCompletados.length}</span>
+              <span style={stylesObj.tabCount("completados")}>{pedidosCompletados.length}</span>
             </button>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginTop: "16px" }}>
@@ -583,7 +585,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
                           </div>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                          <span style={styles.badge(p.estado)}>{p.estado || "—"}</span>
+                          <span style={stylesObj.badge(p.estado)}>{p.estado || "—"}</span>
                           <span style={{ transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }}>▼</span>
                         </div>
                       </div>
@@ -641,12 +643,12 @@ export default function ClientPortalShell({ user, onSignOut }) {
 
                                   <div style={{ marginTop: "20px", display: "flex", gap: "12px", justifyContent: "flex-end" }}>
                                     {activeTab === TAB_PENDIENTES && (
-                                      <button type="button" disabled={pagandoBase} style={{ ...styles.btn, background: pagandoBase ? "#64748b" : "#10b981", borderColor: pagandoBase ? "#64748b" : "#10b981", fontWeight: 600, padding: "10px 24px" }} onClick={(e) => handlePagarBase(p.id, e)}>
+                                      <button type="button" disabled={pagandoBase} style={{ ...stylesObj.btn, background: pagandoBase ? "#64748b" : "#10b981", borderColor: pagandoBase ? "#64748b" : "#10b981", fontWeight: 600, padding: "10px 24px" }} onClick={(e) => handlePagarBase(p.id, e)}>
                                         {pagandoBase ? "Procesando..." : "Pagar Base"}
                                       </button>
                                     )}
                                     {activeTab === TAB_COMPLETADOS && Number(detalle.ruta.costo_espera_total) > 0 && (
-                                      <button type="button" disabled={pagandoRetraso} style={{ ...styles.btn, background: pagandoRetraso ? "#64748b" : "#ef4444", borderColor: pagandoRetraso ? "#64748b" : "#ef4444", fontWeight: 600, padding: "10px 24px" }} onClick={(e) => handlePagarRetraso(p.id, e)}>
+                                      <button type="button" disabled={pagandoRetraso} style={{ ...stylesObj.btn, background: pagandoRetraso ? "#64748b" : "#ef4444", borderColor: pagandoRetraso ? "#64748b" : "#ef4444", fontWeight: 600, padding: "10px 24px" }} onClick={(e) => handlePagarRetraso(p.id, e)}>
                                         {pagandoRetraso ? "Procesando..." : "Pagar Retraso"}
                                       </button>
                                     )}
@@ -658,7 +660,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
 
                               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "24px", marginBottom: "12px", borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "4px" }}>
                                 <h3 style={{ fontSize: "15px", margin: 0, color: "#94a3b8" }}>Historial de estados</h3>
-                                <button type="button" style={{ ...styles.btnEvidencias, margin: 0, padding: "6px 12px", fontSize: "12px" }} onClick={(e) => { e.stopPropagation(); handleVerEvidencias(); }}>
+                                <button type="button" style={{ ...stylesObj.btnEvidencias, margin: 0, padding: "6px 12px", fontSize: "12px" }} onClick={(e) => { e.stopPropagation(); handleVerEvidencias(); }}>
                                   Ver Evidencias Fotográficas
                                 </button>
                               </div>
@@ -668,7 +670,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
                                   <p style={{ opacity: 0.7, fontSize: "14px" }}>Sin historial.</p>
                                 ) : (
                                   detalle.historial_estados.map((h) => (
-                                    <div key={h.id} style={{ ...styles.timelineItem, flexShrink: 0, minWidth: "140px" }}>
+                                    <div key={h.id} style={{ ...stylesObj.timelineItem, flexShrink: 0, minWidth: "140px" }}>
                                       <strong>{h.estado}</strong>
                                       <div style={{ opacity: 0.75, fontSize: "12px" }}>{formatDate(h.created_at)}</div>
                                     </div>
@@ -699,13 +701,13 @@ export default function ClientPortalShell({ user, onSignOut }) {
       ) : null}
 
       {showCreateModal ? (
-        <div style={styles.modalOverlay}>
-          <div style={styles.modalContent}>
+        <div style={stylesObj.modalOverlay}>
+          <div style={stylesObj.modalContent}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
               <h2 style={{ margin: 0, fontSize: "20px", color: "#38bdf8" }}>Crear Nuevo Pedido</h2>
               <button
                 type="button"
-                style={{ ...styles.btn, padding: "4px 8px", fontSize: "12px" }}
+                style={{ ...stylesObj.btn, padding: "4px 8px", fontSize: "12px" }}
                 onClick={() => setShowCreateModal(false)}
               >
                 ✕
@@ -723,7 +725,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
                 <label style={{ fontSize: "13px", color: "#94a3b8" }}>Dirección de Origen *</label>
                 <input
                   type="text"
-                  style={styles.input}
+                  style={stylesObj.input}
                   required
                   placeholder="Ej: Av. Vitacura 1234, Santiago"
                   value={newOrderForm.origen}
@@ -735,7 +737,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
                 <label style={{ fontSize: "13px", color: "#94a3b8" }}>Dirección de Destino *</label>
                 <input
                   type="text"
-                  style={styles.input}
+                  style={stylesObj.input}
                   required
                   placeholder="Ej: Calle Valparaíso 456, Viña del Mar"
                   value={newOrderForm.destino}
@@ -749,7 +751,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
                   type="number"
                   min="1"
                   step="1"
-                  style={styles.input}
+                  style={stylesObj.input}
                   required
                   placeholder="Ej: 120"
                   value={newOrderForm.distancia_km}
@@ -762,7 +764,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
                   <span style={{ fontWeight: 600, fontSize: "15px" }}>Detalle de Bultos ({newOrderForm.bultos_detalle.length})</span>
                   <button
                     type="button"
-                    style={{ ...styles.btn, padding: "6px 12px", fontSize: "13px", borderColor: "#0ea5e9", color: "#38bdf8" }}
+                    style={{ ...stylesObj.btn, padding: "6px 12px", fontSize: "13px", borderColor: "#0ea5e9", color: "#38bdf8" }}
                     onClick={handleAddBulto}
                   >
                     + Agregar Bulto
@@ -770,14 +772,14 @@ export default function ClientPortalShell({ user, onSignOut }) {
                 </div>
 
                 {newOrderForm.bultos_detalle.map((b, idx) => (
-                  <div key={idx} style={styles.bultoRow}>
+                  <div key={idx} style={stylesObj.bultoRow}>
                     <div>
                       <label style={{ fontSize: "11px", color: "#94a3b8" }}>Alto (cm)</label>
                       <input
                         type="number"
                         min="1"
                         required
-                        style={styles.input}
+                        style={stylesObj.input}
                         placeholder="cm"
                         value={b.alto_cm}
                         onChange={(e) => handleChangeBulto(idx, "alto_cm", e.target.value)}
@@ -789,7 +791,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
                         type="number"
                         min="1"
                         required
-                        style={styles.input}
+                        style={stylesObj.input}
                         placeholder="cm"
                         value={b.ancho_cm}
                         onChange={(e) => handleChangeBulto(idx, "ancho_cm", e.target.value)}
@@ -801,7 +803,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
                         type="number"
                         min="1"
                         required
-                        style={styles.input}
+                        style={stylesObj.input}
                         placeholder="cm"
                         value={b.largo_cm}
                         onChange={(e) => handleChangeBulto(idx, "largo_cm", e.target.value)}
@@ -814,7 +816,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
                         min="0.1"
                         step="0.1"
                         required
-                        style={styles.input}
+                        style={stylesObj.input}
                         placeholder="Kg"
                         value={b.peso_kg}
                         onChange={(e) => handleChangeBulto(idx, "peso_kg", e.target.value)}
@@ -823,7 +825,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
                     <div>
                       <button
                         type="button"
-                        style={{ ...styles.btn, padding: "8px 12px", borderColor: "#f87171", color: "#f87171", opacity: newOrderForm.bultos_detalle.length === 1 ? 0.4 : 1 }}
+                        style={{ ...stylesObj.btn, padding: "8px 12px", borderColor: "#f87171", color: "#f87171", opacity: newOrderForm.bultos_detalle.length === 1 ? 0.4 : 1 }}
                         disabled={newOrderForm.bultos_detalle.length === 1}
                         onClick={() => handleRemoveBulto(idx)}
                       >
@@ -837,7 +839,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
               <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end", marginTop: "24px", borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: "16px" }}>
                 <button
                   type="button"
-                  style={styles.btn}
+                  style={stylesObj.btn}
                   onClick={() => setShowCreateModal(false)}
                   disabled={creatingOrder}
                 >
@@ -845,7 +847,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
                 </button>
                 <button
                   type="submit"
-                  style={{ ...styles.btn, background: "#0ea5e9", borderColor: "#0ea5e9", fontWeight: 600 }}
+                  style={{ ...stylesObj.btn, background: "#0ea5e9", borderColor: "#0ea5e9", fontWeight: 600 }}
                   disabled={creatingOrder}
                 >
                   {creatingOrder ? "Guardando..." : "Guardar Pedido"}

@@ -92,17 +92,23 @@ export default function CreadorCarga() {
     }
     setCalculandoRuta(true);
     setMensaje(null);
-    const res = await estimarFechasEstimadas({ origen, destino: address });
-    if (res.success && res.data?.distancia_km != null) {
+    const prevAddress = paradas.length > 0 ? paradas[paradas.length - 1].address : origen;
+    const resIda = await estimarFechasEstimadas({ origen: prevAddress, destino: address });
+    const resVuelta = await estimarFechasEstimadas({ origen: address, destino: origen });
+
+    if (resIda.success && resIda.data?.distancia_km != null) {
+      const fromPrev = resIda.data.distancia_km;
+      const toOrigin = resVuelta.success ? (resVuelta.data?.distancia_km || fromPrev) : fromPrev;
+      const cumulative = (paradas.length > 0 ? paradas[paradas.length - 1].distanceKm : 0) + fromPrev;
+
       const newParada = {
         id: Math.random().toString(),
         address: address,
-        distanceKm: res.data.distancia_km
+        distanceFromPrev: fromPrev,
+        distanceToOrigin: toOrigin,
+        distanceKm: cumulative
       };
-      setParadas(prev => {
-        const next = [...prev, newParada];
-        return next.sort((a, b) => a.distanceKm - b.distanceKm);
-      });
+      setParadas(prev => [...prev, newParada]);
       if (nuevaParadaRef.current) nuevaParadaRef.current.value = "";
     } else {
       setMensaje({ tipo: "error", texto: "Error al calcular distancia hacia: " + address });
@@ -220,30 +226,23 @@ export default function CreadorCarga() {
   }, [origen, modoCarga]);
 
   useEffect(() => {
-    const calcLogistica = async () => {
+    const calcLogistica = () => {
       if (!origen || paradas.length === 0) {
         setDistanciaLogisticaKm(0);
         return;
       }
 
       const distMaxParadas = paradas[paradas.length - 1].distanceKm || 0;
+      const distVuelta = paradas[paradas.length - 1].distanceToOrigin || distMaxParadas;
 
       if (modoCarga === 'RETORNO') {
-        // En retorno solo gastamos la distancia directa desde origen a destino, sin viajes redondos.
+        // En retorno solo gastamos la distancia acumulada, sin viaje de vuelta.
         setDistanciaLogisticaKm(Math.round(distMaxParadas));
         return;
       }
 
-      const CENTRAL = "Quillota 980, Viña del Mar, Chile";
-      const r1 = await estimarFechasEstimadas({ origen: CENTRAL, destino: origen });
-      const d1 = r1.success ? r1.data?.distancia_km || 100 : 100;
-
-      const destinoFinal = paradas[paradas.length - 1].address;
-
-      const r2 = await estimarFechasEstimadas({ origen: destinoFinal, destino: CENTRAL });
-      const d2 = r2.success ? r2.data?.distancia_km || distMaxParadas : distMaxParadas;
-
-      setDistanciaLogisticaKm(Math.round(d1 + distMaxParadas + d2));
+      // Viaje secuencial: Ida (acumulada) + Vuelta (desde el último destino)
+      setDistanciaLogisticaKm(Math.round(distMaxParadas + distVuelta));
     };
     calcLogistica();
   }, [origen, paradas, modoCarga]);
@@ -409,7 +408,7 @@ export default function CreadorCarga() {
   let tarifaCalculadaBultos = 0;
   let breakdown = [];
 
-  paradas.forEach(p => {
+  paradas.forEach((p, idx) => {
     const bultosParada = bultos.filter(b => b.paradaId === p.id);
     const slotsParada = bultosParada.reduce((acc, b) => acc + b.slots, 0);
     if (slotsParada === 0) return;
@@ -421,7 +420,19 @@ export default function CreadorCarga() {
     const countS = Math.floor(slotsToPrice / 4); slotsToPrice %= 4;
     const countXS = slotsToPrice;
 
-    const billedDistanceKm = modoCarga === 'RETORNO' ? p.distanceKm : (p.distanceKm * 2); // Retorno cobra Ida, Central cobra Ida y Vuelta
+    const fromPrev = p.distanceFromPrev || p.distanceKm || 0;
+    const toOrigin = p.distanceToOrigin || fromPrev;
+
+    // Facturación fraccionada justa: Cada destino paga el trayecto exacto que el camión recorrió para llegar a él.
+    // El último destino asume el costo logístico de devolver el camión vacío a la central.
+    let billedDistanceKm = 0;
+    if (modoCarga === 'RETORNO') {
+      billedDistanceKm = Math.round(fromPrev);
+    } else {
+      const isLastParada = idx === paradas.length - 1;
+      billedDistanceKm = Math.round(fromPrev + (isLastParada ? toOrigin : 0));
+    }
+    
     const shortAddr = p.address.split(',')[0];
 
     if (countXL > 0) { tarifaCalculadaBultos += countXL * OBTENER_TARIFA_POR_TRAMO("XL", billedDistanceKm); breakdown.push({ cat: "XL", qty: countXL, parada: shortAddr, kmFacturado: billedDistanceKm }); }
@@ -436,8 +447,8 @@ export default function CreadorCarga() {
   const pagoConductorAutomatico = paradas.length === 0 ? 0 : (
     tarifasConfig.precioPorRuta + 
     (paradas.length * tarifasConfig.precioPorEntrega) + 
-    (bultos.length * tarifasConfig.precioPorBulto) + 
-    (distKmMax * tarifasConfig.precioPorKm)
+    (totalSlotsUsed * tarifasConfig.precioPorBulto) + 
+    (distanciaLogisticaKm * tarifasConfig.precioPorKm)
   );
 
   const costosOperativosTerceros = Number(costoTac || 0) + pagoConductorAutomatico;
@@ -445,9 +456,9 @@ export default function CreadorCarga() {
 
   const margenGanancia = tarifaFinalBase - totalCostosOperativos;
 
-  // El cliente paga solamente la tarifa base (Ingreso Total). 
-  // Los costos operativos los asume la empresa de esa tarifa base.
-  const totalAPagarCliente = tarifaFinalBase;
+  // Calculo de IVA (19%)
+  const ivaCalculado = Math.round(tarifaFinalBase * 0.19);
+  const totalAPagarCliente = tarifaFinalBase + ivaCalculado;
 
   const handleCrearRuta = async (e) => {
     e.preventDefault();
@@ -460,7 +471,7 @@ export default function CreadorCarga() {
     setSaving(true);
     setMensaje(null);
 
-    const destinoFinal = paradas[paradas.length - 1].address;
+    const destinoFinal = paradas.map((p, i) => `${i + 1}. ${p.address.split(',')[0]}`).join(' ➔ ');
 
     try {
       const { data: ruta, error: rutaErr } = await supabase
@@ -470,11 +481,11 @@ export default function CreadorCarga() {
           camion_id: camionId || null,
           origen,
           destino: destinoFinal,
-          distancia_km: distKmMax,
+          distancia_km: distanciaLogisticaKm,
           costo_tac_peajes_clp: Number(costoTac || 0),
           pago_conductor_base_clp: pagoConductorAutomatico,
           tarifa_base_total: tarifaFinalBase,
-          costo_servicio: tarifaFinalBase, // BYPASS: Guardamos la tarifa aquí porque el DB trigger sobrescribe total_pagar
+          costo_servicio: totalAPagarCliente, // BYPASS: Guardamos el Total c/IVA aquí para el cliente
           costo_combustible_calculado: modoCarga === 'RETORNO' ? 0 : costoCombustibleCalculado,
           total_pagar: totalAPagarCliente, 
           is_tarifa_manual: isTarifaManual,
@@ -571,7 +582,21 @@ export default function CreadorCarga() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <label className="liquid-label" style={{ fontSize: '13px', fontWeight: '700' }}>Origen (Autocompletado) *</label>
-              <input ref={origenRef} required type="text" placeholder="Ej: Santiago, Chile" className="liquid-input" style={{ padding: '12px', borderRadius: '8px', outline: 'none' }} />
+              <input 
+                ref={origenRef} 
+                required 
+                type="text" 
+                defaultValue={origenInput || origen}
+                onChange={e => {
+                  setOrigenInput(e.target.value);
+                  if (!e.target.value) setOrigen("");
+                }}
+                disabled={paradas.length > 0}
+                placeholder="Ej: Santiago, Chile" 
+                className="liquid-input" 
+                style={{ padding: '12px', borderRadius: '8px', outline: 'none', opacity: paradas.length > 0 ? 0.6 : 1 }} 
+              />
+              {paradas.length > 0 && <span style={{ fontSize: '11px', color: '#FBBF24' }}>Para cambiar el origen, elimina los destinos.</span>}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', gridColumn: 'span 2' }}>
               <label className="liquid-label" style={{ fontSize: '13px', fontWeight: '700' }}>Añadir Parada (Destino) {calculandoRuta && <span style={{ fontSize: '12px', color: '#1D4ED8' }}>(Calculando...)</span>}</label>
@@ -583,16 +608,42 @@ export default function CreadorCarga() {
 
           {paradas.length > 0 && (
             <div style={{ background: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '12px', marginBottom: '16px', border: '1px solid rgba(255,255,255,0.1)' }}>
-              <div style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '8px' }} className="liquid-label">Ruta Consolidada ({distKmMax} km total):</div>
-              {paradas.map((p, idx) => (
-                <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 12px', background: 'rgba(0,0,0,0.2)', borderRadius: '6px', marginBottom: '6px', fontSize: '13px' }} className="liquid-text">
-                  <span>{idx + 1}. {p.address}</span>
-                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                    <span style={{ fontWeight: 'bold', color: '#38BDF8' }}>{p.distanceKm} km</span>
-                    <button type="button" onClick={() => handleRemoveParada(p.id)} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', fontWeight: 'bold' }}>×</button>
-                  </div>
+              <div style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '12px' }} className="liquid-label">Ruta Consolidada ({distanciaLogisticaKm} km logísticos):</div>
+              
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '8px', padding: '0 4px' }}>
+                <span style={{ fontSize: '16px' }}>📍</span>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <span style={{ fontSize: '11px', color: '#9CA3AF', fontWeight: 'bold', textTransform: 'uppercase' }}>Desde (Origen)</span>
+                  <span className="liquid-text" style={{ fontSize: '13px', fontWeight: '500' }}>{origen}</span>
                 </div>
-              ))}
+              </div>
+
+              <div style={{ borderLeft: '2px dashed rgba(255,255,255,0.15)', marginLeft: '11px', paddingLeft: '18px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {paradas.map((p, idx) => (
+                  <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: 'rgba(0,0,0,0.2)', borderRadius: '6px', fontSize: '13px', alignItems: 'center' }} className="liquid-text">
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontSize: '11px', color: '#9CA3AF', fontWeight: 'bold', textTransform: 'uppercase' }}>Hacia (Destino {idx + 1})</span>
+                      <span>{p.address}</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                      <span style={{ fontWeight: 'bold', color: '#38BDF8' }}>+{Number(p.distanceFromPrev || p.distanceKm || 0).toFixed(1)} km</span>
+                      <button type="button" onClick={() => handleRemoveParada(p.id)} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', fontWeight: 'bold', fontSize: '16px', padding: '0 4px' }}>×</button>
+                    </div>
+                  </div>
+                ))}
+
+                {modoCarga !== 'RETORNO' && paradas.length > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '6px', fontSize: '13px', alignItems: 'center', border: '1px solid rgba(16, 185, 129, 0.2)' }} className="liquid-text">
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontSize: '11px', color: '#10B981', fontWeight: 'bold', textTransform: 'uppercase' }}>Retorno a Base</span>
+                      <span style={{ color: '#A7F3D0' }}>{origen}</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                      <span style={{ fontWeight: 'bold', color: '#10B981' }}>+{Number(paradas[paradas.length - 1].distanceToOrigin || 0).toFixed(1)} km</span>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -628,7 +679,7 @@ export default function CreadorCarga() {
             <div>
               <select value={activeParadaId} onChange={e => setActiveParadaId(e.target.value)} className="liquid-input" style={{ padding: '10px', borderRadius: '8px', width: '100%', outline: 'none', fontSize: '13px' }} disabled={paradas.length === 0}>
                 <option value="">Selecciona la parada de destino para el bulto...</option>
-                {paradas.map((p, idx) => <option key={p.id} value={p.id}>{idx + 1}. {p.address} ({p.distanceKm} km)</option>)}
+                {paradas.map((p, idx) => <option key={p.id} value={p.id}>{idx + 1}. {p.address} (+{Number(p.distanceFromPrev || p.distanceKm || 0).toFixed(1)} km)</option>)}
               </select>
             </div>
           </div>
@@ -777,9 +828,17 @@ export default function CreadorCarga() {
                 <span>+${(bk.qty * OBTENER_TARIFA_POR_TRAMO(bk.cat, bk.kmFacturado)).toLocaleString()}</span>
               </div>
             ))}
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', marginBottom: '20px', fontWeight: '900', color: '#10B981', paddingTop: '8px' }}>
-              <span>Total Recaudado (Total a Pagar por Cliente)</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '15px', marginBottom: '8px', fontWeight: '700', color: '#6EE7B7' }}>
+              <span>Subtotal Neto</span>
               <span>${tarifaFinalBase.toLocaleString()}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '15px', marginBottom: '8px', fontWeight: '700', color: '#93C5FD' }}>
+              <span>IVA (19%)</span>
+              <span>+${ivaCalculado.toLocaleString()}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', marginBottom: '20px', fontWeight: '900', color: '#10B981', paddingTop: '8px', borderTop: '1px solid rgba(16,185,129,0.3)' }}>
+              <span>Total Recaudado (Total a Pagar por Cliente)</span>
+              <span>${totalAPagarCliente.toLocaleString()}</span>
             </div>
 
             <div style={{ fontSize: '16px', fontWeight: '900', color: '#FCA5A5', borderBottom: '1px solid rgba(248,113,113,0.3)', paddingBottom: '8px', marginBottom: '12px' }}>
