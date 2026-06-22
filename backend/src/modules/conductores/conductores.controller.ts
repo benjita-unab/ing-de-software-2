@@ -119,8 +119,20 @@ export class ConductoresController {
    */
   @Get()
   @UseGuards(JwtGuard)
-  async listActiveDrivers() {
-    return await this.conductoresService.listActiveDrivers();
+  async listActiveDrivers(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+    @Query('orden') orden?: string,
+  ) {
+    const pageNum = page ? parseInt(page, 10) : undefined;
+    const limitNum = limit ? parseInt(limit, 10) : undefined;
+    return await this.conductoresService.listActiveDrivers({
+      page: pageNum,
+      limit: limitNum,
+      search,
+      orden,
+    });
   }
 
   private parsePeriodoPago(periodo?: string): PeriodoPago {

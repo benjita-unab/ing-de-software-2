@@ -6,6 +6,7 @@ import {
   Param,
   Body,
   UseGuards,
+  Query,
 } from '@nestjs/common';
 import { CamionesService } from './camiones.service';
 import { CreateCamionDto } from './dto/create-camion.dto';
@@ -26,8 +27,22 @@ export class CamionesController {
    * Lista todos los camiones activos (con su estado real).
    */
   @Get()
-  async list() {
-    return await this.camionesService.listCamiones();
+  async list(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+    @Query('estado') estado?: string,
+    @Query('orden') orden?: string,
+  ) {
+    const pageNum = page ? parseInt(page, 10) : undefined;
+    const limitNum = limit ? parseInt(limit, 10) : undefined;
+    return await this.camionesService.listCamiones({
+      page: pageNum,
+      limit: limitNum,
+      search,
+      estado,
+      orden,
+    });
   }
 
   /**

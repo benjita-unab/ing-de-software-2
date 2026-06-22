@@ -144,10 +144,20 @@ export async function obtenerRutasSinAsignar() {
 
 /**
  * Obtiene los conductores activos con su estado de licencia.
- * @returns {Promise<{data: array, error?: string}>}
+ * @param {object} [params]
+ * @returns {Promise<{data: array, meta?: object, error?: string}>}
  */
-export async function obtenerConductoresActivos() {
-  const res = await apiFetch(`/api/conductores`);
+export async function obtenerConductoresActivos(params = {}) {
+  const qs = new URLSearchParams();
+  if (params.page) qs.set("page", params.page);
+  if (params.limit) qs.set("limit", params.limit);
+  if (params.search) qs.set("search", params.search);
+  if (params.orden) qs.set("orden", params.orden);
+
+  const qString = qs.toString();
+  const url = qString ? `/api/conductores?${qString}` : "/api/conductores";
+
+  const res = await apiFetch(url);
 
   if (!res.ok) {
     return { data: [], error: res.error || "Error al obtener conductores" };
@@ -155,7 +165,9 @@ export async function obtenerConductoresActivos() {
 
   const payload = res.data;
   const data = Array.isArray(payload) ? payload : payload?.data ?? [];
-  return { data };
+  const meta = payload?.meta;
+
+  return meta ? { data, meta } : { data };
 }
 
 /**
