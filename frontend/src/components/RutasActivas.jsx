@@ -17,6 +17,7 @@ import {
 import { useGooglePlacesAutocomplete } from "../hooks/useGooglePlacesAutocomplete";
 import { getNombreRuta } from "../lib/rutasUtils";
 import ParadaPlantillaInput from "./ParadaPlantillaInput";
+import ConsolidacionRutaPanel from "./ConsolidacionRutaPanel";
 import Badge from "./ui/Badge";
 import Spinner from "./ui/Spinner";
 
@@ -163,6 +164,7 @@ export default function RutasActivas() {
   const [paradas, setParadas] = useState([]);
   const [guardarComoPlantilla, setGuardarComoPlantilla] = useState(false);
   const [nombrePlantilla, setNombrePlantilla] = useState("");
+  const [consolidacionAbiertaId, setConsolidacionAbiertaId] = useState(null);
 
   const [form, setForm] = useState({
     nombreRuta: "",
@@ -1276,12 +1278,14 @@ export default function RutasActivas() {
                   <th>ETA</th>
                   <th>Fechas estimadas</th>
                   <th>Anomalías</th>
+                  <th>Consolidación</th>
                   <th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {rutas.map((ruta) => (
-                  <tr key={ruta.id}>
+                  <React.Fragment key={ruta.id}>
+                  <tr>
                     <td>
                       <strong>{getNombreRuta(ruta)}</strong>
                     </td>
@@ -1388,19 +1392,6 @@ export default function RutasActivas() {
                       )}
                     </td>
                     <td>
-                      <button
-                        type="button"
-                        className="lt-btn lt-btn--success lt-btn--full"
-                        disabled={notifyingId === ruta.id}
-                        onClick={() => enviarNotificacionRuta(ruta.id)}
-                      >
-                        {notifyingId === ruta.id
-                          ? "Enviando…"
-                          : "Notificar fecha estimada"}
-                      </button>
-                      <MensajeFilaRuta mensaje={mensajesRuta[ruta.id]?.notificar} />
-                    </td>
-                    <td>
                       {Array.isArray(anomaliasPorRuta[ruta.id]) && anomaliasPorRuta[ruta.id].length > 0 ? (
                         <div className="lt-card" style={{ padding: 10 }}>
                           <div className="lt-list-item__title" style={{ marginBottom: 8 }}>
@@ -1442,7 +1433,55 @@ export default function RutasActivas() {
                         </div>
                       )}
                     </td>
+                    <td>
+                      <button
+                        type="button"
+                        className={`lt-btn lt-btn--sm ${consolidacionAbiertaId === ruta.id ? "lt-btn--primary" : "lt-btn--secondary"}`}
+                        onClick={() =>
+                          setConsolidacionAbiertaId((prev) =>
+                            prev === ruta.id ? null : ruta.id,
+                          )
+                        }
+                        disabled={!ruta.camion_id}
+                        title={
+                          ruta.camion_id
+                            ? "Gestionar consolidación de pedidos"
+                            : "Asigne un camión para consolidar pedidos"
+                        }
+                      >
+                        {consolidacionAbiertaId === ruta.id ? "Cerrar" : "Consolidar"}
+                      </button>
+                      {!ruta.camion_id && (
+                        <p className="lt-list-item__sub" style={{ marginTop: 4 }}>
+                          Requiere camión
+                        </p>
+                      )}
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="lt-btn lt-btn--success lt-btn--full"
+                        disabled={notifyingId === ruta.id}
+                        onClick={() => enviarNotificacionRuta(ruta.id)}
+                      >
+                        {notifyingId === ruta.id
+                          ? "Enviando…"
+                          : "Notificar fecha estimada"}
+                      </button>
+                      <MensajeFilaRuta mensaje={mensajesRuta[ruta.id]?.notificar} />
+                    </td>
                   </tr>
+                  {consolidacionAbiertaId === ruta.id && (
+                    <tr key={`${ruta.id}-consolidacion`}>
+                      <td colSpan={11} className="lt-consolidacion-row">
+                        <ConsolidacionRutaPanel
+                          rutaId={ruta.id}
+                          onConsolidado={cargarRutas}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>

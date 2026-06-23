@@ -13,7 +13,15 @@ import { ConfiguracionPagosService } from '../configuracion-pagos/configuracion-
 import { PagosClienteService } from '../pagos-cliente/pagos-cliente.service';
 import { RutasPlantillaService } from '../rutas-plantilla/rutas-plantilla.service';
 import { CreateAnomaliaDto } from './dto/create-anomalia.dto';
+import type { ConsolidarPedidoDto } from './dto/consolidar-pedido.dto';
 import type { CreateRutaDto, ParadaRutaDto } from './dto/create-ruta.dto';
+import {
+  advertenciasCapacidad,
+  advertenciasDistanciaDestinos,
+  calcularCapacidadRuta,
+  type AdvertenciaConsolidacion,
+  type CapacidadRuta,
+} from './consolidacion.helper';
 
 export type { CreateRutaDto } from './dto/create-ruta.dto';
 
@@ -1276,6 +1284,7 @@ export class RutasService {
       cliente_id,
       conductor_id,
       camion_id,
+      ruta_maestra_id,
       ficha_despacho_url,
       distancia_km,
       fecha_estimada_inicio,
@@ -1286,8 +1295,11 @@ export class RutasService {
       bultos_despachados,
       clientes(id, nombre, contacto_email),
       conductores(id, rut),
-      camiones(id, patente)
+      camiones(id, patente, slots, slots_utilizados, talla)
     `, { count: 'exact' });
+
+    // HU-59: ocultar pedidos hijos consolidados del listado principal.
+    query = query.is('ruta_maestra_id', null);
 
     if (filters?.estado) {
       query = query.eq('estado', filters.estado);
@@ -1832,5 +1844,494 @@ export class RutasService {
       rutaId: ruta.id,
       resendId,
     };
+  }
+
+  // ─── HU-59: Consolidación de pedidos en una misma ruta logística ───
+
+  private readonly ESTADOS_CONSOLIDABLES = new Set(['PENDIENTE', 'ASIGNADO']);
+
+  private mapPedidoConsolidacion(row: Record<string, unknown>) {
+    const clientes = row.clientes as { nombre?: string } | null;
+    return {
+      id: row.id as string,
+      nombre_ruta: row.nombre_ruta ?? null,
+      origen: row.origen ?? '',
+      destino: row.destino ?? '',
+      distancia_km:
+        row.distancia_km != null ? Number(row.distancia_km) : null,
+      bultos_despachados:
+        row.bultos_despachados != null
+          ? Number(row.bultos_despachados)
+          : 0,
+      estado: row.estado ?? null,
+      cliente_id: row.cliente_id ?? null,
+      cliente_nombre: clientes?.nombre ?? null,
+      es_maestra: row.ruta_maestra_id == null,
+    };
+  }
+
+  private async resolverRutaMaestra(
+    rutaId: string,
+  ): Promise<Record<string, unknown>> {
+    const supabase = this.supabaseConfig.getClient();
+    const { data: ruta, error } = await supabase
+      .from('rutas')
+      .select(
+        'id, nombre_ruta, origen, destino, estado, cliente_id, conductor_id, camion_id, ruta_maestra_id, distancia_km, bultos_despachados, camiones(id, patente, slots, slots_utilizados, talla)',
+      )
+      .eq('id', rutaId)
+      .single();
+
+    if (error || !ruta) {
+      throw new NotFoundException(`Ruta no encontrada: ${rutaId}`);
+    }
+
+    if (ruta.ruta_maestra_id) {
+      const { data: maestra, error: maestraError } = await supabase
+        .from('rutas')
+        .select(
+          'id, nombre_ruta, origen, destino, estado, cliente_id, conductor_id, camion_id, ruta_maestra_id, distancia_km, bultos_despachados, camiones(id, patente, slots, slots_utilizados, talla)',
+        )
+        .eq('id', ruta.ruta_maestra_id)
+        .single();
+
+      if (maestraError || !maestra) {
+        throw new NotFoundException(
+          `Ruta maestra no encontrada para pedido ${rutaId}`,
+        );
+      }
+      return maestra;
+    }
+
+    return ruta;
+  }
+
+  private async cargarPedidosGrupo(
+    maestraId: string,
+  ): Promise<Record<string, unknown>[]> {
+    const supabase = this.supabaseConfig.getClient();
+
+    const { data: maestra, error: maestraError } = await supabase
+      .from('rutas')
+      .select(
+        'id, nombre_ruta, origen, destino, estado, cliente_id, conductor_id, camion_id, ruta_maestra_id, distancia_km, bultos_despachados, clientes(id, nombre)',
+      )
+      .eq('id', maestraId)
+      .single();
+
+    if (maestraError || !maestra) {
+      throw new NotFoundException(`Ruta maestra no encontrada: ${maestraId}`);
+    }
+
+    const { data: hijos, error: hijosError } = await supabase
+      .from('rutas')
+      .select(
+        'id, nombre_ruta, origen, destino, estado, cliente_id, conductor_id, camion_id, ruta_maestra_id, distancia_km, bultos_despachados, clientes(id, nombre)',
+      )
+      .eq('ruta_maestra_id', maestraId)
+      .order('created_at', { ascending: true });
+
+    if (hijosError) {
+      throw new BadRequestException(
+        `Error al cargar pedidos consolidados: ${hijosError.message}`,
+      );
+    }
+
+    return [maestra, ...(hijos || [])];
+  }
+
+  private async cargarParadasMapa(
+    pedidoIds: string[],
+  ): Promise<
+    Array<{
+      pedido_id: string;
+      tipo: 'origen' | 'destino' | 'parada';
+      direccion: string;
+      latitud: number | null;
+      longitud: number | null;
+      orden: number;
+    }>
+  > {
+    if (!pedidoIds.length) return [];
+
+    const supabase = this.supabaseConfig.getClient();
+    const { data: rutas, error } = await supabase
+      .from('rutas')
+      .select('id, origen, destino')
+      .in('id', pedidoIds);
+
+    if (error) {
+      throw new BadRequestException(
+        `Error al cargar paradas de mapa: ${error.message}`,
+      );
+    }
+
+    const { data: paradas, error: paradasError } = await supabase
+      .from('rutas_paradas')
+      .select('ruta_id, direccion, orden, latitud, longitud')
+      .in('ruta_id', pedidoIds)
+      .order('orden', { ascending: true });
+
+    if (paradasError) {
+      console.warn('cargarParadasMapa paradas omitidas:', paradasError.message);
+    }
+
+    const puntos: Array<{
+      pedido_id: string;
+      tipo: 'origen' | 'destino' | 'parada';
+      direccion: string;
+      latitud: number | null;
+      longitud: number | null;
+      orden: number;
+    }> = [];
+
+    for (const ruta of rutas || []) {
+      const rid = ruta.id as string;
+      puntos.push({
+        pedido_id: rid,
+        tipo: 'origen',
+        direccion: String(ruta.origen ?? ''),
+        latitud: null,
+        longitud: null,
+        orden: 0,
+      });
+
+      (paradas || [])
+        .filter((p) => p.ruta_id === rid)
+        .forEach((p) => {
+          puntos.push({
+            pedido_id: rid,
+            tipo: 'parada',
+            direccion: String(p.direccion ?? ''),
+            latitud: p.latitud != null ? Number(p.latitud) : null,
+            longitud: p.longitud != null ? Number(p.longitud) : null,
+            orden: Number(p.orden) || 0,
+          });
+        });
+
+      puntos.push({
+        pedido_id: rid,
+        tipo: 'destino',
+        direccion: String(ruta.destino ?? ''),
+        latitud: null,
+        longitud: null,
+        orden: 9999,
+      });
+    }
+
+    return puntos;
+  }
+
+  private async calcularDistanciasEntreDestinos(
+    destinos: string[],
+  ): Promise<number[]> {
+    const unicos = destinos
+      .map((d) => String(d ?? '').trim())
+      .filter(Boolean);
+    if (unicos.length < 2) return [];
+
+    const apiKey = this.getGoogleMapsApiKey();
+    const distancias: number[] = [];
+
+    for (let i = 0; i < unicos.length; i++) {
+      for (let j = i + 1; j < unicos.length; j++) {
+        const result = await calcularDistanciaVialGoogle(
+          unicos[i],
+          unicos[j],
+          apiKey,
+        );
+        if (result.ok) {
+          distancias.push(result.distancia_km);
+        }
+      }
+    }
+
+    return distancias;
+  }
+
+  private async evaluarConsolidacion(
+    maestra: Record<string, unknown>,
+    pedidosGrupo: Record<string, unknown>[],
+    pedidoAdicional?: Record<string, unknown>,
+  ): Promise<{
+    capacidad: CapacidadRuta;
+    advertencias: AdvertenciaConsolidacion[];
+  }> {
+    const camion = maestra.camiones as
+      | { slots?: number; slots_utilizados?: number; talla?: string }
+      | null
+      | undefined;
+
+    const slotsCamion = (camion?.slots as number) ?? 96;
+    const bultosGrupo = pedidosGrupo.map((p) =>
+      Number(p.bultos_despachados ?? 0),
+    );
+    const bultosAdicional = pedidoAdicional
+      ? Number(pedidoAdicional.bultos_despachados ?? 0)
+      : 0;
+
+    const capacidad = calcularCapacidadRuta(slotsCamion, [
+      ...bultosGrupo,
+      ...(pedidoAdicional ? [bultosAdicional] : []),
+    ]);
+
+    if (camion?.talla) {
+      capacidad.talla = String(camion.talla);
+    }
+
+    const advertencias = advertenciasCapacidad(
+      calcularCapacidadRuta(slotsCamion, bultosGrupo),
+      bultosAdicional,
+    );
+
+    const pedidosParaDistancia = [
+      ...pedidosGrupo,
+      ...(pedidoAdicional ? [pedidoAdicional] : []),
+    ].map((p) => ({
+      id: String(p.id),
+      destino: String(p.destino ?? ''),
+      distancia_km:
+        p.distancia_km != null ? Number(p.distancia_km) : null,
+    }));
+
+    const destinos = pedidosParaDistancia.map((p) => p.destino).filter(Boolean);
+    const distanciasEntreDestinos =
+      destinos.length >= 2
+        ? await this.calcularDistanciasEntreDestinos(destinos)
+        : [];
+
+    advertencias.push(
+      ...advertenciasDistanciaDestinos(
+        pedidosParaDistancia,
+        distanciasEntreDestinos,
+      ),
+    );
+
+    return { capacidad, advertencias };
+  }
+
+  async getConsolidacionInfo(rutaId: string) {
+    const maestra = await this.resolverRutaMaestra(rutaId);
+    const maestraId = String(maestra.id);
+    const pedidosGrupo = await this.cargarPedidosGrupo(maestraId);
+    const { capacidad, advertencias } = await this.evaluarConsolidacion(
+      maestra,
+      pedidosGrupo,
+    );
+
+    const supabase = this.supabaseConfig.getClient();
+    const idsGrupo = new Set(pedidosGrupo.map((p) => String(p.id)));
+
+    const { data: disponibles, error } = await supabase
+      .from('rutas')
+      .select(
+        'id, nombre_ruta, origen, destino, estado, cliente_id, distancia_km, bultos_despachados, clientes(id, nombre)',
+      )
+      .is('ruta_maestra_id', null)
+      .in('estado', ['PENDIENTE', 'ASIGNADO'])
+      .neq('id', maestraId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      throw new BadRequestException(
+        `Error al listar pedidos disponibles: ${error.message}`,
+      );
+    }
+
+    const pedidosDisponibles = (disponibles || [])
+      .filter((p) => !idsGrupo.has(String(p.id)))
+      .map((p) => this.mapPedidoConsolidacion(p as Record<string, unknown>));
+
+    const paradasMapa = await this.cargarParadasMapa(
+      pedidosGrupo.map((p) => String(p.id)),
+    );
+
+    return {
+      ruta_maestra_id: maestraId,
+      es_maestra: String(rutaId) === maestraId,
+      pedidos: pedidosGrupo.map((p) => ({
+        ...this.mapPedidoConsolidacion(p as Record<string, unknown>),
+        es_maestra: String(p.id) === maestraId,
+      })),
+      capacidad,
+      advertencias,
+      paradas_mapa: paradasMapa,
+      pedidos_disponibles: pedidosDisponibles,
+    };
+  }
+
+  async consolidarPedido(rutaMaestraId: string, body: ConsolidarPedidoDto) {
+    const pedidoId = String(body?.pedido_id ?? '').trim();
+    if (!pedidoId) {
+      throw new BadRequestException('pedido_id es requerido');
+    }
+
+    const supabase = this.supabaseConfig.getClient();
+    const maestra = await this.resolverRutaMaestra(rutaMaestraId);
+    const maestraId = String(maestra.id);
+
+    if (maestra.ruta_maestra_id) {
+      throw new BadRequestException(
+        'Solo se puede consolidar bajo una ruta maestra',
+      );
+    }
+
+    if (pedidoId === maestraId) {
+      throw new BadRequestException(
+        'No se puede consolidar un pedido consigo mismo',
+      );
+    }
+
+    if (!maestra.camion_id) {
+      throw new BadRequestException(
+        'La ruta maestra debe tener un camión asignado para consolidar pedidos',
+      );
+    }
+
+    const { data: pedidoHijo, error: hijoError } = await supabase
+      .from('rutas')
+      .select(
+        'id, nombre_ruta, origen, destino, estado, cliente_id, conductor_id, camion_id, ruta_maestra_id, distancia_km, bultos_despachados',
+      )
+      .eq('id', pedidoId)
+      .single();
+
+    if (hijoError || !pedidoHijo) {
+      throw new NotFoundException(`Pedido no encontrado: ${pedidoId}`);
+    }
+
+    if (pedidoHijo.ruta_maestra_id) {
+      throw new BadRequestException('El pedido ya está consolidado en otra ruta');
+    }
+
+    if (!this.ESTADOS_CONSOLIDABLES.has(String(pedidoHijo.estado))) {
+      throw new BadRequestException(
+        `El pedido debe estar en estado PENDIENTE o ASIGNADO (actual: ${pedidoHijo.estado})`,
+      );
+    }
+
+    const pedidosGrupo = await this.cargarPedidosGrupo(maestraId);
+    const { advertencias } = await this.evaluarConsolidacion(
+      maestra,
+      pedidosGrupo,
+      pedidoHijo as Record<string, unknown>,
+    );
+
+    const bloqueantes = advertencias.filter((a) => a.bloqueante);
+    if (bloqueantes.length > 0) {
+      throw new ForbiddenException({
+        message: bloqueantes[0].mensaje,
+        advertencias: bloqueantes,
+      });
+    }
+
+    const advertenciasSuaves = advertencias.filter((a) => !a.bloqueante);
+    if (advertenciasSuaves.length > 0) {
+      const ignoraOcupacion = body.ignorar_advertencias_ocupacion === true;
+      const ignoraDistancia = body.ignorar_advertencias_distancia === true;
+
+      const pendientes = advertenciasSuaves.filter((a) => {
+        if (a.tipo === 'ocupacion_baja') return !ignoraOcupacion;
+        if (a.tipo === 'distancia_destinos') return !ignoraDistancia;
+        return true;
+      });
+
+      if (pendientes.length > 0) {
+        throw new BadRequestException({
+          message: pendientes[0].mensaje,
+          advertencias: advertenciasSuaves,
+          requiere_confirmacion: true,
+        });
+      }
+    }
+
+    const bultosHijo = Number(pedidoHijo.bultos_despachados ?? 0);
+    const camionMaestraId = String(maestra.camion_id);
+    const camionHijoId = pedidoHijo.camion_id
+      ? String(pedidoHijo.camion_id)
+      : null;
+
+    if (bultosHijo > 0) {
+      const { data: camionMaestra } = await supabase
+        .from('camiones')
+        .select('slots, slots_utilizados')
+        .eq('id', camionMaestraId)
+        .single();
+
+      const slotsMaestra = (camionMaestra?.slots as number) ?? 96;
+      const utilizadosMaestra =
+        (camionMaestra?.slots_utilizados as number) ?? 0;
+      const bultosGrupo = pedidosGrupo.reduce(
+        (sum, p) => sum + Number(p.bultos_despachados ?? 0),
+        0,
+      );
+
+      if (bultosGrupo + bultosHijo > slotsMaestra) {
+        throw new ForbiddenException(
+          `Capacidad insuficiente: se requieren ${bultosGrupo + bultosHijo} slots y el camión tiene ${slotsMaestra}.`,
+        );
+      }
+
+      if (camionHijoId !== camionMaestraId) {
+        await supabase
+          .from('camiones')
+          .update({ slots_utilizados: utilizadosMaestra + bultosHijo })
+          .eq('id', camionMaestraId);
+      }
+
+      if (camionHijoId && camionHijoId !== camionMaestraId && bultosHijo > 0) {
+        const { data: camionHijo } = await supabase
+          .from('camiones')
+          .select('slots_utilizados')
+          .eq('id', camionHijoId)
+          .single();
+
+        const utilizadosHijo = (camionHijo?.slots_utilizados as number) ?? 0;
+        await supabase
+          .from('camiones')
+          .update({
+            slots_utilizados: Math.max(0, utilizadosHijo - bultosHijo),
+          })
+          .eq('id', camionHijoId);
+      }
+    }
+
+    const updatePayload: Record<string, unknown> = {
+      ruta_maestra_id: maestraId,
+      conductor_id: maestra.conductor_id ?? null,
+      camion_id: maestra.camion_id ?? null,
+    };
+
+    const estadoMaestra = String(maestra.estado ?? '');
+    if (
+      estadoMaestra === 'ASIGNADO' &&
+      String(pedidoHijo.estado) === 'PENDIENTE'
+    ) {
+      updatePayload.estado = 'ASIGNADO';
+    }
+
+    const { error: updateError } = await supabase
+      .from('rutas')
+      .update(updatePayload)
+      .eq('id', pedidoId);
+
+    if (updateError) {
+      throw new BadRequestException(
+        `Error al consolidar pedido: ${updateError.message}`,
+      );
+    }
+
+    if (updatePayload.estado) {
+      try {
+        await supabase.from('historial_estados').insert({
+          ruta_id: pedidoId,
+          estado: updatePayload.estado,
+        });
+      } catch (e: unknown) {
+        console.warn('consolidarPedido historial_estados omitido:', e);
+      }
+    }
+
+    return this.getConsolidacionInfo(maestraId);
   }
 }

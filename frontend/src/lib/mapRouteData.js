@@ -119,6 +119,7 @@ export function buildMapRoutes(rutas, geocodeMap, alerts = [], eventosConductor 
       conductor: ruta.conductores?.rut ?? null,
       origenCoords,
       destinoCoords,
+      paradas: Array.isArray(ruta.paradas) ? ruta.paradas : [],
       vehicleGps,
       markerCoords,
       markerType,

@@ -1027,6 +1027,34 @@ body {
   height: 100%;
 }
 
+/* HU-59: mapa compacto dentro de tablas/paneles (no usar lt-map-canvas suelto) */
+.lt-map-stage--compact {
+  position: relative;
+  width: 100%;
+  height: 220px;
+  min-height: 220px;
+  max-height: 220px;
+  overflow: hidden;
+  background: var(--lt-bg-muted);
+  border-radius: var(--lt-radius-md);
+  isolation: isolate;
+}
+
+.lt-consolidacion-row td {
+  position: relative;
+  z-index: 1;
+  vertical-align: top;
+  padding: 16px !important;
+  background: var(--lt-bg-muted, #f8fafc);
+}
+
+.lt-consolidacion-panel {
+  position: relative;
+  width: 100%;
+  overflow: visible;
+  isolation: isolate;
+}
+
 .lt-map-loading {
   position: absolute;
   inset: 0;

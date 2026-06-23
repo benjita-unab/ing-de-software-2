@@ -512,3 +512,63 @@ export async function obtenerComparativaMetricasPago(filtros = {}) {
 
   return { data: res.data?.data ?? res.data };
 }
+
+/**
+ * HU-59: estado de consolidación de una ruta maestra.
+ * @param {string} rutaId
+ */
+export async function obtenerConsolidacion(rutaId) {
+  if (!rutaId) {
+    return { data: null, error: "rutaId es requerido" };
+  }
+
+  const res = await apiFetch(`/api/rutas/${rutaId}/consolidacion`);
+
+  if (!res.ok) {
+    return { data: null, error: res.error || "Error al obtener consolidación" };
+  }
+
+  return { data: res.data?.data ?? res.data, error: null };
+}
+
+/**
+ * HU-59: consolida un pedido bajo una ruta maestra.
+ * @param {string} rutaMaestraId
+ * @param {string} pedidoId
+ * @param {{ ignorar_advertencias_ocupacion?: boolean, ignorar_advertencias_distancia?: boolean }} [opciones]
+ */
+export async function consolidarPedidoEnRuta(rutaMaestraId, pedidoId, opciones = {}) {
+  if (!rutaMaestraId || !pedidoId) {
+    return { success: false, error: "rutaId y pedidoId son requeridos" };
+  }
+
+  const res = await apiFetch(`/api/rutas/${rutaMaestraId}/consolidar`, {
+    method: "POST",
+    json: {
+      pedido_id: pedidoId,
+      ignorar_advertencias_ocupacion: opciones.ignorar_advertencias_ocupacion === true,
+      ignorar_advertencias_distancia: opciones.ignorar_advertencias_distancia === true,
+    },
+  });
+
+  if (!res.ok) {
+    const payload = res.data || {};
+    const advertencias = payload.advertencias || payload.message?.advertencias;
+    const requiere =
+      payload.requiere_confirmacion === true ||
+      payload.message?.requiere_confirmacion === true;
+
+    return {
+      success: false,
+      error:
+        (typeof payload.message === "string" ? payload.message : null) ||
+        payload.message?.message ||
+        res.error ||
+        "No se pudo consolidar el pedido",
+      advertencias: Array.isArray(advertencias) ? advertencias : [],
+      requiere_confirmacion: requiere,
+    };
+  }
+
+  return { success: true, data: res.data?.data ?? res.data };
+}
