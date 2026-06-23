@@ -110,6 +110,33 @@ export class RutasController {
   }
 
   /**
+   * GET /api/rutas/:id/consolidacion
+   * HU-59: estado de consolidación, capacidad, advertencias y paradas para mapa.
+   */
+  @Get(':id/consolidacion')
+  async getConsolidacion(@Param('id') rutaId: string) {
+    return await this.rutasService.getConsolidacionInfo(rutaId);
+  }
+
+  /**
+   * POST /api/rutas/:id/consolidar
+   * HU-59: asigna un pedido a la ruta maestra indicada.
+   */
+  @Post(':id/consolidar')
+  @Roles('ADMIN', 'OPERADOR')
+  async consolidarPedido(
+    @Param('id') rutaId: string,
+    @Body()
+    body: {
+      pedido_id: string;
+      ignorar_advertencias_ocupacion?: boolean;
+      ignorar_advertencias_distancia?: boolean;
+    },
+  ) {
+    return await this.rutasService.consolidarPedido(rutaId, body);
+  }
+
+  /**
    * GET /api/rutas/:id
    * Obtiene información detallada de una ruta
    */
