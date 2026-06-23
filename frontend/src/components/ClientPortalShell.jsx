@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import PortalEvidenciasModal from "./PortalEvidenciasModal";
 import PortalPagos from "./PortalPagos";
+import PortalRecurrencias from "./PortalRecurrencias";
+import ModalRecurrencia from "./ModalRecurrencia";
 import {
   getPortalPedidoById,
   getPortalPedidoEvidencias,
@@ -9,6 +11,7 @@ import {
 
 const SECCION_PEDIDOS = "pedidos";
 const SECCION_PAGOS = "pagos";
+const SECCION_RECURRENCIAS = "recurrencias";
 
 const TAB_PENDIENTES = "pendientes";
 const TAB_COMPLETADOS = "completados";
@@ -193,6 +196,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
   const [evidencias, setEvidencias] = useState(null);
   const [evidenciasLoading, setEvidenciasLoading] = useState(false);
   const [evidenciasError, setEvidenciasError] = useState(null);
+  const [modalRecurrenciaOpen, setModalRecurrenciaOpen] = useState(false);
 
   const loadPedidos = useCallback(async () => {
     setLoading(true);
@@ -307,7 +311,11 @@ export default function ClientPortalShell({ user, onSignOut }) {
   }
 
   const tituloSeccion =
-    seccionActiva === SECCION_PAGOS ? "Mis pagos" : "Mis pedidos";
+    seccionActiva === SECCION_PAGOS
+      ? "Mis pagos"
+      : seccionActiva === SECCION_RECURRENCIAS
+        ? "Mis recurrencias"
+        : "Mis pedidos";
 
   return (
     <div style={styles.page}>
@@ -342,10 +350,23 @@ export default function ClientPortalShell({ user, onSignOut }) {
         >
           Pagos
         </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={seccionActiva === SECCION_RECURRENCIAS}
+          style={styles.tab(seccionActiva === SECCION_RECURRENCIAS)}
+          onClick={() => setSeccionActiva(SECCION_RECURRENCIAS)}
+        >
+          Recurrencias
+        </button>
       </div>
 
       {seccionActiva === SECCION_PAGOS ? (
         <PortalPagos clienteId={user?.clienteId} />
+      ) : null}
+
+      {seccionActiva === SECCION_RECURRENCIAS ? (
+        <PortalRecurrencias />
       ) : null}
 
       {seccionActiva !== SECCION_PEDIDOS ? null : (
@@ -462,6 +483,14 @@ export default function ClientPortalShell({ user, onSignOut }) {
                   >
                     Ver evidencias
                   </button>
+
+                  <button
+                    type="button"
+                    style={{ ...styles.btnEvidencias, marginLeft: 8 }}
+                    onClick={() => setModalRecurrenciaOpen(true)}
+                  >
+                    Repetir pedido
+                  </button>
                 </>
               ) : (
                 <p style={{ opacity: 0.7 }}>Sin datos de detalle.</p>
@@ -480,6 +509,19 @@ export default function ClientPortalShell({ user, onSignOut }) {
           onClose={cerrarEvidencias}
         />
       ) : null}
+
+      <ModalRecurrencia
+        open={modalRecurrenciaOpen}
+        onClose={() => setModalRecurrenciaOpen(false)}
+        onSuccess={() => {
+          setModalRecurrenciaOpen(false);
+          setSeccionActiva(SECCION_RECURRENCIAS);
+        }}
+        clienteId={user?.clienteId || detalle?.ruta?.cliente_id}
+        rutaOrigenId={selectedId}
+        portalMode
+        titulo="Repetir pedido"
+      />
         </>
       )}
     </div>

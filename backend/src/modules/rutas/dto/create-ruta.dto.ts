@@ -33,4 +33,7 @@ export type CreateRutaDto = {
   /** HU-58 modo manual: guardar origen/destino como nueva plantilla reutilizable. */
   guardar_como_plantilla?: boolean;
   nombre_plantilla?: string | null;
+  /** HU-47: pedido generado por job de recurrencia. */
+  generado_automaticamente?: boolean;
+  recurrencia_id?: string | null;
 };

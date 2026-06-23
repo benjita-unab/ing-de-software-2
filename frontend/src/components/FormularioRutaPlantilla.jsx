@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Plus } from "lucide-react";
 import { useGooglePlacesAutocomplete } from "../hooks/useGooglePlacesAutocomplete";
 import { calcularRutaPlantilla } from "../lib/rutasPlantillaService";
+import { getClientes } from "../lib/clientesService";
 import Card from "./ui/Card";
 import ParadaPlantillaInput from "./ParadaPlantillaInput";
 import Spinner from "./ui/Spinner";
@@ -17,6 +18,7 @@ const EMPTY = {
   distanciaEstimada: "",
   tiempoEstimado: "",
   activa: true,
+  clienteId: "",
   paradas: [],
 };
 
@@ -53,6 +55,8 @@ export default function FormularioRutaPlantilla({
   const [saving, setSaving] = useState(false);
   const [calculandoRuta, setCalculandoRuta] = useState(false);
   const [errorRuta, setErrorRuta] = useState("");
+  const [clientes, setClientes] = useState([]);
+  const [cargandoClientes, setCargandoClientes] = useState(false);
 
   const origenInputRef = useRef(null);
   const destinoInputRef = useRef(null);
@@ -85,6 +89,27 @@ export default function FormularioRutaPlantilla({
   const mapsError = mapsOrigenError || mapsDestinoError;
 
   useEffect(() => {
+    let cancelled = false;
+    async function cargarClientes() {
+      setCargandoClientes(true);
+      try {
+        const data = await getClientes();
+        if (!cancelled) {
+          setClientes(Array.isArray(data) ? data : data?.data || []);
+        }
+      } catch {
+        if (!cancelled) setClientes([]);
+      } finally {
+        if (!cancelled) setCargandoClientes(false);
+      }
+    }
+    cargarClientes();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (plantillaInicial) {
       setForm({
         nombre: plantillaInicial.nombre || "",
@@ -103,6 +128,7 @@ export default function FormularioRutaPlantilla({
             ? String(plantillaInicial.tiempoEstimado)
             : "",
         activa: plantillaInicial.activa !== false,
+        clienteId: plantillaInicial.clienteId || "",
         paradas: (plantillaInicial.paradas || []).map((p) => ({
           direccion: p.direccion,
           orden: p.orden,
@@ -241,6 +267,7 @@ export default function FormularioRutaPlantilla({
       destinoLat: form.destinoLat,
       destinoLng: form.destinoLng,
       activa: form.activa,
+      clienteId: form.clienteId?.trim() || null,
       paradas: form.paradas
         .filter((p) => p.direccion.trim())
         .map((p, i) => ({
@@ -312,6 +339,26 @@ export default function FormularioRutaPlantilla({
               maxLength={150}
               required
             />
+          </div>
+
+          <div className="lt-field-group">
+            <label className="lt-label" htmlFor="rp-cliente">
+              Cliente adjudicado
+            </label>
+            <select
+              id="rp-cliente"
+              className="lt-input"
+              value={form.clienteId}
+              onChange={(e) => updateField("clienteId", e.target.value)}
+              disabled={cargandoClientes}
+            >
+              <option value="">Sin cliente (plantilla global)</option>
+              {clientes.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nombre}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="lt-field-group lt-field-group--full">

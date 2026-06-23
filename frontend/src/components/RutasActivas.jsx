@@ -18,6 +18,7 @@ import { useGooglePlacesAutocomplete } from "../hooks/useGooglePlacesAutocomplet
 import { getNombreRuta } from "../lib/rutasUtils";
 import ParadaPlantillaInput from "./ParadaPlantillaInput";
 import ConsolidacionRutaPanel from "./ConsolidacionRutaPanel";
+import ModalRecurrencia from "./ModalRecurrencia";
 import Badge from "./ui/Badge";
 import Spinner from "./ui/Spinner";
 
@@ -165,6 +166,9 @@ export default function RutasActivas() {
   const [guardarComoPlantilla, setGuardarComoPlantilla] = useState(false);
   const [nombrePlantilla, setNombrePlantilla] = useState("");
   const [consolidacionAbiertaId, setConsolidacionAbiertaId] = useState(null);
+  const [programarRecurrencia, setProgramarRecurrencia] = useState(false);
+  const [recurrenciaModalOpen, setRecurrenciaModalOpen] = useState(false);
+  const [rutaRecurrenciaCtx, setRutaRecurrenciaCtx] = useState(null);
 
   const [form, setForm] = useState({
     nombreRuta: "",
@@ -740,6 +744,22 @@ export default function RutasActivas() {
       ? `Pedido creado correctamente (ID: ${resultado.data?.id?.slice(0, 8) || "—"}…). Pago pendiente generado.`
       : "Pedido creado correctamente.";
     setMensaje({ tipo: "ok", texto: textoOk });
+
+    const nuevaRutaId = resultado.data?.id;
+    const clienteIdCreado = form.clienteId.trim();
+    const plantillaIdCreada =
+      modoCreacion === MODO_PLANTILLA ? form.plantillaId?.trim() : "";
+
+    if (programarRecurrencia && nuevaRutaId && clienteIdCreado) {
+      setRutaRecurrenciaCtx({
+        clienteId: clienteIdCreado,
+        rutaOrigenId: nuevaRutaId,
+        rutaPlantillaId: plantillaIdCreada || undefined,
+      });
+      setRecurrenciaModalOpen(true);
+    }
+
+    setProgramarRecurrencia(false);
     setForm({
       nombreRuta: "",
       clienteId: "",
@@ -1139,6 +1159,18 @@ export default function RutasActivas() {
                   {renderErrorFormulario("nombrePlantilla")}
                 </div>
               )}
+
+              <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
+                <label className="lt-label" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <input
+                    type="checkbox"
+                    checked={programarRecurrencia}
+                    onChange={(e) => setProgramarRecurrencia(e.target.checked)}
+                  />
+                  Repetir pedido (programar recurrencia tras crear)
+                </label>
+              </div>
+
               <div className="lt-field-group">
                 <label className="lt-label" htmlFor="ruta-fecha-inicio">Fecha inicio *</label>
                 <input
@@ -1460,6 +1492,21 @@ export default function RutasActivas() {
                     <td>
                       <button
                         type="button"
+                        className="lt-btn lt-btn--secondary lt-btn--full"
+                        style={{ marginBottom: 8 }}
+                        onClick={() => {
+                          setRutaRecurrenciaCtx({
+                            clienteId: ruta.cliente_id,
+                            rutaOrigenId: ruta.id,
+                            rutaPlantillaId: ruta.ruta_plantilla_id || undefined,
+                          });
+                          setRecurrenciaModalOpen(true);
+                        }}
+                      >
+                        Repetir pedido
+                      </button>
+                      <button
+                        type="button"
                         className="lt-btn lt-btn--success lt-btn--full"
                         disabled={notifyingId === ruta.id}
                         onClick={() => enviarNotificacionRuta(ruta.id)}
@@ -1488,6 +1535,24 @@ export default function RutasActivas() {
           </div>
         )}
       </div>
+
+      <ModalRecurrencia
+        open={recurrenciaModalOpen}
+        onClose={() => {
+          setRecurrenciaModalOpen(false);
+          setRutaRecurrenciaCtx(null);
+        }}
+        onSuccess={() => {
+          setMensaje({
+            tipo: "ok",
+            texto: "Recurrencia configurada correctamente.",
+          });
+        }}
+        clienteId={rutaRecurrenciaCtx?.clienteId}
+        rutaOrigenId={rutaRecurrenciaCtx?.rutaOrigenId}
+        rutaPlantillaId={rutaRecurrenciaCtx?.rutaPlantillaId}
+        titulo="Repetir pedido"
+      />
     </div>
   );
 }

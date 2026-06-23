@@ -307,11 +307,16 @@ export class RutasService {
         ? String(camionRaw).trim()
         : null;
 
-    if (!conductor_id) {
-      throw new BadRequestException('conductor_id es obligatorio');
-    }
-    if (!camion_id) {
-      throw new BadRequestException('camion_id es obligatorio');
+    const generadoAutomaticamente = body.generado_automaticamente === true;
+    const recurrenciaId = this.parseUuidOpcional(body?.recurrencia_id);
+
+    if (!generadoAutomaticamente) {
+      if (!conductor_id) {
+        throw new BadRequestException('conductor_id es obligatorio');
+      }
+      if (!camion_id) {
+        throw new BadRequestException('camion_id es obligatorio');
+      }
     }
 
     const estadosValidos = [...RutasService.ESTADOS_RUTA];
@@ -332,7 +337,7 @@ export class RutasService {
     } else if (conductor_id && camion_id) {
       estadoInicial = 'ASIGNADO';
     } else {
-      estadoInicial = 'PENDIENTE';
+      estadoInicial = generadoAutomaticamente ? 'PENDIENTE' : 'PENDIENTE';
     }
 
     const insert: Record<string, unknown> = {
@@ -344,6 +349,13 @@ export class RutasService {
 
     if (rutaPlantillaId) {
       insert.ruta_plantilla_id = rutaPlantillaId;
+    }
+
+    if (generadoAutomaticamente) {
+      insert.generado_automaticamente = true;
+      if (recurrenciaId) {
+        insert.recurrencia_id = recurrenciaId;
+      }
     }
 
     const observaciones =
@@ -1260,6 +1272,7 @@ export class RutasService {
     search?: string;
     page?: number;
     limit?: number;
+    generadoAutomaticamente?: boolean;
   }) {
     const supabase = this.supabaseConfig.getClient();
 
@@ -1293,6 +1306,8 @@ export class RutasService {
       notificacion_fecha_estimada_enviada_at,
       notificacion_fecha_estimada_destinatario,
       bultos_despachados,
+      generado_automaticamente,
+      recurrencia_id,
       clientes(id, nombre, contacto_email),
       conductores(id, rut),
       camiones(id, patente, slots, slots_utilizados, talla)
@@ -1311,6 +1326,12 @@ export class RutasService {
 
     if (filters?.clienteId) {
       query = query.eq('cliente_id', filters.clienteId);
+    }
+
+    if (filters?.generadoAutomaticamente === true) {
+      query = query.eq('generado_automaticamente', true);
+    } else if (filters?.generadoAutomaticamente === false) {
+      query = query.eq('generado_automaticamente', false);
     }
 
     if (filters?.search) {

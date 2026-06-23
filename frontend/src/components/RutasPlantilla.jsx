@@ -8,6 +8,7 @@ import {
   getRutaPlantillaById,
   getRutasPlantilla,
 } from "../lib/rutasPlantillaService";
+import { getClientes } from "../lib/clientesService";
 import FormularioRutaPlantilla from "./FormularioRutaPlantilla";
 import Badge from "./ui/Badge";
 import EmptyState from "./ui/EmptyState";
@@ -36,6 +37,20 @@ export default function RutasPlantilla() {
   const [modoFormulario, setModoFormulario] = useState(false);
   const [editando, setEditando] = useState(null);
   const [accionId, setAccionId] = useState(null);
+  const [clientesMap, setClientesMap] = useState({});
+
+  useEffect(() => {
+    async function cargarClientes() {
+      const data = await getClientes();
+      const lista = Array.isArray(data) ? data : data?.data || [];
+      const map = {};
+      for (const c of lista) {
+        map[c.id] = c.nombre;
+      }
+      setClientesMap(map);
+    }
+    cargarClientes();
+  }, []);
 
   const loadRutas = useCallback(async () => {
     setLoading(true);
@@ -193,6 +208,7 @@ export default function RutasPlantilla() {
                 <thead>
                   <tr>
                     <th>Nombre</th>
+                    <th>Cliente</th>
                     <th>Origen</th>
                     <th>Destino</th>
                     <th>Distancia</th>
@@ -207,6 +223,7 @@ export default function RutasPlantilla() {
                   {rutasVisibles.map((r) => (
                     <tr key={r.id}>
                       <td>{r.nombre}</td>
+                      <td>{r.clienteId ? clientesMap[r.clienteId] || "—" : "Global"}</td>
                       <td>{r.origen}</td>
                       <td>{r.destino}</td>
                       <td>{formatDistancia(r.distanciaEstimada)}</td>

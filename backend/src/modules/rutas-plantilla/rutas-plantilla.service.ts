@@ -212,6 +212,46 @@ export class RutasPlantillaService {
     return this.getById(id);
   }
 
+  /** HU-47 / HU-60: adjudicar plantilla a un cliente B2B. */
+  async asignarCliente(
+    id: string,
+    clienteId: string,
+  ): Promise<RutaPlantillaDetalleDto> {
+    await this.fetchPlantillaOrThrow(id);
+
+    const cliente = clienteId?.trim();
+    if (!cliente) {
+      throw new BadRequestException('clienteId es obligatorio');
+    }
+
+    const supabase = this.supabaseConfig.getClient();
+    const { data: clienteRow, error: clienteError } = await supabase
+      .from('clientes')
+      .select('id')
+      .eq('id', cliente)
+      .single();
+
+    if (clienteError || !clienteRow) {
+      throw new NotFoundException('Cliente no encontrado');
+    }
+
+    const { error } = await supabase
+      .from('rutas_plantilla')
+      .update({
+        cliente_id: cliente,
+        fecha_actualizacion: new Date().toISOString(),
+      })
+      .eq('id', id);
+
+    if (error) {
+      throw new InternalServerErrorException(
+        `No fue posible asignar la plantilla al cliente: ${error.message}`,
+      );
+    }
+
+    return this.getById(id);
+  }
+
   async duplicar(id: string): Promise<RutaPlantillaDetalleDto> {
     const original = await this.getById(id);
     const nombreCopia = `${original.nombre} (copia)`.slice(0, 150);
