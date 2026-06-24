@@ -1,6 +1,10 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View, Modal, TouchableOpacity, ScrollView, ActivityIndicator, FlatList } from 'react-native';
+import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
+import MapView, { Marker, Polyline } from 'react-native-maps';
+import { getPortalPedidos, getPortalPedidoById } from '@/src/services/portalClienteService';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Location from 'expo-location';
 import { LogiTrackLogo } from '@/src/components/auth/LogiTrackLogo';
 import { SignOutButton } from '@/src/components/SignOutButton';
 import { useAuth } from '@/src/context/AuthContext';
@@ -12,6 +16,102 @@ export default function ClienteHomeScreen() {
   const { session } = useAuth();
   const { colors } = useAuthTheme();
 
+  const [modalVisible, setModalVisible] = React.useState(false);
+  const [selectedRuta, setSelectedRuta] = React.useState(null);
+  const [loadingMap, setLoadingMap] = React.useState(false);
+  const [mapCoords, setMapCoords] = React.useState(null);
+  const [pedidos, setPedidos] = React.useState<any[]>([]);
+  const [loadingPedidos, setLoadingPedidos] = React.useState(true);
+  const [activeTab, setActiveTab] = React.useState('Todos');
+
+  const SIZES: Record<string, number> = {
+    'XS': 1, 'S': 4, 'M': 12, 'L': 24, 'XL': 48, 'MAXIMO': 96
+  };
+
+  React.useEffect(() => {
+    async function loadPedidos() {
+      try {
+        const res = await getPortalPedidos();
+        setPedidos(res.data || []);
+      } catch (err) {
+        console.warn('Error loading pedidos:', err);
+      } finally {
+        setLoadingPedidos(false);
+      }
+    }
+    loadPedidos();
+  }, []);
+
+  const abrirDetalle = async (item: any) => {
+    setSelectedRuta(item);
+    setModalVisible(true);
+    setLoadingMap(true);
+    setMapCoords(null);
+    try {
+      const detail = await getPortalPedidoById(item.id);
+      if (detail && detail.ruta) {
+        setSelectedRuta({ ...detail.ruta, bultos: detail.bultos });
+
+        let latOrig = -33.4489, lngOrig = -70.6693;
+        let latDest = -33.0245, lngDest = -71.5518;
+        
+        try {
+          const resOrig = await Location.geocodeAsync(detail.ruta.origen || item.origen || '');
+          if (resOrig && resOrig.length > 0) {
+            latOrig = resOrig[0].latitude;
+            lngOrig = resOrig[0].longitude;
+          }
+          const resDest = await Location.geocodeAsync(detail.ruta.destino || item.destino || '');
+          if (resDest && resDest.length > 0) {
+            latDest = resDest[0].latitude;
+            lngDest = resDest[0].longitude;
+          }
+        } catch(e) {
+          console.warn("Geocoding fallback", e);
+        }
+
+        const curve = [];
+        for (let i = 0; i <= 10; i++) {
+          const t = i / 10;
+          curve.push({
+            latitude: latOrig + (latDest - latOrig) * t,
+            longitude: lngOrig + (lngDest - lngOrig) * t,
+          });
+        }
+
+        setMapCoords({
+          origin: { latitude: latOrig, longitude: lngOrig },
+          dest: { latitude: latDest, longitude: lngDest },
+          curve
+        });
+      }
+    } catch (err) {
+      console.warn('Error fetching details', err);
+    } finally {
+      setLoadingMap(false);
+    }
+  };
+
+  const obtenerColorEstado = (estado: string) => {
+    switch (estado?.toUpperCase()) {
+      case 'PENDIENTE': return '#f59e0b';
+      case 'ASIGNADO': return '#3b82f6';
+      case 'EN_CURSO': return '#3b82f6';
+      case 'ENTREGADO': return '#10b981';
+      default: return '#64748b';
+    }
+  };
+
+  const tabs = ['Todos', 'Pendientes de Pago', 'En Curso', 'Completados'];
+
+  const pedidosFiltrados = pedidos.filter(p => {
+    if (activeTab === 'Todos') return true;
+    if (activeTab === 'Pendientes de Pago') return p.estado_pago !== 'pagado';
+    if (activeTab === 'En Curso') return ['ASIGNADO', 'EN_TRANSITO', 'EN_CAMINO_ORIGEN', 'EN_CARGA', 'EN_DESTINO'].includes(p.estado) && p.estado_pago === 'pagado';
+    if (activeTab === 'Completados') return p.estado === 'ENTREGADO';
+    return true;
+  });
+
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: '#0a0e1a' }]}>
       <View style={styles.header}>
@@ -22,15 +122,53 @@ export default function ClienteHomeScreen() {
         <SignOutButton />
       </View>
 
+      <View style={styles.tabsContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsScroll}>
+          {tabs.map(tab => (
+            <TouchableOpacity 
+              key={tab} 
+              style={[styles.tabButton, activeTab === tab && styles.tabButtonActive]}
+              onPress={() => setActiveTab(tab)}
+            >
+              <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>{tab}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
       <View style={styles.content}>
-        <LogiTrackLogo portalTitle="Portal Cliente" />
-        <Text style={[styles.body, { color: colors.textSecondary }]}>
-          Sesión iniciada como {session?.email ?? 'cliente'}.
+        <Text style={[styles.body, { color: colors.textSecondary, marginBottom: 16, fontWeight: 'bold' }]}>
+          Tus pedidos recientes
         </Text>
-        <Text style={[styles.hint, { color: colors.textMuted }]}>
-          El seguimiento completo de pedidos está disponible en el portal web LogiTrack.
-        </Text>
-        <SignOutButton />
+        
+        {loadingPedidos ? (
+          <ActivityIndicator size="large" color="#38bdf8" style={{ marginTop: 40 }} />
+        ) : (
+          <FlatList
+            data={pedidosFiltrados}
+            keyExtractor={item => item.id}
+            renderItem={({ item }) => (
+              <TouchableOpacity style={styles.pedidoCard} onPress={() => abrirDetalle(item)}>
+                <View style={styles.pedidoCardHeader}>
+                  <Text style={styles.pedidoCardTitle}>{item.nombre_ruta || 'Pedido Sin Nombre'}</Text>
+                  <View style={[styles.statusBadge, { backgroundColor: obtenerColorEstado(item.estado) + '20', borderColor: obtenerColorEstado(item.estado) + '50' }]}>
+                    <Text style={[styles.statusText, { color: obtenerColorEstado(item.estado) }]}>
+                      {item.estado}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.pedidoCardText}><Text style={{ fontWeight: 'bold' }}>Origen:</Text> {item.origen}</Text>
+                <Text style={styles.pedidoCardText}><Text style={{ fontWeight: 'bold' }}>Destino:</Text> {item.destino}</Text>
+                {item.fecha_estimada_entrega && (
+                  <Text style={styles.pedidoCardText}><Text style={{ fontWeight: 'bold' }}>Entrega Est.:</Text> {new Date(item.fecha_estimada_entrega).toLocaleDateString()}</Text>
+                )}
+              </TouchableOpacity>
+            )}
+            contentContainerStyle={{ paddingBottom: 20 }}
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={<Text style={styles.emptyText}>No tienes pedidos registrados en esta categoría.</Text>}
+          />
+        )}
       </View>
 
       {/* MODAL DE DETALLE (UX LIQUIDGLASS) */}
@@ -61,7 +199,7 @@ export default function ClienteHomeScreen() {
                       </Text>
                     </View>
                   </View>
-                  <Text style={styles.detailSubtext}>Creado el: {new Date(selectedRuta.created_at).toLocaleDateString()}</Text>
+                  <Text style={styles.detailSubtext}>Creado el: {selectedRuta.created_at ? new Date(selectedRuta.created_at).toLocaleDateString() : 'Desconocido'}</Text>
                 </View>
 
                 {/* Ruta */}
@@ -89,6 +227,7 @@ export default function ClienteHomeScreen() {
                     </View>
                   ) : mapCoords ? (
                     <MapView
+                      provider="google"
                       style={{ flex: 1 }}
                       initialRegion={{
                         latitude: (mapCoords.origin.latitude + mapCoords.dest.latitude) / 2,
@@ -121,20 +260,24 @@ export default function ClienteHomeScreen() {
                   )}
                 </View>
 
-                {/* Bultos */}
+                {/* Paquetes */}
                 <View style={styles.detailSection}>
-                  <Text style={styles.sectionHeader}>Detalle de Carga</Text>
+                  <Text style={styles.sectionHeader}>Detalles del Paquete</Text>
                   {selectedRuta.bultos && selectedRuta.bultos.length > 0 ? (
-                    selectedRuta.bultos.map((b, idx) => (
-                      <View key={b.id} style={styles.bultoDetailRow}>
-                        <Text style={styles.bultoName}>Bulto #{idx + 1} ({b.tamaño})</Text>
-                        <Text style={styles.bultoSpecs}>
-                          {Number(b.cuadrados_equivalentes || 0).toFixed(2)} Bloques
-                        </Text>
-                      </View>
-                    ))
+                    selectedRuta.bultos.map((b: any, idx: number) => {
+                      const catUpper = (b.categoria || '').toUpperCase();
+                      const slots = SIZES[catUpper] || 0;
+                      return (
+                        <View key={b.id} style={styles.bultoDetailRow}>
+                          <Text style={styles.bultoName}>#{idx + 1} {b.categoria || 'Estándar'}</Text>
+                          <Text style={styles.bultoSpecs}>
+                            {slots} Slots usados
+                          </Text>
+                        </View>
+                      );
+                    })
                   ) : (
-                    <Text style={styles.noBultosText}>Sin detalle de bultos registrados.</Text>
+                    <Text style={styles.noBultosText}>Sin detalle de paquetes registrados.</Text>
                   )}
                 </View>
 
@@ -159,6 +302,36 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.06)'
   },
+  tabsContainer: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  tabsScroll: {
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  tabButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  tabButtonActive: {
+    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    borderColor: '#38bdf8',
+  },
+  tabText: {
+    color: '#94a3b8',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  tabTextActive: {
+    color: '#38bdf8',
+    fontWeight: 'bold',
+  },
   welcomeText: {
     fontSize: 20,
     fontWeight: 'bold',
@@ -178,4 +351,152 @@ const styles = StyleSheet.create({
   },
   body: { fontSize: 16, lineHeight: 24 },
   hint: { fontSize: 14, lineHeight: 22, marginBottom: 12 },
+  pedidoCard: {
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)'
+  },
+  pedidoCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8
+  },
+  pedidoCardTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#f8fafc',
+    flex: 1,
+    marginRight: 8
+  },
+  pedidoCardText: {
+    fontSize: 14,
+    color: '#cbd5e1',
+    marginTop: 4
+  },
+  emptyText: {
+    color: '#94a3b8',
+    textAlign: 'center',
+    marginTop: 40,
+    fontStyle: 'italic'
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20
+  },
+  modalContent: {
+    width: '100%',
+    maxHeight: '85%',
+    backgroundColor: '#1e293b',
+    borderRadius: 20,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)'
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.05)'
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#f8fafc'
+  },
+  closeBtn: {
+    padding: 4
+  },
+  modalScroll: {
+    padding: 16
+  },
+  detailSection: {
+    marginBottom: 20,
+    backgroundColor: 'rgba(255,255,255,0.02)',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)'
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8
+  },
+  detailLabel: {
+    fontSize: 15,
+    color: '#cbd5e1',
+    fontWeight: '500'
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: 'bold'
+  },
+  detailSubtext: {
+    fontSize: 13,
+    color: '#94a3b8'
+  },
+  sectionHeader: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#f8fafc',
+    marginBottom: 12
+  },
+  routePathContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingRight: 16
+  },
+  routePathText: {
+    fontSize: 14,
+    color: '#cbd5e1',
+    marginLeft: 8,
+    flex: 1
+  },
+  routePathDistance: {
+    marginTop: 12,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#38bdf8',
+    textAlign: 'right'
+  },
+  bultoDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.05)'
+  },
+  bultoName: {
+    fontSize: 14,
+    color: '#e2e8f0',
+    fontWeight: '500'
+  },
+  bultoSpecs: {
+    fontSize: 13,
+    color: '#94a3b8'
+  },
+  noBultosText: {
+    fontSize: 14,
+    color: '#94a3b8',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    paddingVertical: 8
+  }
 });

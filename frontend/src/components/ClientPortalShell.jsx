@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import PortalEvidenciasModal from "./PortalEvidenciasModal";
+import ComprobanteModal from "./ComprobanteModal";
 import {
   getPortalPedidoById,
   getPortalPedidoEvidencias,
@@ -12,6 +13,7 @@ const TAB_TODOS = "todos";
 const TAB_PENDIENTES = "pendientes";
 const TAB_EN_CURSO = "en_curso";
 const TAB_COMPLETADOS = "completados";
+const TAB_PAGO_ATRASO = "pago_atraso";
 
 const getStyles = (isLight) => ({
   page: {
@@ -47,10 +49,17 @@ const getStyles = (isLight) => ({
     fontSize: "12px",
     fontWeight: 600,
     background:
-      estado === "ENTREGADO"
+      estado === "ENTREGADO" || estado === "COMPLETADO"
         ? "rgba(34,197,94,0.2)"
+        : estado === "PAGO_ATRASO_PENDIENTE"
+        ? "rgba(239,68,68,0.2)"
         : "rgba(14,165,233,0.2)",
-    color: estado === "ENTREGADO" ? "#86efac" : "#7dd3fc",
+    color: 
+      estado === "ENTREGADO" || estado === "COMPLETADO"
+        ? "#86efac"
+        : estado === "PAGO_ATRASO_PENDIENTE"
+        ? "#fca5a5"
+        : "#7dd3fc",
   }),
   btn: {
     padding: "10px 16px",
@@ -221,7 +230,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
 
   const [seccionActiva, setSeccionActiva] = useState(SECCION_PEDIDOS);
   const [pedidos, setPedidos] = useState([]);
-  const [activeTab, setActiveTab] = useState(TAB_PENDIENTES);
+  const [activeTab, setActiveTab] = useState(TAB_TODOS);
   const [selectedId, setSelectedId] = useState(null);
   const [detalle, setDetalle] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -231,13 +240,14 @@ export default function ClientPortalShell({ user, onSignOut }) {
   const [evidencias, setEvidencias] = useState(null);
   const [evidenciasLoading, setEvidenciasLoading] = useState(false);
   const [evidenciasError, setEvidenciasError] = useState(null);
+  const [comprobanteRutaId, setComprobanteRutaId] = useState(null);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newOrderForm, setNewOrderForm] = useState({
     origen: "",
     destino: "",
     distancia_km: "",
-    bultos_detalle: [{ alto_cm: "", ancho_cm: "", largo_cm: "", peso_kg: "" }]
+    bultos_detalle: [{ categoria: "S" }]
   });
   const [creatingOrder, setCreatingOrder] = useState(false);
   const [createError, setCreateError] = useState("");
@@ -245,7 +255,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
   const handleAddBulto = () => {
     setNewOrderForm(prev => ({
       ...prev,
-      bultos_detalle: [...prev.bultos_detalle, { alto_cm: "", ancho_cm: "", largo_cm: "", peso_kg: "" }]
+      bultos_detalle: [...prev.bultos_detalle, { categoria: "S" }]
     }));
   };
 
@@ -279,35 +289,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
       return;
     }
 
-    // validate packages
-    let volumenAcumulado = 0;
-    for (let i = 0; i < newOrderForm.bultos_detalle.length; i++) {
-      const b = newOrderForm.bultos_detalle[i];
-      const alto = Number(b.alto_cm);
-      const ancho = Number(b.ancho_cm);
-      const largo = Number(b.largo_cm);
-      const peso = Number(b.peso_kg);
-
-      if (isNaN(alto) || alto <= 0 || isNaN(ancho) || ancho <= 0 || isNaN(largo) || largo <= 0 || isNaN(peso) || peso <= 0) {
-        setCreateError(`El bulto #${i + 1} tiene dimensiones o peso inválidos.`);
-        setCreatingOrder(false);
-        return;
-      }
-
-      const volumen = alto * ancho * largo;
-      if (largo > 500 || ancho > 200 || alto > 250 || volumen > 25000000) {
-        setCreateError(`El bulto #${i + 1}: Excede capacidad física permitida.`);
-        setCreatingOrder(false);
-        return;
-      }
-      volumenAcumulado += volumen;
-    }
-
-    if (volumenAcumulado > 25000000) {
-      setCreateError("Capacidad de volumen excedida para este envío. Requiere coordinar un camión adicional.");
-      setCreatingOrder(false);
-      return;
-    }
+    // No need to validate dimensions since we use fixed sizes now
 
     try {
       const payload = {
@@ -335,7 +317,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
           origen: "",
           destino: "",
           distancia_km: "",
-          bultos_detalle: [{ alto_cm: "", ancho_cm: "", largo_cm: "", peso_kg: "" }]
+          bultos_detalle: [{ categoria: "S" }]
         });
         loadPedidos();
       }
@@ -363,21 +345,45 @@ export default function ClientPortalShell({ user, onSignOut }) {
     loadPedidos();
   }, [loadPedidos]);
 
-  const { pedidosTodos, pedidosPendientes, pedidosEnCurso, pedidosCompletados } = useMemo(() => {
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const paymentResult = params.get("payment_result");
+    if (paymentResult) {
+      if (paymentResult === "success") {
+        alert("Pago completado con éxito. Su pedido pasará a estar 'En Curso' en breve mientras verificamos la transacción.");
+        // Polling para dar tiempo al webhook
+        let retries = 0;
+        const interval = setInterval(() => {
+          loadPedidos();
+          retries++;
+          if (retries > 3) clearInterval(interval); // Poll for ~15 seconds max
+        }, 5000);
+      } else if (paymentResult === "failed") {
+        alert("El pago no se ha podido completar. Por favor, inténtelo de nuevo.");
+      }
+      // Limpiar la URL para evitar que la alerta vuelva a aparecer al recargar
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, [loadPedidos]);
+
+  const { pedidosTodos, pedidosPendientes, pedidosEnCurso, pedidosCompletados, pedidosAtraso } = useMemo(() => {
     const todos = pedidos;
     const pendientes = [];
     const enCurso = [];
     const completados = [];
+    const atraso = [];
     for (const p of pedidos) {
-      if (p.estado === "PENDIENTE") {
+      if (p.estado_pago !== "pagado") {
         pendientes.push(p);
-      } else if (p.estado === "ENTREGADO") {
+      } else if (p.estado === "PAGO_ATRASO_PENDIENTE") {
+        atraso.push(p);
+      } else if (p.estado === "ENTREGADO" || p.estado === "FINALIZADO" || p.estado === "COMPLETADO") {
         completados.push(p);
       } else {
         enCurso.push(p);
       }
     }
-    return { pedidosTodos: todos, pedidosPendientes: pendientes, pedidosEnCurso: enCurso, pedidosCompletados: completados };
+    return { pedidosTodos: todos, pedidosPendientes: pendientes, pedidosEnCurso: enCurso, pedidosCompletados: completados, pedidosAtraso: atraso };
   }, [pedidos]);
 
   const pedidosVisibles = useMemo(() => {
@@ -385,8 +391,9 @@ export default function ClientPortalShell({ user, onSignOut }) {
     if (activeTab === TAB_PENDIENTES) return pedidosPendientes;
     if (activeTab === TAB_EN_CURSO) return pedidosEnCurso;
     if (activeTab === TAB_COMPLETADOS) return pedidosCompletados;
+    if (activeTab === TAB_PAGO_ATRASO) return pedidosAtraso;
     return [];
-  }, [activeTab, pedidosTodos, pedidosPendientes, pedidosEnCurso, pedidosCompletados]);
+  }, [activeTab, pedidosTodos, pedidosPendientes, pedidosEnCurso, pedidosCompletados, pedidosAtraso]);
 
   async function handleSelectPedido(id) {
     setSelectedId(id);
@@ -434,32 +441,28 @@ export default function ClientPortalShell({ user, onSignOut }) {
     if (activeTab === TAB_PENDIENTES) return "No tienes pedidos pendientes de pago.";
     if (activeTab === TAB_EN_CURSO) return "No tienes pedidos en curso.";
     if (activeTab === TAB_COMPLETADOS) return "No hay pedidos completados.";
+    if (activeTab === TAB_PAGO_ATRASO) return "No tienes cobros por atraso.";
     return "No hay pedidos en esta sección.";
   }
 
   const [pagandoBase, setPagandoBase] = useState(false);
   const [pagandoRetraso, setPagandoRetraso] = useState(false);
 
-  const handlePagarBase = async (id, e) => {
+  const handlePagarKhipu = async (id, monto, tipo = 'base', e) => {
     e.stopPropagation();
     setPagandoBase(true);
     try {
-      const { pagarPortalPedidoBase } = await import("../lib/portalService");
-      const res = await pagarPortalPedidoBase(id);
-      if (res.ok) {
-        alert("Pago base procesado correctamente.");
-        await loadPedidos();
-        if (selectedId === id) {
-          handleSelectPedido(id);
-        }
+      const { apiFetch } = await import("../lib/apiClient");
+      const res = await apiFetch('/api/pagos/crear-cobro', { method: 'POST', json: { rutaId: id, monto, tipo } });
+      if (res.ok && res.data && res.data.paymentUrl) {
+        window.location.href = res.data.paymentUrl;
       } else {
-        alert("Error: " + res.error);
+        alert(res?.error || "Error al crear el cobro en Transbank Webpay");
       }
-    } catch(err) {
-      alert("Error inesperado: " + err.message);
-    } finally {
-      setPagandoBase(false);
+    } catch (err) {
+      alert("Error al comunicarse con Transbank Webpay");
     }
+    setPagandoBase(false);
   };
 
   const handlePagarRetraso = async (id, e) => {
@@ -558,6 +561,16 @@ export default function ClientPortalShell({ user, onSignOut }) {
               Completados
               <span style={stylesObj.tabCount("completados")}>{pedidosCompletados.length}</span>
             </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === TAB_PAGO_ATRASO}
+              style={stylesObj.tab(activeTab === TAB_PAGO_ATRASO)}
+              onClick={() => setActiveTab(TAB_PAGO_ATRASO)}
+            >
+              Pagos por Atraso
+              <span style={stylesObj.tabCount("atraso")}>{pedidosAtraso.length}</span>
+            </button>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginTop: "16px" }}>
             <div role="tabpanel" style={{ width: "100%", maxWidth: "800px", margin: "0 auto" }}>
@@ -581,7 +594,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
                           </strong>
                           <div style={{ fontSize: "13px", opacity: 0.8 }}>
                             Entrega estimada: {formatDate(p.fecha_estimada_entrega)}
-                            {p.bultos_despachados != null ? ` · ${p.bultos_despachados} bultos` : ""}
+                            {p.bultos_despachados != null ? ` · ${p.bultos_despachados} paquetes` : ""}
                           </div>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -608,7 +621,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
                                 <div>
                                   {detalle.bultos && detalle.bultos.length > 0 && (
                                     <>
-                                      <h3 style={{ fontSize: "14px", marginTop: 0, color: "#94a3b8", marginBottom: "8px" }}>Bultos Registrados</h3>
+                                      <h3 style={{ fontSize: "14px", marginTop: 0, color: "#94a3b8", marginBottom: "8px" }}>Paquetes Registrados</h3>
                                       {Object.entries(
                                         detalle.bultos.reduce((acc, b) => {
                                           const label = b.categoria ? `Tipo ${b.categoria}` : `${b.alto_cm}x${b.ancho_cm}x${b.largo_cm} cm (${b.peso_kg} kg)`;
@@ -641,15 +654,18 @@ export default function ClientPortalShell({ user, onSignOut }) {
                                     </strong>
                                   </div>
 
-                                  <div style={{ marginTop: "20px", display: "flex", gap: "12px", justifyContent: "flex-end" }}>
-                                    {activeTab === TAB_PENDIENTES && (
-                                      <button type="button" disabled={pagandoBase} style={{ ...stylesObj.btn, background: pagandoBase ? "#64748b" : "#10b981", borderColor: pagandoBase ? "#64748b" : "#10b981", fontWeight: 600, padding: "10px 24px" }} onClick={(e) => handlePagarBase(p.id, e)}>
-                                        {pagandoBase ? "Procesando..." : "Pagar Base"}
+                                  <div style={{ marginTop: "24px", display: "flex", justifyContent: "flex-end" }}>
+                                    {detalle.ruta.estado === 'PAGO_ATRASO_PENDIENTE' ? (
+                                      <button type="button" disabled={pagandoBase} style={{ ...stylesObj.btn, background: pagandoBase ? "#64748b" : "#ef4444", borderColor: pagandoBase ? "#64748b" : "#ef4444", fontWeight: 600, padding: "10px 24px" }} onClick={(e) => handlePagarKhipu(p.id, Number(detalle.ruta.costo_espera_total), 'atraso', e)}>
+                                        {pagandoBase ? "Redirigiendo..." : "Pagar Atraso"}
                                       </button>
-                                    )}
-                                    {activeTab === TAB_COMPLETADOS && Number(detalle.ruta.costo_espera_total) > 0 && (
-                                      <button type="button" disabled={pagandoRetraso} style={{ ...stylesObj.btn, background: pagandoRetraso ? "#64748b" : "#ef4444", borderColor: pagandoRetraso ? "#64748b" : "#ef4444", fontWeight: 600, padding: "10px 24px" }} onClick={(e) => handlePagarRetraso(p.id, e)}>
-                                        {pagandoRetraso ? "Procesando..." : "Pagar Retraso"}
+                                    ) : detalle.ruta.estado_pago === 'pagado' ? (
+                                      <button type="button" style={{ ...stylesObj.btn, background: "#3B82F6", borderColor: "#3B82F6", fontWeight: 600, padding: "10px 24px" }} onClick={(e) => { e.stopPropagation(); setComprobanteRutaId(p.id); }}>
+                                        Ver Comprobante
+                                      </button>
+                                    ) : (
+                                      <button type="button" disabled={pagandoBase} style={{ ...stylesObj.btn, background: pagandoBase ? "#64748b" : "#10b981", borderColor: pagandoBase ? "#64748b" : "#10b981", fontWeight: 600, padding: "10px 24px" }} onClick={(e) => handlePagarKhipu(p.id, Number((detalle.ruta.costo_servicio || detalle.ruta.tarifa_base_total || 0)), 'base', e)}>
+                                        {pagandoBase ? "Redirigiendo..." : "Pagar"}
                                       </button>
                                     )}
                                   </div>
@@ -761,13 +777,13 @@ export default function ClientPortalShell({ user, onSignOut }) {
 
               <div style={{ borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: "14px", marginBottom: "14px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-                  <span style={{ fontWeight: 600, fontSize: "15px" }}>Detalle de Bultos ({newOrderForm.bultos_detalle.length})</span>
+                  <span style={{ fontWeight: 600, fontSize: "15px" }}>Detalle de Paquetes ({newOrderForm.bultos_detalle.length})</span>
                   <button
                     type="button"
                     style={{ ...stylesObj.btn, padding: "6px 12px", fontSize: "13px", borderColor: "#0ea5e9", color: "#38bdf8" }}
                     onClick={handleAddBulto}
                   >
-                    + Agregar Bulto
+                    + Agregar Paquete
                   </button>
                 </div>
 
@@ -857,6 +873,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
           </div>
         </div>
       ) : null}
+      {comprobanteRutaId && <ComprobanteModal rutaId={comprobanteRutaId} onClose={() => setComprobanteRutaId(null)} stylesObj={stylesObj} />}
     </div>
   );
 }

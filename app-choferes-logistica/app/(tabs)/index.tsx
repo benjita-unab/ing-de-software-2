@@ -11,14 +11,13 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import RegistroViaje from '../../scripts/RegistroViaje';
+import RegistroViajeLinear from '../../scripts/RegistroViajeLinear';
 import { BotonCerrarDespacho } from '../../src/components/BotonCerrarDespacho';
 import {
   ChoferSessionBar,
   STORAGE_RUTA_ACTIVA_ID,
 } from '../../src/components/ChoferSessionBar';
 import { bffFetch } from '../../src/services/bffService';
-import { TiemposInspeccionBotones } from '../../src/components/TiemposInspeccionBotones';
 import { RutaChoferCard } from '../../src/components/RutaChoferCard';
 import {
   etiquetaRutaAccesibilidad,
@@ -48,10 +47,8 @@ function esRutaOperativa(estado: string | null | undefined): boolean {
     .trim()
     .toUpperCase()
     .replace(/\s+/g, '_');
-  const operativos = new Set(['ASIGNADO', 'EN_CURSO', 'PENDIENTE']);
-  const excluidos = new Set(['ENTREGADO', 'CANCELADO', 'FINALIZADO']);
-  if (excluidos.has(e)) return false;
-  return operativos.has(e);
+  const excluidos = new Set(['ENTREGADO', 'CANCELADO', 'FINALIZADO', 'COMPLETADO', 'PAGO_ATRASO_PENDIENTE']);
+  return !excluidos.has(e);
 }
 
 export default function HomeScreen() {
@@ -188,7 +185,7 @@ export default function HomeScreen() {
   if (cargandoRutas) {
     return (
       <View style={styles.screenRoot}>
-        <ChoferSessionBar />
+        <ChoferSessionBar onRefresh={() => void cargarRutas()} />
         <View style={styles.centered}>
           <ActivityIndicator size="large" />
           <Text style={styles.hint}>Cargando rutas…</Text>
@@ -204,7 +201,7 @@ export default function HomeScreen() {
     const selectorPadBottom = insets.bottom + 96;
     return (
       <View style={styles.screenRoot} collapsable={false}>
-        <ChoferSessionBar />
+        <ChoferSessionBar onRefresh={() => void cargarRutas()} />
         {errorRutas ? (
           <View style={styles.banner}>
             <Text style={styles.bannerText}>
@@ -263,7 +260,7 @@ export default function HomeScreen() {
   if (!rutaActivaId) {
     return (
       <View style={styles.screenRoot}>
-        <ChoferSessionBar />
+        <ChoferSessionBar onRefresh={() => void cargarRutas()} />
         <View style={styles.centered}>
           <Text style={styles.hint}>Sin ruta para trabajar.</Text>
         </View>
@@ -273,7 +270,7 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.screenRoot} collapsable={false}>
-      <ChoferSessionBar />
+      <ChoferSessionBar onRefresh={() => void cargarRutas()} />
       {errorRutas ? (
         <View style={styles.banner}>
           <Text style={styles.bannerText}>
@@ -323,14 +320,17 @@ export default function HomeScreen() {
       <View style={styles.mainContent} collapsable={false}>
         {rutaActivaId ? (
           <>
-            <RegistroViaje
+            <RegistroViajeLinear
               key={rutaActivaId}
               onSyncComplete={setTodoSincronizado}
               rutaId={rutaActivaId}
+              destino={rutaActiva?.destino}
+              estadoPago={rutaActiva?.estado_pago}
+              estadoRuta={rutaActiva?.estado}
+              horaLlegadaDestino={rutaActiva?.hora_llegada_destino}
             />
             {todoSincronizado && (
               <>
-                <TiemposInspeccionBotones rutaId={rutaActivaId} />
                 <BotonCerrarDespacho
                   rutaId={rutaActivaId}
                   bultosDespachadosOriginal={rutaActiva?.bultos_despachados ?? null}

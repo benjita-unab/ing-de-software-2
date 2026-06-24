@@ -28,6 +28,7 @@
     "@nestjs/passport": "^10.0.3",
     "@nestjs/platform-express": "^10.4.22",
     "@supabase/supabase-js": "^2.39.3",
+    "axios": "^1.18.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.0",
     "compression": "^1.7.4",
@@ -39,6 +40,7 @@
     "passport-jwt": "^4.0.1",
     "pdfkit": "^0.13.0",
     "resend": "^3.0.0",
+    "transbank-sdk": "^6.1.1",
     "uuid": "^14.0.0"
   },
   "devDependencies": {

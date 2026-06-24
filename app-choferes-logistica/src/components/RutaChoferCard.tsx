@@ -68,7 +68,7 @@ export function RutaChoferCard({
   const estado = ruta.estado?.trim() || null;
 
   const metaParts: string[] = [];
-  if (bultos != null) metaParts.push(`Bultos: ${bultos}`);
+  if (bultos != null) metaParts.push(`Bultos/Slots: ${bultos}`);
   if (distancia) metaParts.push(`Distancia: ${distancia}`);
   if (fechaEntrega) metaParts.push(`Entrega estimada: ${fechaEntrega}`);
 

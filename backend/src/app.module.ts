@@ -24,6 +24,7 @@ import { ConfiguracionPagosModule } from './modules/configuracion-pagos/configur
 import { ChatRutaModule } from './modules/chat-ruta/chat-ruta.module';
 import { PagosClienteModule } from './modules/pagos-cliente/pagos-cliente.module';
 import { RutasPlantillaModule } from './modules/rutas-plantilla/rutas-plantilla.module';
+import { PagosModule } from './modules/pagos/pagos.module';
 
 @Module({
   imports: [
@@ -57,6 +58,7 @@ import { RutasPlantillaModule } from './modules/rutas-plantilla/rutas-plantilla.
     ChatRutaModule,
     PagosClienteModule,
     RutasPlantillaModule,
+    PagosModule,
   ],
   controllers: [AppController],
   providers: [AppService, SupabaseConfigService, ResendConfigService, JwtStrategy],

@@ -2,6 +2,7 @@
 export type RutaListItem = {
   id: string;
   estado?: string | null;
+  estado_pago?: string | null;
   origen?: string | null;
   destino?: string | null;
   bultos_despachados?: number | null;
@@ -15,6 +16,7 @@ export type RutaListItem = {
   costo_espera_total?: number | string | null;
   total_pagar?: number | string | null;
   costo_servicio?: number | string | null;
+  pago_conductor_base_clp?: number | string | null;
 };
 
 export function getClienteNombre(ruta: RutaListItem): string | null {

@@ -12,10 +12,11 @@ import { calcularDistanciaVialGoogle } from './google-routes-distance.helper';
 import { CreateAnomaliaDto } from './dto/create-anomalia.dto';
 
 export type BultoInputDto = {
-  alto_cm: number;
-  ancho_cm: number;
-  largo_cm: number;
-  peso_kg: number;
+  alto_cm?: number;
+  ancho_cm?: number;
+  largo_cm?: number;
+  peso_kg?: number;
+  categoria?: string;
 };
 
 /** Cuerpo esperado por POST /api/rutas (validación en createRoute). */
@@ -90,6 +91,8 @@ export class RutasService {
     'EN_DESTINO',
     'ENTREGADO',
     'CANCELADO',
+    'PAGO_ATRASO_PENDIENTE',
+    'COMPLETADO',
   ] as const;
 
   constructor(
@@ -304,7 +307,7 @@ export class RutasService {
 
     const conductorRaw = body?.conductor_id;
     const camionRaw = body?.camion_id;
-    const conductor_id =
+    let conductor_id =
       conductorRaw != null && String(conductorRaw).trim() !== ''
         ? String(conductorRaw).trim()
         : null;
@@ -312,6 +315,18 @@ export class RutasService {
       camionRaw != null && String(camionRaw).trim() !== ''
         ? String(camionRaw).trim()
         : null;
+
+    // AUTORESOLVE 1:1 Conductor <-> Camion
+    if (camion_id && !conductor_id) {
+       const { data: conductorAsociado } = await this.supabaseConfig.getClient()
+          .from('conductores')
+          .select('id')
+          .eq('camion_id', camion_id)
+          .single();
+       if (conductorAsociado) {
+           conductor_id = conductorAsociado.id;
+       }
+    }
 
     const estadosValidos = [...RutasService.ESTADOS_RUTA];
 
@@ -328,10 +343,9 @@ export class RutasService {
         );
       }
       estadoInicial = estadoExplicito;
-    } else if (conductor_id && camion_id) {
-      estadoInicial = 'ASIGNADO';
     } else {
-      estadoInicial = 'PENDIENTE';
+      // Si no se especifica y tenemos conductor (ya sea explícito o por auto-resolución), ASIGNADO
+      estadoInicial = conductor_id ? 'ASIGNADO' : 'PENDIENTE';
     }
 
     const insert: Record<string, unknown> = {
@@ -499,15 +513,24 @@ export class RutasService {
 
     // Insertar bultos si existen
     if (body.bultos_detalle && Array.isArray(body.bultos_detalle) && body.bultos_detalle.length > 0) {
-      const inserts = body.bultos_detalle.map(b => ({
-        ruta_id: created.id,
-        alto_cm: Number(b.alto_cm),
-        ancho_cm: Number(b.ancho_cm),
-        largo_cm: Number(b.largo_cm),
-        peso_kg: Number(b.peso_kg),
-        categoria: null as string | null,
-        tarifa_calculada_clp: 0
-      }));
+      const inserts = body.bultos_detalle.map(b => {
+        const cat = b.categoria || null;
+        let cuadrados = 0;
+        if (cat) {
+          const map: Record<string, number> = {
+            'XS': 1, 'S': 4, 'M': 12, 'L': 24, 'XL': 48, 'MAXIMO': 96
+          };
+          cuadrados = map[cat.toUpperCase()] || 0;
+        }
+
+        return {
+          ruta_id: created.id,
+          categoria: cat,
+          tamaño: cat,
+          cuadrados_equivalentes: cuadrados,
+          tarifa_calculada_clp: 0
+        };
+      });
 
       const { error: bultosError } = await supabase
         .from('bultos')
@@ -1030,13 +1053,9 @@ export class RutasService {
   }
 
   /**
-   * Cambia el estado de una ruta
+   * PATCH /api/rutas/:id/status
    */
   async updateRouteStatus(rutaId: string, nuevoEstado: string) {
-    if (!rutaId || !nuevoEstado) {
-      throw new BadRequestException('rutaId y nuevoEstado son requeridos');
-    }
-
     const supabase = this.supabaseConfig.getClient();
 
     const estadosValidos = [...RutasService.ESTADOS_RUTA];
@@ -1048,9 +1067,10 @@ export class RutasService {
     const patch: Record<string, unknown> = { estado: nuevoEstado };
     // Solo registrar fecha_fin al cerrar entrega; no borrar fecha_fin al
     // cambiar a otros estados (evita pérdida de auditoría).
-    if (nuevoEstado === 'ENTREGADO') {
+    if (nuevoEstado === 'ENTREGADO' || nuevoEstado === 'COMPLETADO' || nuevoEstado === 'PAGO_ATRASO_PENDIENTE') {
       patch.fecha_fin = new Date().toISOString();
     }
+
 
     const { data: rutaActualizada, error } = await supabase
       .from('rutas')
@@ -1059,7 +1079,7 @@ export class RutasService {
       .select();
 
     if (error) {
-      throw new BadRequestException(`Error al actualizar ruta: ${error.message}`);
+      throw new InternalServerErrorException(`Error al actualizar estado de la ruta: ${error.message}`);
     }
 
     if (nuevoEstado === 'ASIGNADO') {
@@ -1091,7 +1111,74 @@ export class RutasService {
     return {
       success: true,
       message: `Ruta actualizada a estado: ${nuevoEstado}`,
-      data: rutaActualizada[0],
+      data: rutaActualizada ? rutaActualizada[0] : null,
+    };
+  }
+
+  /**
+   * Registra la llegada a destino, inicia reloj y actualiza estado a EN_DESTINO.
+   */
+  async registrarLlegadaDestino(rutaId: string) {
+    const supabase = this.supabaseConfig.getClient();
+    const now = new Date().toISOString();
+
+    const patch = {
+      hora_llegada_destino: now,
+      estado: 'EN_DESTINO'
+    };
+
+    const { error } = await supabase.from('rutas').update(patch).eq('id', rutaId);
+
+    if (error) {
+      throw new InternalServerErrorException('Error al registrar llegada a destino');
+    }
+
+    // TODO: Notificar al cliente aquí si existe un servicio de notificaciones
+
+    return { success: true, hora_llegada_destino: now, estado: 'EN_DESTINO' };
+  }
+
+  /**
+   * Simula o registra el escaneo del QR, detiene cronómetro, cobra atraso y actualiza estado.
+   */
+  async scanQrDestino(rutaId: string) {
+    const supabase = this.supabaseConfig.getClient();
+    
+    // Obtener hora de llegada
+    const { data: ruta } = await supabase.from('rutas').select('hora_llegada_destino').eq('id', rutaId).single();
+    if (!ruta) throw new BadRequestException('Ruta no encontrada');
+
+    const llegada = ruta.hora_llegada_destino ? new Date(ruta.hora_llegada_destino) : new Date();
+    const now = new Date();
+    
+    // Diferencia en segundos
+    const diffSeconds = Math.max(0, Math.floor((now.getTime() - llegada.getTime()) / 1000));
+    
+    let costoExtra = 0;
+    if (diffSeconds > 30) {
+      costoExtra = Math.ceil((diffSeconds - 30) / 15) * 500;
+    }
+
+    const nuevoEstado = costoExtra > 0 ? 'PAGO_ATRASO_PENDIENTE' : 'COMPLETADO';
+
+    const patch: Record<string, any> = {
+      tiempo_espera_minutos: diffSeconds / 60, // guardamos el equivalente en minutos para la BD aunque sea fracción
+      costo_espera_total: costoExtra,
+      estado: nuevoEstado,
+      fecha_fin: now.toISOString()
+    };
+
+    const { error } = await supabase.from('rutas').update(patch).eq('id', rutaId);
+
+    if (error) {
+      throw new InternalServerErrorException('Error al registrar el escaneo QR y cobros');
+    }
+
+    return {
+      success: true,
+      diffSeconds,
+      costoExtra,
+      nuevoEstado
     };
   }
 
@@ -1191,6 +1278,7 @@ export class RutasService {
       origen,
       destino,
       estado,
+      estado_pago,
       fecha_inicio,
       fecha_fin,
       eta,

@@ -17,6 +17,7 @@ import type {
   PortalRutaDetalleDto,
   PortalIncidenciaDto,
   PortalMensajeDto,
+  PortalBultoDto,
 } from './dto/portal-pedido.dto';
 
 @Injectable()
@@ -38,7 +39,7 @@ export class PortalService {
     const { data: rutas, error } = await supabase
       .from('rutas')
       .select(
-        'id, nombre_ruta, estado, origen, destino, eta, fecha_estimada_entrega, distancia_km, bultos_despachados, tarifa_base_total, costo_servicio, costo_espera_total, total_pagar',
+        'id, nombre_ruta, estado, estado_pago, origen, destino, eta, fecha_estimada_entrega, distancia_km, bultos_despachados, tarifa_base_total, costo_servicio, costo_espera_total, total_pagar, created_at',
       )
       .eq('cliente_id', clienteId)
       .order('created_at', { ascending: false });
@@ -79,6 +80,7 @@ export class PortalService {
         id,
         nombre_ruta,
         estado,
+        estado_pago,
         origen,
         destino,
         eta,
@@ -90,6 +92,7 @@ export class PortalService {
         costo_espera_total,
         total_pagar,
         cliente_id,
+        created_at,
         historial_estados (
           id,
           estado,
@@ -141,7 +144,7 @@ export class PortalService {
 
     const { data: bultosData } = await supabase
       .from('bultos')
-      .select('id, alto_cm, ancho_cm, largo_cm, peso_kg, categoria')
+      .select('id, tamaño, categoria, cuadrados_equivalentes')
       .eq('ruta_id', rutaId.trim());
 
     const historialRaw = this.normalizeRelation(row.historial_estados);
@@ -240,9 +243,11 @@ export class PortalService {
       id: String(row.id),
       nombre_ruta: (row.nombre_ruta as string) ?? null,
       estado: (row.estado as string) ?? null,
+      estado_pago: (row.estado_pago as string) ?? null,
       origen: (row.origen as string) ?? null,
       destino: (row.destino as string) ?? null,
       fecha_estimada_entrega: (row.eta as string) || (row.fecha_estimada_entrega as string) || null,
+      created_at: (row.created_at as string) ?? null,
       distancia_km: row.distancia_km != null ? Number(row.distancia_km) : null,
       bultos_despachados:
         row.bultos_despachados != null ? Number(row.bultos_despachados) : null,
@@ -385,14 +390,14 @@ export class PortalService {
     };
   }
 
-  private mapBulto(row: Record<string, unknown>): any {
+  private mapBulto(row: any): PortalBultoDto {
     return {
-      id: String(row.id),
-      alto_cm: row.alto_cm != null ? Number(row.alto_cm) : null,
-      ancho_cm: row.ancho_cm != null ? Number(row.ancho_cm) : null,
-      largo_cm: row.largo_cm != null ? Number(row.largo_cm) : null,
-      peso_kg: row.peso_kg != null ? Number(row.peso_kg) : null,
-      categoria: (row.categoria as string) ?? null,
+      id: row.id,
+      alto_cm: null,
+      ancho_cm: null,
+      largo_cm: null,
+      peso_kg: null,
+      categoria: (row.categoria as string) || (row.tamaño as string) || null,
     };
   }
 }

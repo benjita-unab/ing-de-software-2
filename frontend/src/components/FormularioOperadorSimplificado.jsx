@@ -377,7 +377,7 @@ export default function FormularioOperadorSimplificado() {
 
         {/* --- Sección de Bultos Reactiva --- */}
         <div style={styles.sectionHeader}>
-          <div style={styles.sectionTitle}>Bultos / Carga</div>
+          <div style={styles.sectionTitle}>Paquetes / Carga</div>
           <button type="button" onClick={handleAddBulto} style={styles.btnSecondary}>
             [+] Añadir Bulto
           </button>

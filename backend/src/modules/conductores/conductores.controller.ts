@@ -56,6 +56,31 @@ export class ConductoresController {
   }
 
   /**
+   * POST /api/conductores/asignar-camion
+   * Asigna un camión a un conductor (1 a 1)
+   */
+  @Post('asignar-camion')
+  @UseGuards(JwtGuard)
+  async asignarCamion(
+    @Body() body: { conductorId: string; camionId: string },
+  ) {
+    return await this.conductoresService.asignarCamion(
+      body.conductorId,
+      body.camionId,
+    );
+  }
+
+  /**
+   * POST /api/conductores/liberar-camion
+   * Libera el camión de un conductor
+   */
+  @Post('liberar-camion')
+  @UseGuards(JwtGuard)
+  async liberarCamion(@Body() body: { conductorId: string }) {
+    return await this.conductoresService.liberarCamion(body.conductorId);
+  }
+
+  /**
    * GET /api/conductores/metricas-pago/comparativa
    * HU-37 CA-08: comparativa de rendimiento entre conductores activos.
    */
@@ -94,6 +119,16 @@ export class ConductoresController {
   }
 
   /**
+   * GET /api/conductores/mi-flota/asignacion
+   * Endpoint optimizado para la App Móvil
+   */
+  @Get('mi-flota/asignacion')
+  @UseGuards(JwtGuard)
+  async getMiFlotaAsignacion(@CurrentUser('id') userId: string) {
+    return await this.conductoresService.getMiFlotaAsignacion(userId);
+  }
+
+  /**
    * GET /api/conductores/:id/license-status
    * Obtiene el estado de la licencia de un conductor
    */
@@ -121,6 +156,16 @@ export class ConductoresController {
   @UseGuards(JwtGuard)
   async listActiveDrivers() {
     return await this.conductoresService.listActiveDrivers();
+  }
+
+  /**
+   * POST /api/conductores
+   * Crea un nuevo conductor (y su usuario de auth)
+   */
+  @Post()
+  @UseGuards(JwtGuard)
+  async createConductor(@Body() body: any) {
+    return await this.conductoresService.createConductor(body);
   }
 
   private parsePeriodoPago(periodo?: string): PeriodoPago {

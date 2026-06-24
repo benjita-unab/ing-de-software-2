@@ -140,6 +140,24 @@ export class RutasController {
   }
 
   /**
+   * POST /api/rutas/:id/llegada
+   * Registra la llegada a destino y comienza el temporizador
+   */
+  @Post(':id/llegada')
+  async registrarLlegada(@Param('id') rutaId: string) {
+    return await this.rutasService.registrarLlegadaDestino(rutaId);
+  }
+
+  /**
+   * POST /api/rutas/:id/scan-qr
+   * Escanea el QR, detiene el temporizador, calcula cobro extra y cambia estado.
+   */
+  @Post(':id/scan-qr')
+  async scanQrDestino(@Param('id') rutaId: string) {
+    return await this.rutasService.scanQrDestino(rutaId);
+  }
+
+  /**
    * PATCH /api/rutas/:id/tiempos
    * Actualiza los tiempos de inspección de una ruta y calcula el tiempo de espera si ambos están presentes
    */

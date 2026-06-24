@@ -2,6 +2,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from '@supabase/supabase-js';
 import { apiFetch } from "../lib/apiClient";
+import ComprobanteModal from "./ComprobanteModal";
 import { getPlantillasPorCliente } from "../lib/clientesService";
 import { getRutaPlantillaById } from "../lib/rutasPlantillaService";
 import {
@@ -143,6 +144,7 @@ export default function RutasActivas() {
   
   const [showDetalleModal, setShowDetalleModal] = useState(false);
   const [rutaDetalle, setRutaDetalle] = useState(null);
+  const [comprobanteRutaId, setComprobanteRutaId] = useState(null);
   const [plantillasCliente, setPlantillasCliente] = useState([]);
   const [plantillaSeleccionadaId, setPlantillaSeleccionadaId] = useState("");
   const [cargandoPlantillas, setCargandoPlantillas] = useState(false);
@@ -511,7 +513,7 @@ export default function RutasActivas() {
       String(form.bultosDespachos ?? "").trim() &&
       (Number.isNaN(bultosDespachosValue) || !Number.isInteger(bultosDespachosValue) || bultosDespachosValue < 1)
     ) {
-      nuevosErrores.bultosDespachos = "Cantidad de bultos inválida";
+      nuevosErrores.bultosDespachos = "Cantidad de paquetes inválida";
     }
 
     const distanciaOriginal = String(form.distanciaKm ?? "").trim();
@@ -701,6 +703,7 @@ export default function RutasActivas() {
                   <th>Cliente</th>
                   <th>Estado</th>
                   <th>Pago (CLP)</th>
+                  <th>Estado de Pago</th>
                   <th>Conductor / Camión</th>
                   <th>ETA</th>
                   <th>Fechas estimadas</th>
@@ -758,6 +761,30 @@ export default function RutasActivas() {
                         </div>
                       ) : (
                         <span className="lt-list-item__sub" style={{ opacity: 0.6 }}>No calculado</span>
+                      )}
+                    </td>
+                    <td>
+                      <span style={{
+                        display: 'inline-block',
+                        padding: '4px 8px',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        fontWeight: 'bold',
+                        textTransform: 'uppercase',
+                        backgroundColor: ruta.estado_pago === 'pagado' ? '#10b981' : ruta.estado_pago === 'procesando' ? '#f59e0b' : ruta.estado_pago === 'fallido' ? '#ef4444' : '#64748b',
+                        color: '#fff'
+                      }}>
+                        {ruta.estado_pago || 'PENDIENTE'}
+                      </span>
+                      {ruta.estado_pago === 'pagado' && (
+                        <button 
+                          type="button" 
+                          onClick={() => setComprobanteRutaId(ruta.id)}
+                          className="lt-btn lt-btn--secondary" 
+                          style={{ padding: '4px 8px', fontSize: '11px', marginTop: '8px', width: '100%', borderColor: '#3B82F6', color: '#3B82F6' }}
+                        >
+                          Ver Comprobante
+                        </button>
                       )}
                     </td>
                     <td>
@@ -924,6 +951,7 @@ export default function RutasActivas() {
             </table>
           </div>
         )}
+      {comprobanteRutaId && <ComprobanteModal rutaId={comprobanteRutaId} onClose={() => setComprobanteRutaId(null)} />}
       {/* Modal Detalle Financiero */}
       {showDetalleModal && rutaDetalle && (
         <div className="lt-modal-overlay">

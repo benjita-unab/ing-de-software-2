@@ -9,7 +9,9 @@ import {
 import { obtenerConductoresActivos } from "../lib/rutasService";
 import Badge from "./ui/Badge";
 import DetalleConductorModal from "./DetalleConductorModal";
+import CrearChoferModal from "./CrearChoferModal";
 import EmptyState from "./ui/EmptyState";
+import { UserPlus } from "lucide-react";
 
 function licenciaBadgeFromDias(diasRestantes) {
   if (diasRestantes < 0) {
@@ -69,6 +71,7 @@ export default function ChoferesFlota({ configPagosVersion = 0 }) {
   const [conductorDetalle, setConductorDetalle] = useState(null);
   const [busqueda, setBusqueda] = useState("");
   const [orden, setOrden] = useState(ORDEN_CHOFERES.NOMBRE_ASC);
+  const [mostrarCrearModal, setMostrarCrearModal] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -126,10 +129,20 @@ export default function ChoferesFlota({ configPagosVersion = 0 }) {
     <>
       <div className="lt-card lt-module-card">
         <div className="lt-card__body">
-          <h3 className="lt-module-card__title">
-            Choferes activos ({conductoresVisibles.length}
-            {busqueda.trim() ? ` de ${conductores.length}` : ""})
-          </h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <h3 className="lt-module-card__title" style={{ margin: 0 }}>
+              Choferes activos ({conductoresVisibles.length}
+              {busqueda.trim() ? ` de ${conductores.length}` : ""})
+            </h3>
+            <button
+              className="lt-btn lt-btn--primary"
+              onClick={() => setMostrarCrearModal(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+              <UserPlus size={16} />
+              Nuevo Chofer
+            </button>
+          </div>
 
           <div className="lt-toolbar" style={{ marginBottom: 16 }}>
             <div className="lt-search-wrap" style={{ flex: 1, maxWidth: 420 }}>
@@ -273,6 +286,16 @@ export default function ChoferesFlota({ configPagosVersion = 0 }) {
           onClose={() => setConductorDetalle(null)}
           onConductorActualizado={handleConductorActualizado}
           configPagosVersion={configPagosVersion}
+        />
+      )}
+
+      {mostrarCrearModal && (
+        <CrearChoferModal
+          onClose={() => setMostrarCrearModal(false)}
+          onCreated={(nuevoConductor) => {
+            setMensaje({ tipo: "success", texto: `Chofer ${nuevoConductor.nombre} creado con éxito.` });
+            handleConductorActualizado(); // Recargar lista
+          }}
         />
       )}
     </>

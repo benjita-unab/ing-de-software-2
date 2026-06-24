@@ -7,11 +7,13 @@ export interface PortalPedidoListItemDto {
   id: string;
   nombre_ruta?: string | null;
   estado: string | null;
+  estado_pago?: string | null;
   origen: string | null;
   destino: string | null;
   fecha_estimada_entrega: string | null;
   distancia_km: number | null;
   bultos_despachados: number | null;
+  created_at?: string | null;
   tarifa_base_total?: number | null;
   costo_servicio?: number | null;
   costo_espera_total?: number | null;
@@ -27,11 +29,13 @@ export interface PortalRutaDetalleDto {
   id: string;
   nombre_ruta?: string | null;
   estado: string | null;
+  estado_pago?: string | null;
   origen: string | null;
   destino: string | null;
   fecha_estimada_entrega: string | null;
   distancia_km: number | null;
   bultos_despachados: number | null;
+  created_at?: string | null;
   tarifa_base_total?: number | null;
   costo_servicio?: number | null;
   costo_espera_total?: number | null;

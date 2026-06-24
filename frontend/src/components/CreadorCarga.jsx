@@ -69,6 +69,7 @@ export default function CreadorCarga() {
   const [camionesRetornoCercanos, setCamionesRetornoCercanos] = useState([]);
 
   const [clienteId, setClienteId] = useState(draft?.clienteId || "");
+  const [nombreRuta, setNombreRuta] = useState(draft?.nombreRuta || "");
   const [origen, setOrigen] = useState(draft?.origen || "");
   const [origenInput, setOrigenInput] = useState(draft?.origenInput || "");
 
@@ -136,14 +137,14 @@ export default function CreadorCarga() {
   // Guardar en localStorage cuando cambian los datos críticos
   useEffect(() => {
     localStorage.setItem('creadorCargaDraft', JSON.stringify({
-      modoCarga, clienteId, origen, origenInput, paradas, bultos
+      modoCarga, clienteId, nombreRuta, origen, origenInput, paradas, bultos
     }));
-  }, [modoCarga, clienteId, origen, origenInput, paradas, bultos]);
+  }, [modoCarga, clienteId, nombreRuta, origen, origenInput, paradas, bultos]);
 
   const handleNuevoPedido = () => {
     if(window.confirm("¿Estás seguro de que quieres borrar el pedido actual y empezar uno nuevo?")) {
       localStorage.removeItem('creadorCargaDraft');
-      setModoCarga('CENTRAL'); setClienteId(""); setOrigen(""); setOrigenInput("");
+      setModoCarga('CENTRAL'); setClienteId(""); setNombreRuta(""); setOrigen(""); setOrigenInput("");
       setParadas([]); setBultos([]); setCostoTac("");
       setFechaEntregaStr(""); setFechaEntregaTimestamp(""); setActiveSizeBrush(null);
       setIsTarifaManual(false); setCamionId(""); setActiveParadaId("");
@@ -474,11 +475,29 @@ export default function CreadorCarga() {
     const destinoFinal = paradas.map((p, i) => `${i + 1}. ${p.address.split(',')[0]}`).join(' ➔ ');
 
     try {
+      let conductorIdParaInsertar = null;
+      let estadoInicial = 'PENDIENTE';
+
+      if (camionId) {
+        const { data: conductor } = await supabase
+          .from('conductores')
+          .select('id')
+          .eq('camion_id', camionId)
+          .single();
+        
+        if (conductor) {
+          conductorIdParaInsertar = conductor.id;
+          estadoInicial = 'ASIGNADO';
+        }
+      }
+
       const { data: ruta, error: rutaErr } = await supabase
         .from("rutas")
         .insert([{
           cliente_id: clienteId,
           camion_id: camionId || null,
+          conductor_id: conductorIdParaInsertar,
+          nombre_ruta: nombreRuta || null,
           origen,
           destino: destinoFinal,
           distancia_km: distanciaLogisticaKm,
@@ -490,7 +509,7 @@ export default function CreadorCarga() {
           total_pagar: totalAPagarCliente, 
           is_tarifa_manual: isTarifaManual,
           fecha_estimada_entrega: fechaEntregaTimestamp || null,
-          estado: 'PENDIENTE',
+          estado: estadoInicial,
           alerta_sub_financiada: false
         }])
         .select("id")
@@ -537,7 +556,7 @@ export default function CreadorCarga() {
         )}
       </div>
       <p className="liquid-text" style={{ fontSize: '14px', marginBottom: '24px', lineHeight: '1.5', fontWeight: '500' }}>
-        Arma tu carga (96 Micro-bloques). Usa <b>Click Izquierdo</b> para pintar en el camión y <b>Click Derecho</b> para borrar bultos.
+        Arma tu carga (96 Micro-bloques). Usa <b>Click Izquierdo</b> para pintar en el camión y <b>Click Derecho</b> para borrar paquetes.
       </p>
 
       {mensaje && (
@@ -572,13 +591,24 @@ export default function CreadorCarga() {
             {modoCarga === 'CENTRAL' && <span style={{ color: '#3B82F6', fontSize: '14px', marginLeft:'8px' }}>(Salida Base: Quillota 980, Viña del Mar)</span>}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '16px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <label className="liquid-label" style={{ fontSize: '13px', fontWeight: '700' }}>Cliente Principal B2B *</label>
               <select required value={clienteId} onChange={e => setClienteId(e.target.value)} className="liquid-input" style={{ padding: '12px', borderRadius: '8px', outline: 'none' }}>
                 <option value="">Selecciona Cliente...</option>
                 {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre || c.contacto_email}</option>)}
               </select>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <label className="liquid-label" style={{ fontSize: '13px', fontWeight: '700' }}>Nombre de Ruta (Opcional)</label>
+              <input 
+                type="text" 
+                value={nombreRuta}
+                onChange={e => setNombreRuta(e.target.value)}
+                placeholder="Ej: Pedido Falabella..." 
+                className="liquid-input" 
+                style={{ padding: '12px', borderRadius: '8px', outline: 'none' }} 
+              />
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <label className="liquid-label" style={{ fontSize: '13px', fontWeight: '700' }}>Origen (Autocompletado) *</label>

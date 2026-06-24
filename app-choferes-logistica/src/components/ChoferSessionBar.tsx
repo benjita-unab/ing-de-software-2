@@ -8,9 +8,9 @@ import { useAuth } from '@/src/context/AuthContext';
 export const STORAGE_RUTA_ACTIVA_ID = 'logitrack_ruta_activa_id';
 
 /**
- * Barra superior en el portal chofer: correo de sesión + cerrar sesión.
+ * Barra superior en el portal chofer: correo de sesión + cerrar sesión y opcionalmente un botón de refrescar.
  */
-export function ChoferSessionBar() {
+export function ChoferSessionBar({ onRefresh }: { onRefresh?: () => void }) {
   const insets = useSafeAreaInsets();
   const { session } = useAuth();
 
@@ -29,7 +29,17 @@ export function ChoferSessionBar() {
           {session?.email ?? 'Sesión activa'}
         </Text>
       </View>
-      <SignOutButton extraStorageKeys={[STORAGE_RUTA_ACTIVA_ID]} />
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        {onRefresh && (
+          <Text 
+            onPress={onRefresh} 
+            style={{ fontSize: 22, marginRight: 8, padding: 4 }}
+          >
+            🔄
+          </Text>
+        )}
+        <SignOutButton extraStorageKeys={[STORAGE_RUTA_ACTIVA_ID]} />
+      </View>
     </View>
   );
 }
