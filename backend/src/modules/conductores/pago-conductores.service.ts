@@ -136,6 +136,60 @@ export class PagoConductoresService {
   }
 
   /**
+   * HU-50: desglose HU-37 para un único pedido/ruta (proyección o histórico).
+   */
+  async getDesglosePagoPorRutaId(rutaId: string): Promise<{
+    desglose: DesglosePago;
+    tarifas: PagoTarifas;
+  }> {
+    if (!rutaId?.trim()) {
+      throw new BadRequestException('rutaId es requerido');
+    }
+
+    const ruta = await this.fetchRutaParaPago(rutaId);
+    const tarifas = await this.configuracionPagosService.getTarifas();
+    const metricas = this.aggregateMetricas([ruta]);
+    const desglose = this.calculatePago(metricas, tarifas);
+
+    return { desglose, tarifas };
+  }
+
+  private async fetchRutaParaPago(rutaId: string): Promise<RutaRow> {
+    const supabase = this.supabaseConfig.getClient();
+    const { data, error } = await supabase
+      .from('rutas')
+      .select(
+        `
+        id,
+        conductor_id,
+        origen,
+        destino,
+        distancia_km,
+        bultos_despachados,
+        fecha_fin,
+        fecha_inicio,
+        estado,
+        conductores ( id, rut ),
+        entregas (
+          id,
+          bultos_recepcionados,
+          fecha_entrega_real,
+          validado,
+          estado
+        )
+      `,
+      )
+      .eq('id', rutaId)
+      .single();
+
+    if (error || !data) {
+      throw new NotFoundException('Ruta no encontrada');
+    }
+
+    return data as RutaRow;
+  }
+
+  /**
    * HU-37 CA-08: comparativa de rendimiento entre conductores activos.
    */
   async getComparativaMetricas(

@@ -16,6 +16,11 @@ export class UpdateCamionDto {
 
   @IsOptional()
   @IsNumber()
+  @Min(0.01)
+  km_l?: number;
+
+  @IsOptional()
+  @IsNumber()
   @Min(0)
   slots_utilizados?: number;
 

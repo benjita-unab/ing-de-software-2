@@ -7,6 +7,7 @@ import { EmailModule } from '../email/email.module';
 import { RutasPlantillaModule } from '../rutas-plantilla/rutas-plantilla.module';
 import { PagosClienteModule } from '../pagos-cliente/pagos-cliente.module';
 import { ConfiguracionPagosModule } from '../configuracion-pagos/configuracion-pagos.module';
+import { CostosOperativosModule } from '../costos-operativos/costos-operativos.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { ConfiguracionPagosModule } from '../configuracion-pagos/configuracion-p
     RutasPlantillaModule,
     PagosClienteModule,
     ConfiguracionPagosModule,
+    CostosOperativosModule,
   ],
   providers: [RutasService, SupabaseConfigService],
   controllers: [RutasController],
