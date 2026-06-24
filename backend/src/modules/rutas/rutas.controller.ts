@@ -223,6 +223,7 @@ export class RutasController {
     @Query('search') search?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('generadoAutomaticamente') generadoAutomaticamente?: string,
   ) {
     let effectiveConductorId = conductorId;
 
@@ -243,6 +244,12 @@ export class RutasController {
       search,
       page: page ? parseInt(page, 10) : 1,
       limit: limit ? parseInt(limit, 10) : 10,
+      generadoAutomaticamente:
+        generadoAutomaticamente === 'true'
+          ? true
+          : generadoAutomaticamente === 'false'
+            ? false
+            : undefined,
     };
 
     return await this.rutasService.listRoutes(filters);

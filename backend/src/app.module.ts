@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
+import { ScheduleModule } from '@nestjs/schedule';
 import { SupabaseConfigService } from './config/supabase.config';
 import { ResendConfigService } from './config/resend.config';
 import { JwtStrategy } from './common/strategies/jwt.strategy';
@@ -24,6 +25,7 @@ import { ConfiguracionPagosModule } from './modules/configuracion-pagos/configur
 import { ChatRutaModule } from './modules/chat-ruta/chat-ruta.module';
 import { PagosClienteModule } from './modules/pagos-cliente/pagos-cliente.module';
 import { RutasPlantillaModule } from './modules/rutas-plantilla/rutas-plantilla.module';
+import { RecurrenciasModule } from './modules/recurrencias/recurrencias.module';
 
 @Module({
   imports: [
@@ -31,6 +33,7 @@ import { RutasPlantillaModule } from './modules/rutas-plantilla/rutas-plantilla.
       isGlobal: true,
       envFilePath: '.env',
     }),
+    ScheduleModule.forRoot(),
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -57,6 +60,7 @@ import { RutasPlantillaModule } from './modules/rutas-plantilla/rutas-plantilla.
     ChatRutaModule,
     PagosClienteModule,
     RutasPlantillaModule,
+    RecurrenciasModule,
   ],
   controllers: [AppController],
   providers: [AppService, SupabaseConfigService, ResendConfigService, JwtStrategy],

@@ -259,6 +259,7 @@ export default function HistorialDespachos() {
   
   const [searchQuery, setSearchQuery] = useState("");
   const [searchInput, setSearchInput] = useState("");
+  const [filtroAuto, setFiltroAuto] = useState("all");
 
   useEffect(() => {
     let cancelled = false;
@@ -274,6 +275,11 @@ export default function HistorialDespachos() {
       });
       if (searchQuery) {
         queryParams.append("search", searchQuery);
+      }
+      if (filtroAuto === "auto") {
+        queryParams.append("generadoAutomaticamente", "true");
+      } else if (filtroAuto === "manual") {
+        queryParams.append("generadoAutomaticamente", "false");
       }
 
       const resAll = await apiFetch(`/api/rutas?${queryParams.toString()}`);
@@ -308,7 +314,7 @@ export default function HistorialDespachos() {
     return () => {
       cancelled = true;
     };
-  }, [page, limit, searchQuery]);
+  }, [page, limit, searchQuery, filtroAuto]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -379,6 +385,20 @@ export default function HistorialDespachos() {
         >
           Buscar
         </button>
+        <select
+          className="lt-input"
+          style={{ maxWidth: 220 }}
+          value={filtroAuto}
+          onChange={(e) => {
+            setFiltroAuto(e.target.value);
+            setPage(1);
+          }}
+          aria-label="Filtrar por origen del pedido"
+        >
+          <option value="all">Todos los pedidos</option>
+          <option value="auto">Generado automáticamente</option>
+          <option value="manual">Creado manualmente</option>
+        </select>
       </div>
 
       <div className="lt-card lt-module-card">
@@ -399,6 +419,7 @@ export default function HistorialDespachos() {
                     <th>Espera</th>
                     <th>Finalizado</th>
                     <th>Estado</th>
+                    <th>Origen</th>
                     <th>Evidencias</th>
                   </tr>
                 </thead>
@@ -441,6 +462,15 @@ export default function HistorialDespachos() {
                         <Badge variant="success" showDot={false}>
                           ✅ {despacho.estado}
                         </Badge>
+                      </td>
+                      <td>
+                        {despacho.generado_automaticamente ? (
+                          <Badge variant="info" showDot={false}>
+                            Automático
+                          </Badge>
+                        ) : (
+                          <span className="lt-card__subtitle">Manual</span>
+                        )}
                       </td>
                       <td>
                         <button
