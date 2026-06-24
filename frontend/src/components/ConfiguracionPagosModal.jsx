@@ -28,6 +28,16 @@ const CAMPOS = [
     label: "Precio por kilómetro",
     hint: "Monto por km recorrido (distancia_km)",
   },
+  {
+    key: "precioCombustibleLitro",
+    label: "Precio combustible por litro",
+    hint: "Snapshot al calcular costos de cada pedido (HU-50)",
+  },
+  {
+    key: "precioEsperaMinuto",
+    label: "Precio espera por minuto",
+    hint: "Costo de tiempo de espera en destino (HU-50)",
+  },
 ];
 
 function formatMontoPreview(valor) {
@@ -52,6 +62,8 @@ export default function ConfiguracionPagosModal({ onClose, onGuardado }) {
     precioPorEntrega: "",
     precioPorBulto: "",
     precioPorKm: "",
+    precioCombustibleLitro: "",
+    precioEsperaMinuto: "",
   });
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
@@ -77,6 +89,8 @@ export default function ConfiguracionPagosModal({ onClose, onGuardado }) {
           precioPorEntrega: String(data.precioPorEntrega ?? ""),
           precioPorBulto: String(data.precioPorBulto ?? ""),
           precioPorKm: String(data.precioPorKm ?? ""),
+          precioCombustibleLitro: String(data.precioCombustibleLitro ?? ""),
+          precioEsperaMinuto: String(data.precioEsperaMinuto ?? ""),
         });
         setMeta({
           updatedAt: data.updatedAt ?? null,
@@ -107,6 +121,8 @@ export default function ConfiguracionPagosModal({ onClose, onGuardado }) {
       precioPorEntrega: Number(valores.precioPorEntrega),
       precioPorBulto: Number(valores.precioPorBulto),
       precioPorKm: Number(valores.precioPorKm),
+      precioCombustibleLitro: Number(valores.precioCombustibleLitro),
+      precioEsperaMinuto: Number(valores.precioEsperaMinuto),
     };
 
     for (const campo of CAMPOS) {
@@ -132,6 +148,10 @@ export default function ConfiguracionPagosModal({ onClose, onGuardado }) {
       precioPorEntrega: String(data.precioPorEntrega ?? payload.precioPorEntrega),
       precioPorBulto: String(data.precioPorBulto ?? payload.precioPorBulto),
       precioPorKm: String(data.precioPorKm ?? payload.precioPorKm),
+      precioCombustibleLitro: String(
+        data.precioCombustibleLitro ?? payload.precioCombustibleLitro,
+      ),
+      precioEsperaMinuto: String(data.precioEsperaMinuto ?? payload.precioEsperaMinuto),
     });
     setMeta({
       updatedAt: data.updatedAt ?? new Date().toISOString(),
@@ -156,7 +176,7 @@ export default function ConfiguracionPagosModal({ onClose, onGuardado }) {
               Configuración de pagos
             </div>
             <div className="lt-modal-header__sub">
-              Tarifas unitarias para el cálculo HU-37
+              Tarifas unitarias para pagos (HU-37) y costos operativos (HU-50)
             </div>
           </div>
           <button

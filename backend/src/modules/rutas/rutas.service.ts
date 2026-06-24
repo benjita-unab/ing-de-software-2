@@ -12,6 +12,7 @@ import { calcularDistanciaVialGoogle } from './google-routes-distance.helper';
 import { ConfiguracionPagosService } from '../configuracion-pagos/configuracion-pagos.service';
 import { PagosClienteService } from '../pagos-cliente/pagos-cliente.service';
 import { RutasPlantillaService } from '../rutas-plantilla/rutas-plantilla.service';
+import { CostosOperativosService } from '../costos-operativos/costos-operativos.service';
 import { CreateAnomaliaDto } from './dto/create-anomalia.dto';
 import type { ConsolidarPedidoDto } from './dto/consolidar-pedido.dto';
 import type { CreateRutaDto, ParadaRutaDto } from './dto/create-ruta.dto';
@@ -83,6 +84,7 @@ export class RutasService {
     private rutasPlantillaService: RutasPlantillaService,
     private pagosClienteService: PagosClienteService,
     private configuracionPagosService: ConfiguracionPagosService,
+    private costosOperativosService: CostosOperativosService,
   ) {}
 
   private static readonly FECHAS_ESTIMADAS_SELECT = `
@@ -1210,6 +1212,15 @@ export class RutasService {
         created_at: new Date().toISOString(),
       },
     ]);
+
+    if (nuevoEstado === 'ENTREGADO') {
+      try {
+        await this.costosOperativosService.congelarPorRuta(rutaId);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.warn('updateRouteStatus congelar costos omitido:', msg);
+      }
+    }
 
     return {
       success: true,

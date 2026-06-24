@@ -18,6 +18,7 @@ import { useGooglePlacesAutocomplete } from "../hooks/useGooglePlacesAutocomplet
 import { getNombreRuta } from "../lib/rutasUtils";
 import ParadaPlantillaInput from "./ParadaPlantillaInput";
 import ConsolidacionRutaPanel from "./ConsolidacionRutaPanel";
+import CostosOperativosPanel from "./CostosOperativosPanel";
 import ModalRecurrencia from "./ModalRecurrencia";
 import Badge from "./ui/Badge";
 import Spinner from "./ui/Spinner";
@@ -166,6 +167,7 @@ export default function RutasActivas() {
   const [guardarComoPlantilla, setGuardarComoPlantilla] = useState(false);
   const [nombrePlantilla, setNombrePlantilla] = useState("");
   const [consolidacionAbiertaId, setConsolidacionAbiertaId] = useState(null);
+  const [costosAbiertoId, setCostosAbiertoId] = useState(null);
   const [programarRecurrencia, setProgramarRecurrencia] = useState(false);
   const [recurrenciaModalOpen, setRecurrenciaModalOpen] = useState(false);
   const [rutaRecurrenciaCtx, setRutaRecurrenciaCtx] = useState(null);
@@ -1311,6 +1313,7 @@ export default function RutasActivas() {
                   <th>Fechas estimadas</th>
                   <th>Anomalías</th>
                   <th>Consolidación</th>
+                  <th>Costos</th>
                   <th>Acciones</th>
                 </tr>
               </thead>
@@ -1492,6 +1495,20 @@ export default function RutasActivas() {
                     <td>
                       <button
                         type="button"
+                        className={`lt-btn lt-btn--sm ${costosAbiertoId === ruta.id ? "lt-btn--primary" : "lt-btn--secondary"}`}
+                        onClick={() =>
+                          setCostosAbiertoId((prev) =>
+                            prev === ruta.id ? null : ruta.id,
+                          )
+                        }
+                        title="Ver resumen financiero y costos operativos"
+                      >
+                        {costosAbiertoId === ruta.id ? "Cerrar" : "Ver costos"}
+                      </button>
+                    </td>
+                    <td>
+                      <button
+                        type="button"
                         className="lt-btn lt-btn--secondary lt-btn--full"
                         style={{ marginBottom: 8 }}
                         onClick={() => {
@@ -1520,10 +1537,20 @@ export default function RutasActivas() {
                   </tr>
                   {consolidacionAbiertaId === ruta.id && (
                     <tr key={`${ruta.id}-consolidacion`}>
-                      <td colSpan={11} className="lt-consolidacion-row">
+                      <td colSpan={12} className="lt-consolidacion-row">
                         <ConsolidacionRutaPanel
                           rutaId={ruta.id}
                           onConsolidado={cargarRutas}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                  {costosAbiertoId === ruta.id && (
+                    <tr key={`${ruta.id}-costos`}>
+                      <td colSpan={12} className="lt-consolidacion-row">
+                        <CostosOperativosPanel
+                          rutaId={ruta.id}
+                          rutaEstado={ruta.estado}
                         />
                       </td>
                     </tr>
