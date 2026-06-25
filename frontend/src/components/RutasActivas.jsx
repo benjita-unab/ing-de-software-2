@@ -57,6 +57,62 @@ function localDatetimeToIso(localVal) {
   return d.toISOString();
 }
 
+function parseLocalDatetime(localVal) {
+  const value = String(localVal ?? "").trim();
+  const matches = /^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2})$/.exec(value);
+  if (!matches) return null;
+  const [, year, month, day, hours, minutes] = matches;
+  return new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hours),
+    Number(minutes),
+    0,
+    0,
+  );
+}
+
+function formatLocalDatetime(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
+    date.getHours(),
+  )}:${pad(date.getMinutes())}`;
+}
+
+function calcularEtaDesdeFechaInicio(fechaInicio, duracionMinutos) {
+  if (!fechaInicio || duracionMinutos == null) return "";
+  const inicio = parseLocalDatetime(fechaInicio);
+  if (!inicio) return "";
+  inicio.setMinutes(inicio.getMinutes() + Number(duracionMinutos));
+  return formatLocalDatetime(inicio);
+}
+
+function formatLocalDate(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function calcularFechasEstimadasDesdeEta(eta) {
+  if (!eta) return { inicio: "", fin: "", entrega: "" };
+  const fecha = parseLocalDatetime(eta);
+  if (!fecha) return { inicio: "", fin: "", entrega: "" };
+
+  const entrega = formatLocalDate(fecha);
+  const inicio = new Date(fecha);
+  inicio.setDate(inicio.getDate() - 1);
+  const fin = new Date(fecha);
+  fin.setDate(fin.getDate() + 1);
+
+  return {
+    inicio: formatLocalDate(inicio),
+    fin: formatLocalDate(fin),
+    entrega,
+  };
+}
+
 function fmtDate(iso) {
   if (!iso) return "—";
   try {
@@ -182,6 +238,7 @@ export default function RutasActivas() {
     destino: "",
     fechaInicio: "",
     eta: "",
+    duracionMinutos: null,
     distanciaKm: "",
     fechasEstimadas: { ...FECHAS_VACIAS },
     advertenciaEstimacion: "",
@@ -194,13 +251,11 @@ export default function RutasActivas() {
 
   const { error: mapsOrigenError } = useGooglePlacesAutocomplete(origenInputRef, {
     enabled: showForm,
-    onPlaceSelected: (address) =>
-      setForm((prev) => ({ ...prev, origen: address })),
+    onPlaceSelected: (address) => actualizarCampo("origen", address),
   });
   const { error: mapsDestinoError } = useGooglePlacesAutocomplete(destinoInputRef, {
     enabled: showForm,
-    onPlaceSelected: (address) =>
-      setForm((prev) => ({ ...prev, destino: address })),
+    onPlaceSelected: (address) => actualizarCampo("destino", address),
   });
   const mapsError = mapsOrigenError || mapsDestinoError;
 
@@ -340,7 +395,7 @@ export default function RutasActivas() {
   const aplicarPlantilla = async (plantillaId) => {
     setPlantillaSeleccionadaId(plantillaId);
     if (!plantillaId) {
-      setForm((prev) => ({ ...prev, plantillaId: "" }));
+      setForm((prev) => ({ ...prev, plantillaId: "", eta: "", duracionMinutos: null }));
       setParadas([]);
       return;
     }
@@ -366,10 +421,10 @@ export default function RutasActivas() {
       nombreRuta: plantilla.nombre || prev.nombreRuta,
       origen: plantilla.origen || prev.origen,
       destino: plantilla.destino || prev.destino,
-      distanciaKm:
-        plantilla.distanciaEstimada != null
-          ? String(plantilla.distanciaEstimada)
-          : prev.distanciaKm,
+      distanciaKm: "",
+      duracionMinutos: null,
+      eta: "",
+      fechasEstimadas: { ...FECHAS_VACIAS },
       advertenciaEstimacion: "",
     }));
     setMensaje({
@@ -389,18 +444,33 @@ export default function RutasActivas() {
         es_temporal: true,
       },
     ]);
+    setForm((prev) => ({
+      ...prev,
+      eta: "",
+      duracionMinutos: null,
+    }));
   };
 
   const actualizarParada = (index, campo, valor) => {
     setParadas((prev) =>
       prev.map((p, i) => (i === index ? { ...p, [campo]: valor } : p)),
     );
+    setForm((prev) => ({
+      ...prev,
+      eta: "",
+      duracionMinutos: null,
+    }));
   };
 
   const actualizarParadaDesdePlaces = (index, datos) => {
     setParadas((prev) =>
       prev.map((p, i) => (i === index ? { ...p, ...datos, es_temporal: true } : p)),
     );
+    setForm((prev) => ({
+      ...prev,
+      eta: "",
+      duracionMinutos: null,
+    }));
   };
 
   const eliminarParada = (index) => {
@@ -409,6 +479,11 @@ export default function RutasActivas() {
         .filter((_, i) => i !== index)
         .map((p, i) => ({ ...p, orden: i + 1 })),
     );
+    setForm((prev) => ({
+      ...prev,
+      eta: "",
+      duracionMinutos: null,
+    }));
   };
 
   const cambiarModoCreacion = (modo) => {
@@ -422,13 +497,24 @@ export default function RutasActivas() {
       plantillaId: "",
       origen: modo === MODO_MANUAL ? prev.origen : "",
       destino: modo === MODO_MANUAL ? prev.destino : "",
+      eta: "",
+      duracionMinutos: null,
       advertenciaEstimacion: "",
     }));
     setErroresFormulario({});
   };
 
   const actualizarCampo = (campo, valor) => {
-    setForm((prev) => ({ ...prev, [campo]: valor }));
+    const update = { [campo]: valor };
+    if (["origen", "destino", "distanciaKm"].includes(campo)) {
+      update.eta = "";
+      update.duracionMinutos = null;
+    }
+    if (["origen", "destino"].includes(campo)) {
+      update.distanciaKm = "";
+      update.fechasEstimadas = { ...FECHAS_VACIAS };
+    }
+    setForm((prev) => ({ ...prev, ...update }));
     setErroresFormulario((prev) => {
       if (!prev[campo]) return prev;
       const next = { ...prev };
@@ -436,6 +522,47 @@ export default function RutasActivas() {
       return next;
     });
   };
+
+  useEffect(() => {
+    const tieneFechaInicio = String(form.fechaInicio || "").trim() !== "";
+    const duracionValida = Number(form.duracionMinutos) > 0;
+
+    if (!tieneFechaInicio || !duracionValida) {
+      if (form.eta || form.fechasEstimadas.inicio || form.fechasEstimadas.fin || form.fechasEstimadas.entrega) {
+        setForm((prev) => ({
+          ...prev,
+          eta: "",
+          fechasEstimadas: { ...FECHAS_VACIAS },
+        }));
+      }
+      return;
+    }
+
+    const nuevaEta = calcularEtaDesdeFechaInicio(
+      form.fechaInicio,
+      form.duracionMinutos,
+    );
+    if (nuevaEta !== form.eta) {
+      setForm((prev) => ({ ...prev, eta: nuevaEta }));
+    }
+  }, [form.fechaInicio, form.duracionMinutos]);
+
+  useEffect(() => {
+    const nuevasFechas = calcularFechasEstimadasDesdeEta(form.eta);
+    setForm((prev) => {
+      if (
+        prev.fechasEstimadas.inicio === nuevasFechas.inicio &&
+        prev.fechasEstimadas.fin === nuevasFechas.fin &&
+        prev.fechasEstimadas.entrega === nuevasFechas.entrega
+      ) {
+        return prev;
+      }
+      return {
+        ...prev,
+        fechasEstimadas: nuevasFechas,
+      };
+    });
+  }, [form.eta]);
 
   const actualizarFechaForm = (campo, valor) => {
     setForm((prev) => ({
@@ -457,7 +584,14 @@ export default function RutasActivas() {
   };
 
   const calcularDistanciaYFechasForm = async () => {
-    setForm((prev) => ({ ...prev, advertenciaEstimacion: "" }));
+    setForm((prev) => ({
+      ...prev,
+      advertenciaEstimacion: "",
+      distanciaKm: "",
+      eta: "",
+      duracionMinutos: null,
+      fechasEstimadas: { ...FECHAS_VACIAS },
+    }));
     const tieneKm = String(form.distanciaKm ?? "").trim() !== "";
     const paradasValidas = buildParadasPayload(paradas);
     if (!tieneKm && (!form.origen.trim() || !form.destino.trim())) {
@@ -492,6 +626,7 @@ export default function RutasActivas() {
       }
 
       const distancia = resCalc.data.distanciaEstimada;
+      const duracion = resCalc.data.tiempoEstimado ?? null;
       const resFechas = await estimarFechasEstimadas(
         buildEstimarPayload({
           origen: form.origen,
@@ -505,6 +640,11 @@ export default function RutasActivas() {
         setForm((prev) => ({
           ...prev,
           distanciaKm: String(distancia),
+          duracionMinutos: duracion,
+          eta:
+            duracion != null && prev.fechaInicio
+              ? calcularEtaDesdeFechaInicio(prev.fechaInicio, duracion)
+              : "",
           advertenciaEstimacion:
             resFechas.error || resFechas.data?.advertencia || ADVERTENCIA_DISTANCIA_VIAL,
         }));
@@ -516,6 +656,8 @@ export default function RutasActivas() {
         ...prev,
         advertenciaEstimacion: "",
         distanciaKm: String(distancia),
+        duracionMinutos: duracion,
+        eta: duracion != null ? calcularEtaDesdeFechaInicio(form.fechaInicio, duracion) : prev.eta,
         fechasEstimadas: {
           inicio: data.fecha_estimada_inicio || "",
           fin: data.fecha_estimada_fin || "",
@@ -552,17 +694,25 @@ export default function RutasActivas() {
       return;
     }
 
-    setForm((prev) => ({
-      ...prev,
-      advertenciaEstimacion: "",
-      distanciaKm:
-        data.distancia_km != null ? String(data.distancia_km) : prev.distanciaKm,
-      fechasEstimadas: {
-        inicio: data.fecha_estimada_inicio || "",
-        fin: data.fecha_estimada_fin || "",
-        entrega: data.fecha_estimada_entrega || "",
-      },
-    }));
+    setForm((prev) => {
+      const duracion = data.duracion_minutos ?? null;
+      return {
+        ...prev,
+        advertenciaEstimacion: "",
+        distanciaKm:
+          data.distancia_km != null ? String(data.distancia_km) : prev.distanciaKm,
+        duracionMinutos: duracion,
+        eta:
+          duracion != null && prev.fechaInicio
+            ? calcularEtaDesdeFechaInicio(prev.fechaInicio, duracion)
+            : prev.eta,
+        fechasEstimadas: {
+          inicio: data.fecha_estimada_inicio || "",
+          fin: data.fecha_estimada_fin || "",
+          entrega: data.fecha_estimada_entrega || "",
+        },
+      };
+    });
   };
 
   const calcularDistanciaYFechasRuta = async (ruta) => {
@@ -644,7 +794,6 @@ export default function RutasActivas() {
       ["origen", form.origen],
       ["destino", form.destino],
       ["fechaInicio", form.fechaInicio],
-      ["eta", form.eta],
       ["bultosDespachos", form.bultosDespachos],
       ["distanciaKm", form.distanciaKm],
       ["fechaInicioEstimado", form.fechasEstimadas.inicio],
@@ -772,6 +921,7 @@ export default function RutasActivas() {
       destino: "",
       fechaInicio: "",
       eta: "",
+      duracionMinutos: null,
       distanciaKm: "",
       fechasEstimadas: { ...FECHAS_VACIAS },
       advertenciaEstimacion: "",
@@ -1185,13 +1335,14 @@ export default function RutasActivas() {
                 {renderErrorFormulario("fechaInicio")}
               </div>
               <div className="lt-field-group">
-                <label className="lt-label" htmlFor="ruta-eta">ETA *</label>
+                <label className="lt-label" htmlFor="ruta-eta">ETA (Tiempo Estimado de Llegada) *</label>
                 <input
                   id="ruta-eta"
                   className="lt-input"
                   type="datetime-local"
                   value={form.eta}
-                  onChange={(e) => actualizarCampo("eta", e.target.value)}
+                  readOnly
+                  placeholder="Se calcula desde fecha inicio + duración"
                 />
                 {renderErrorFormulario("eta")}
               </div>
@@ -1210,25 +1361,9 @@ export default function RutasActivas() {
                 {renderErrorFormulario("bultosDespachos")}
               </div>
               <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
-                <label className="lt-label" htmlFor="ruta-distancia">Distancia *</label>
-                <p className="lt-module-card__subtitle" style={{ marginTop: 0, marginBottom: 8 }}>
-                  {AYUDA_DISTANCIA_VIAL}
-                </p>
-                <input
-                  id="ruta-distancia"
-                  className="lt-input"
-                  type="text"
-                  inputMode="decimal"
-                  value={form.distanciaKm}
-                  onChange={(e) => actualizarCampo("distanciaKm", e.target.value)}
-                  placeholder="Vacío = calcular por carretera con origen y destino"
-                />
-                {renderErrorFormulario("distanciaKm")}
-              </div>
-              <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
                 <div className="lt-form-actions" style={{ marginTop: 0, flexWrap: "wrap" }}>
                   <span className="lt-module-card__title" style={{ marginBottom: 0, fontSize: 13 }}>
-                    Fechas estimadas de entrega
+                    Distancia y Fechas estimadas de entrega
                   </span>
                   <button
                     type="button"
@@ -1240,6 +1375,22 @@ export default function RutasActivas() {
                       ? "Calculando…"
                       : "Calcular distancia y fechas"}
                   </button>
+                </div>
+                <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
+                  <label className="lt-label" htmlFor="ruta-distancia">Distancia *</label>
+                  <p className="lt-module-card__subtitle" style={{ marginTop: 0, marginBottom: 8 }}>
+                    {AYUDA_DISTANCIA_VIAL}
+                  </p>
+                  <input
+                    id="ruta-distancia"
+                    className="lt-input"
+                    type="text"
+                    inputMode="decimal"
+                    value={form.distanciaKm}
+                    onChange={(e) => actualizarCampo("distanciaKm", e.target.value)}
+                    placeholder="Vacío = calcular por carretera con origen y destino"
+                  />
+                  {renderErrorFormulario("distanciaKm")}
                 </div>
                 {form.advertenciaEstimacion && (
                   <div className="lt-alert-banner lt-alert-banner--warning" role="alert" style={{ marginTop: 10 }}>
@@ -1253,8 +1404,8 @@ export default function RutasActivas() {
                       id="ruta-fecha-est-inicio"
                       type="date"
                       className="lt-input"
+                      readOnly
                       value={form.fechasEstimadas.inicio}
-                      onChange={(e) => actualizarFechaForm("inicio", e.target.value)}
                     />
                     {renderErrorFormulario("fechaInicioEstimado")}
                   </div>
@@ -1264,8 +1415,8 @@ export default function RutasActivas() {
                       id="ruta-fecha-est-fin"
                       type="date"
                       className="lt-input"
+                      readOnly
                       value={form.fechasEstimadas.fin}
-                      onChange={(e) => actualizarFechaForm("fin", e.target.value)}
                     />
                     {renderErrorFormulario("finRangoEstimado")}
                   </div>
@@ -1275,8 +1426,8 @@ export default function RutasActivas() {
                       id="ruta-fecha-est-entrega"
                       type="date"
                       className="lt-input"
+                      readOnly
                       value={form.fechasEstimadas.entrega}
-                      onChange={(e) => actualizarFechaForm("entrega", e.target.value)}
                     />
                     {renderErrorFormulario("diaEstimadoEntrega")}
                   </div>
