@@ -40,7 +40,7 @@ ALTER TABLE public.bultos ADD CONSTRAINT bultos_tamaño_check
   CHECK (tamaño IN ('XS', 'S', 'M', 'L', 'XL', 'MAXIMO'));
 
 -- 4) ELIMINACIÓN DE MATRIZ DE TARIFAS (Lógica trasladada al Frontend)
-DROP TABLE IF EXISTS public.tarifas_matriz;
+-- DROP TABLE IF EXISTS public.tarifas_matriz; -- ponytail: commented out to preserve existing tariff functionality
 
 -- 5) TRIGGER: LÍMITE DE 96 SLOTS POR RUTA
 CREATE OR REPLACE FUNCTION public.fn_validar_capacidad_slots()

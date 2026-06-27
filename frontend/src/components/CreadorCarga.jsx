@@ -399,7 +399,6 @@ export default function CreadorCarga() {
   // ----------------------------------------------------
   // SIMULADOR DE RENTABILIDAD Y COSTOS OPERATIVOS
   // ----------------------------------------------------
-  const distKmMax = paradas.length > 0 ? paradas[paradas.length - 1].distanceKm : 0;
 
   const costoCombustibleCalculado = distanciaLogisticaKm > 0 && rendimientoCamion > 0
     ? Math.round((distanciaLogisticaKm / rendimientoCamion) * precioDiesel)

@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import PortalEvidenciasModal from "./PortalEvidenciasModal";
 import ComprobanteModal from "./ComprobanteModal";
 import PortalPagos from "./PortalPagos";

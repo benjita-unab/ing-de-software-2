@@ -1,8 +1,7 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { CircleHelp, Eye, Search, UserPlus } from "lucide-react";
 import {
   displayNombreConductor,
-  filtrarYOrdenarConductores,
   NOMBRE_API_AYUDA,
   ORDEN_CHOFERES,
 } from "../lib/conductorUtils";

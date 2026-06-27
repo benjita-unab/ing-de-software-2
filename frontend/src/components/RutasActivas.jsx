@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 import { apiFetch } from "../lib/apiClient";
