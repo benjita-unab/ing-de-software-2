@@ -4,6 +4,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -14,7 +15,6 @@ import {
   type AccessKind,
   type AuthSession,
 } from '@/src/services/authSession';
-import { getDriverLicenseStatus } from '@/src/services/api';
 
 export interface AuthContextValue {
   session: AuthSession | null;
@@ -36,22 +36,71 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [licenseStatus, setLicenseStatus] = useState<any | null>(null);
+  const [isFetchingLicense, setIsFetchingLicense] = useState(false);
+  const sessionRef = useRef<AuthSession | null>(null);
+  const isFetchingLicenseRef = useRef(false);
 
-  const refreshLicenseStatus = useCallback(async (currentSession = session) => {
-    if (currentSession?.accessKind === 'chofer' && currentSession?.conductorId) {
-      try {
-        const status = await getDriverLicenseStatus(currentSession.conductorId, currentSession.accessToken);
-        setLicenseStatus(status);
-      } catch (err) {
-        console.error('Error fetching license status:', err);
-      }
-    } else {
-      setLicenseStatus(null);
-    }
+  useEffect(() => {
+    sessionRef.current = session;
   }, [session]);
+
+  const refreshLicenseStatus = useCallback(async (currentSession?: AuthSession | null) => {
+    const activeSession = currentSession ?? sessionRef.current;
+
+    if (!(activeSession?.accessKind === 'chofer' && activeSession?.conductorId)) {
+      setLicenseStatus(null);
+      return;
+    }
+
+    if (isFetchingLicenseRef.current) {
+      return;
+    }
+
+    isFetchingLicenseRef.current = true;
+    setIsFetchingLicense(true);
+
+    try {
+      const baseUrl = process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, '') || '';
+      const url = `${baseUrl}/api/conductores/${activeSession.conductorId}/license-status`;
+
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${activeSession.accessToken}`,
+        },
+      });
+
+      const rawText = await response.text();
+      let data: any = {};
+
+      if (rawText) {
+        try {
+          data = JSON.parse(rawText);
+        } catch (parseErr) {
+          console.error('Error parsing license status JSON:', parseErr);
+          data = {};
+        }
+      }
+
+      if (!response.ok) {
+        const message =
+          (typeof data?.error === 'string' && data.error) ||
+          (typeof data?.message === 'string' && data.message) ||
+          'No se pudo obtener el estado de la licencia';
+        throw new Error(message);
+      }
+
+      setLicenseStatus(data);
+    } catch (err) {
+      console.error('Error fetching license status:', err);
+    } finally {
+      isFetchingLicenseRef.current = false;
+      setIsFetchingLicense(false);
+    }
+  }, []);
 
   const refreshSession = useCallback(async () => {
     const stored = await getStoredSession();
+    sessionRef.current = stored;
     setSession(stored);
     if (stored) await refreshLicenseStatus(stored);
   }, [refreshLicenseStatus]);
@@ -71,15 +120,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         expectedRole,
       );
       setSession(next);
+      sessionRef.current = next;
       await refreshLicenseStatus(next);
       return next;
     },
-    [],
+    [refreshLicenseStatus],
   );
 
   /** Borra token y accessKind en AsyncStorage; la UI debe redirigir a /auth. */
   const signOut = useCallback(async () => {
     await clearSession();
+    sessionRef.current = null;
     setSession(null);
     setLicenseStatus(null);
   }, []);
