@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { CircleHelp, Eye, Search } from "lucide-react";
+﻿import React, { useEffect, useMemo, useState } from "react";
+import { CircleHelp, Eye, Search, UserPlus } from "lucide-react";
 import {
   displayNombreConductor,
   filtrarYOrdenarConductores,
@@ -11,12 +11,7 @@ import Badge from "./ui/Badge";
 import DetalleConductorModal from "./DetalleConductorModal";
 import CrearChoferModal from "./CrearChoferModal";
 import EmptyState from "./ui/EmptyState";
-<<<<<<< HEAD
-import { UserPlus } from "lucide-react";
-
-=======
 import Pagination from "./ui/Pagination";
->>>>>>> origin/main
 function licenciaBadgeFromDias(diasRestantes) {
   if (diasRestantes < 0) {
     return { texto: "Vencida", variant: "danger" };
@@ -37,7 +32,7 @@ function licenciaBadgeFromStatus(licenseStatus) {
     return { texto: dias != null ? `Por vencer (${dias}d)` : "Por vencer", variant: "warning" };
   }
   if (status === "PENDING") {
-    return { texto: "En revisión", variant: "warning" };
+    return { texto: "En revisi├│n", variant: "warning" };
   }
   if (status === "REJECTED") {
     return { texto: "Rechazada", variant: "danger" };
@@ -52,7 +47,7 @@ function licenciaBadgeFromStatus(licenseStatus) {
 }
 function resolveDisponibilidad(conductor) {
   if (conductor.disponibilidad == null || conductor.disponibilidad === "") {
-    return "—";
+    return "ÔÇö";
   }
   return String(conductor.disponibilidad);
 }
@@ -64,8 +59,8 @@ function tieneDisponibilidad(conductores) {
 const OPCIONES_ORDEN = [
   { value: ORDEN_CHOFERES.NOMBRE_ASC, label: "Nombre A-Z" },
   { value: ORDEN_CHOFERES.NOMBRE_DESC, label: "Nombre Z-A" },
-  { value: ORDEN_CHOFERES.VENCIMIENTO_PROXIMO, label: "Vencimiento más próximo" },
-  { value: ORDEN_CHOFERES.VENCIMIENTO_LEJANO, label: "Vencimiento más lejano" },
+  { value: ORDEN_CHOFERES.VENCIMIENTO_PROXIMO, label: "Vencimiento m├ís pr├│ximo" },
+  { value: ORDEN_CHOFERES.VENCIMIENTO_LEJANO, label: "Vencimiento m├ís lejano" },
 ];
 export default function ChoferesFlota({ configPagosVersion = 0 }) {
     const [conductores, setConductores] = useState([]);
@@ -75,12 +70,10 @@ export default function ChoferesFlota({ configPagosVersion = 0 }) {
   const [busqueda, setBusqueda] = useState("");
   const [debouncedBusqueda, setDebouncedBusqueda] = useState("");
   const [orden, setOrden] = useState(ORDEN_CHOFERES.NOMBRE_ASC);
-<<<<<<< HEAD
-  const [mostrarCrearModal, setMostrarCrearModal] = useState(false);
-=======
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [meta, setMeta] = useState(null);
+  const [mostrarCrearModal, setMostrarCrearModal] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedBusqueda(busqueda), 400);
@@ -90,7 +83,6 @@ export default function ChoferesFlota({ configPagosVersion = 0 }) {
   useEffect(() => {
     setPage(1);
   }, [debouncedBusqueda, orden, limit]);
->>>>>>> origin/main
 
   useEffect(() => {
     let cancelled = false;
@@ -142,28 +134,21 @@ export default function ChoferesFlota({ configPagosVersion = 0 }) {
     <>
       <div className="lt-card lt-module-card">
         <div className="lt-card__body">
-<<<<<<< HEAD
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <h3 className="lt-module-card__title" style={{ margin: 0 }}>
-              Choferes activos ({conductoresVisibles.length}
+              Choferes activos ({meta?.total_items ?? conductores.length}
               {busqueda.trim() ? ` de ${conductores.length}` : ""})
             </h3>
             <button
+              type="button"
               className="lt-btn lt-btn--primary"
               onClick={() => setMostrarCrearModal(true)}
-              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+              style={{ display: "flex", alignItems: "center", gap: 6 }}
             >
               <UserPlus size={16} />
               Nuevo Chofer
             </button>
           </div>
-
-=======
-          <h3 className="lt-module-card__title">
-            Choferes activos ({(meta?.total_items ?? conductores.length)}
-            {busqueda.trim() ? ` de ${conductores.length}` : ""})
-          </h3>
->>>>>>> origin/main
           <div className="lt-toolbar" style={{ marginBottom: 16 }}>
             <div className="lt-search-wrap" style={{ flex: 1, maxWidth: 420 }}>
               <Search size={14} className="lt-search-icon" />
@@ -216,7 +201,7 @@ export default function ChoferesFlota({ configPagosVersion = 0 }) {
           ) : (meta?.total_items ?? conductores.length) === 0 ? (
             <EmptyState
               title="Sin resultados"
-              description="No hay choferes que coincidan con la búsqueda."
+              description="No hay choferes que coincidan con la b├║squeda."
             />
           ) : (
             <div className="lt-table-wrap">
@@ -254,17 +239,17 @@ export default function ChoferesFlota({ configPagosVersion = 0 }) {
                       badge = licenciaBadgeFromDias(diasRestantes);
                     }
                     if (!badge) {
-                      badge = { texto: "—", variant: "muted" };
+                      badge = { texto: "ÔÇö", variant: "muted" };
                     }
                     return (
                       <tr key={conductor.id}>
                         <td title={NOMBRE_API_AYUDA}>{displayNombreConductor(conductor)}</td>
-                        <td>{conductor.rut || "—"}</td>
-                        <td>{conductor.licencia_numero || "—"}</td>
+                        <td>{conductor.rut || "ÔÇö"}</td>
+                        <td>{conductor.licencia_numero || "ÔÇö"}</td>
                         <td>
                           {conductor.licencia_vencimiento
                             ? new Date(conductor.licencia_vencimiento).toLocaleDateString("es-CL")
-                            : "—"}
+                            : "ÔÇö"}
                         </td>
                         <td>
                           <Badge variant={badge.variant} showDot={false}>
@@ -315,9 +300,9 @@ export default function ChoferesFlota({ configPagosVersion = 0 }) {
       {mostrarCrearModal && (
         <CrearChoferModal
           onClose={() => setMostrarCrearModal(false)}
-          onCreated={(nuevoConductor) => {
-            setMensaje({ tipo: "success", texto: `Chofer ${nuevoConductor.nombre} creado con éxito.` });
-            handleConductorActualizado(); // Recargar lista
+          onCreated={() => {
+            setMensaje({ tipo: "success", texto: "Chofer creado con éxito." });
+            handleConductorActualizado();
           }}
         />
       )}

@@ -1,3 +1,11 @@
+export type BultoInputDto = {
+  alto_cm?: number;
+  ancho_cm?: number;
+  largo_cm?: number;
+  peso_kg?: number;
+  categoria?: string;
+};
+
 /** Parada intermedia de un pedido/ruta operativa (HU-58). */
 export type ParadaRutaDto = {
   direccion: string;
@@ -24,6 +32,11 @@ export type CreateRutaDto = {
   fecha_estimada_fin?: string | null;
   fecha_estimada_entrega?: string | null;
   bultos_despachados?: number | string | null;
+  bultos_detalle?: BultoInputDto[];
+  costo_tac_peajes_clp?: number | string | null;
+  pago_conductor_base_clp?: number | string | null;
+  is_tarifa_manual?: boolean | null;
+  tarifa_base_total?: number | string | null;
   /** HU-58: plantilla de ruta reutilizable seleccionada. */
   ruta_plantilla_id?: string | null;
   /** HU-58: paradas del pedido (copia de plantilla + temporales). */

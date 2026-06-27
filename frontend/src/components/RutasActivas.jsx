@@ -1,10 +1,6 @@
-/* eslint-disable no-unused-vars */
-import React, { useCallback, useEffect, useRef, useState } from "react";
-<<<<<<< HEAD
-import { createClient } from '@supabase/supabase-js';
-=======
+﻿import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Plus } from "lucide-react";
->>>>>>> origin/main
+import { createClient } from "@supabase/supabase-js";
 import { apiFetch } from "../lib/apiClient";
 import ComprobanteModal from "./ComprobanteModal";
 import { getPlantillasPorCliente } from "../lib/clientesService";
@@ -30,14 +26,12 @@ import ModalRecurrencia from "./ModalRecurrencia";
 import Badge from "./ui/Badge";
 import Spinner from "./ui/Spinner";
 
-<<<<<<< HEAD
+const MODO_PLANTILLA = "plantilla";
+const MODO_MANUAL = "manual";
+
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || "";
 const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY || "";
 const supabase = createClient(supabaseUrl, supabaseKey);
-=======
-const MODO_PLANTILLA = "plantilla";
-const MODO_MANUAL = "manual";
->>>>>>> origin/main
 
 function mensajeFilaClass(tipo) {
   if (tipo === "ok") return "lt-alert-banner lt-alert-banner--success";
@@ -60,9 +54,9 @@ const AYUDA_DISTANCIA_VIAL =
   "La distancia se calcula por carretera usando origen y destino. Puede ajustarse manualmente por criterio operativo.";
 
 const ADVERTENCIA_DISTANCIA_VIAL =
-  "No se pudo calcular la distancia vial automáticamente. Ingrese la distancia manualmente o revise origen/destino.";
+  "No se pudo calcular la distancia vial autom├íticamente. Ingrese la distancia manualmente o revise origen/destino.";
 
-/** datetime-local → ISO (UTC) para el backend */
+/** datetime-local ÔåÆ ISO (UTC) para el backend */
 function localDatetimeToIso(localVal) {
   if (!localVal || !String(localVal).trim()) return null;
   const d = new Date(localVal);
@@ -127,7 +121,7 @@ function calcularFechasEstimadasDesdeEta(eta) {
 }
 
 function fmtDate(iso) {
-  if (!iso) return "—";
+  if (!iso) return "ÔÇö";
   try {
     return new Date(iso).toLocaleString("es-CL", {
       day: "2-digit",
@@ -191,7 +185,7 @@ function mensajeEstimacionOk(data) {
   if (data?.distancia_origen === "manual") {
     return `Fechas recalculadas con distancia manual (${km} km, ref. ${ref}). Revise y guarde.`;
   }
-  return `Estimación lista (${km} km, ref. ${ref}). Revise y guarde.`;
+  return `Estimaci├│n lista (${km} km, ref. ${ref}). Revise y guarde.`;
 }
 
 function estadoBadgeVariant(estado) {
@@ -204,7 +198,7 @@ function estadoBadgeVariant(estado) {
 }
 
 function estadoLabel(estado) {
-  if (!estado) return "—";
+  if (!estado) return "ÔÇö";
   return String(estado).replace(/_/g, " ");
 }
 
@@ -226,10 +220,8 @@ export default function RutasActivas() {
   const [notifyingId, setNotifyingId] = useState(null);
   const [calculandoEstimacion, setCalculandoEstimacion] = useState(false);
   const [calculandoEstimacionRutaId, setCalculandoEstimacionRutaId] = useState(null);
-  const [verBultosRutaId, setVerBultosRutaId] = useState(null);
-  
-  const [showDetalleModal, setShowDetalleModal] = useState(false);
-  const [rutaDetalle, setRutaDetalle] = useState(null);
+  const [showRentabilidadModal, setShowRentabilidadModal] = useState(false);
+  const [rutaRentabilidad, setRutaRentabilidad] = useState(null);
   const [comprobanteRutaId, setComprobanteRutaId] = useState(null);
   const [plantillasCliente, setPlantillasCliente] = useState([]);
   const [plantillaSeleccionadaId, setPlantillaSeleccionadaId] = useState("");
@@ -361,21 +353,25 @@ export default function RutasActivas() {
   }, [cargarRutas, cargarListas]);
 
   const handleDelete = async (id) => {
-    if (window.confirm("¿Estás seguro de que deseas eliminar esta ruta? Esta acción no se puede deshacer.")) {
-      try {
-        await supabase.from('historial_estados').delete().eq('ruta_id', id);
-        await supabase.from('bultos').delete().eq('ruta_id', id);
-        await supabase.from('cargas').delete().eq('ruta_id', id);
-        
-        const { error } = await supabase.from('rutas').delete().eq('id', id);
-        if (error) {
-          alert("Error al eliminar ruta: " + error.message);
-        } else {
-          setRutas(prev => prev.filter(r => r.id !== id));
-        }
-      } catch (err) {
-        alert("Error al procesar eliminación: " + err.message);
+    if (
+      !window.confirm(
+        "¿Estás seguro de que deseas eliminar esta ruta? Esta acción no se puede deshacer.",
+      )
+    ) {
+      return;
+    }
+    try {
+      await supabase.from("historial_estados").delete().eq("ruta_id", id);
+      await supabase.from("bultos").delete().eq("ruta_id", id);
+      await supabase.from("cargas").delete().eq("ruta_id", id);
+      const { error } = await supabase.from("rutas").delete().eq("id", id);
+      if (error) {
+        alert(`Error al eliminar ruta: ${error.message}`);
+      } else {
+        setRutas((prev) => prev.filter((r) => r.id !== id));
       }
+    } catch (err) {
+      alert(`Error al procesar eliminación: ${err.message}`);
     }
   };
 
@@ -852,7 +848,7 @@ export default function RutasActivas() {
       String(form.bultosDespachos ?? "").trim() &&
       (Number.isNaN(bultosDespachosValue) || !Number.isInteger(bultosDespachosValue) || bultosDespachosValue < 1)
     ) {
-      nuevosErrores.bultosDespachos = "Cantidad de paquetes inválida";
+      nuevosErrores.bultosDespachos = "Cantidad de bultos inv├ílida";
     }
 
     const distanciaOriginal = String(form.distanciaKm ?? "").trim();
@@ -863,7 +859,7 @@ export default function RutasActivas() {
       : Number(distanciaNumero.toFixed(2));
 
     if (Number.isNaN(distanciaNormalizada)) {
-      nuevosErrores.distanciaKm = "Distancia inválida";
+      nuevosErrores.distanciaKm = "Distancia inv├ílida";
     }
 
     if (guardarComoPlantilla && modoCreacion === MODO_MANUAL && !nombrePlantilla.trim() && !form.nombreRuta.trim()) {
@@ -932,7 +928,7 @@ export default function RutasActivas() {
 
     const pagoInfo = resultado.data?.pago;
     const textoOk = pagoInfo
-      ? `Pedido creado correctamente (ID: ${resultado.data?.id?.slice(0, 8) || "—"}…). Pago pendiente generado.`
+      ? `Pedido creado correctamente (ID: ${resultado.data?.id?.slice(0, 8) || "ÔÇö"}ÔÇª). Pago pendiente generado.`
       : "Pedido creado correctamente.";
     setMensaje({ tipo: "ok", texto: textoOk });
 
@@ -1042,7 +1038,7 @@ export default function RutasActivas() {
     if (!res.success) {
       setMensajeRuta(rutaId, "notificar", {
         tipo: "error",
-        texto: res.error || "No se pudo enviar la notificación.",
+        texto: res.error || "No se pudo enviar la notificaci├│n.",
       });
       return;
     }
@@ -1053,7 +1049,7 @@ export default function RutasActivas() {
       tipo: "ok",
       texto:
         (res.data?.message ||
-          "Notificación de fecha estimada enviada correctamente.") + refResend,
+          "Notificaci├│n de fecha estimada enviada correctamente.") + refResend,
     });
     await cargarRutas();
   };
@@ -1091,7 +1087,7 @@ export default function RutasActivas() {
 
   const formatCurrencyClp = (value) => {
     const n = Number(value);
-    if (!Number.isFinite(n)) return "—";
+    if (!Number.isFinite(n)) return "ÔÇö";
     return n.toLocaleString("es-CL", {
       style: "currency",
       currency: "CLP",
@@ -1131,7 +1127,7 @@ export default function RutasActivas() {
       { label: "Combustible", value: find(["costo_combustible", "combustible", "monto_combustible"]) },
       { label: "Peajes", value: find(["costo_peajes", "peajes", "monto_peajes"]) },
       { label: "Espera", value: find(["costo_espera", "espera", "monto_espera"]) },
-      { label: "Viáticos", value: find(["viaticos", "costo_viaticos", "monto_viaticos"]) },
+      { label: "Vi├íticos", value: find(["viaticos", "costo_viaticos", "monto_viaticos"]) },
       { label: "Mantenimiento", value: find(["mantenimiento", "costo_mantenimiento", "monto_mantenimiento"]) },
       { label: "Otros", value: find(["otros", "costo_otros", "monto_otros"]) },
     ];
@@ -1162,7 +1158,11 @@ export default function RutasActivas() {
 
   return (
     <div className="lt-module-inner">
-
+      <div className="lt-card lt-module-card">
+        <h3 className="lt-module-card__title">Gesti├│n de rutas</h3>
+        <p className="lt-module-card__subtitle">
+          Cre├í y consult├í rutas operativas. El seguimiento y las evidencias siguen siendo responsabilidad de LogiTrack (app m├│vil y trazabilidad).
+        </p>
 
         {mensaje?.tipo === "ok" && (
           <div className="lt-alert-banner lt-alert-banner--success" role="status">
@@ -1174,8 +1174,6 @@ export default function RutasActivas() {
             {mensaje.texto}
           </div>
         )}
-<<<<<<< HEAD
-=======
 
         <div className="lt-form-actions" style={{ marginTop: 0 }}>
           <button
@@ -1206,7 +1204,7 @@ export default function RutasActivas() {
             </div>
 
             <div className="lt-field-group" style={{ gridColumn: "1 / -1", marginBottom: 16 }}>
-              <span className="lt-label">Modo de creación</span>
+              <span className="lt-label">Modo de creaci├│n</span>
               <div className="lt-form-actions" style={{ marginTop: 8, gap: 8 }}>
                 <button
                   type="button"
@@ -1233,7 +1231,7 @@ export default function RutasActivas() {
                   className="lt-input"
                   value={form.nombreRuta}
                   onChange={(e) => actualizarCampo("nombreRuta", e.target.value)}
-                  placeholder="Ej: Ruta Norte #2 (se autogenerará si se deja vacío)"
+                  placeholder="Ej: Ruta Norte #2 (se autogenerar├í si se deja vac├¡o)"
                 />
               </div>
               <div className="lt-field-group">
@@ -1246,7 +1244,7 @@ export default function RutasActivas() {
                   onChange={(e) => actualizarCampo("clienteId", e.target.value)}
                   disabled={listsLoading}
                 >
-                  <option value="">Seleccionar…</option>
+                  <option value="">SeleccionarÔÇª</option>
                   {clientes.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.nombre || c.id}
@@ -1262,7 +1260,7 @@ export default function RutasActivas() {
                     Ruta reutilizable *
                   </label>
                   {cargandoRutasReutilizables ? (
-                    <p className="lt-card__subtitle">Cargando rutas disponibles…</p>
+                    <p className="lt-card__subtitle">Cargando rutas disponiblesÔÇª</p>
                   ) : rutasReutilizables.length === 0 ? (
                     <p className="lt-card__subtitle">
                       No hay rutas reutilizables activas
@@ -1275,10 +1273,10 @@ export default function RutasActivas() {
                       value={plantillaSeleccionadaId}
                       onChange={(e) => aplicarPlantilla(e.target.value)}
                     >
-                      <option value="">Seleccionar ruta…</option>
+                      <option value="">Seleccionar rutaÔÇª</option>
                       {rutasReutilizables.map((ruta) => (
                         <option key={ruta.id} value={ruta.id}>
-                          {ruta.nombre} — {ruta.origen} → {ruta.destino}
+                          {ruta.nombre} ÔÇö {ruta.origen} ÔåÆ {ruta.destino}
                         </option>
                       ))}
                     </select>
@@ -1293,7 +1291,7 @@ export default function RutasActivas() {
                     Precargar desde plantilla del cliente (opcional)
                   </label>
                   {cargandoPlantillas ? (
-                    <p className="lt-card__subtitle">Buscando plantillas adjudicadas…</p>
+                    <p className="lt-card__subtitle">Buscando plantillas adjudicadasÔÇª</p>
                   ) : (
                     <select
                       id="ruta-plantilla-cliente"
@@ -1301,10 +1299,10 @@ export default function RutasActivas() {
                       value={plantillaSeleccionadaId}
                       onChange={(e) => aplicarPlantilla(e.target.value)}
                     >
-                      <option value="">Seleccionar plantilla para precargar datos…</option>
+                      <option value="">Seleccionar plantilla para precargar datosÔÇª</option>
                       {plantillasCliente.map((plantilla) => (
                         <option key={plantilla.id} value={plantilla.id}>
-                          {plantilla.nombre} — {plantilla.origen} → {plantilla.destino}
+                          {plantilla.nombre} ÔÇö {plantilla.origen} ÔåÆ {plantilla.destino}
                         </option>
                       ))}
                     </select>
@@ -1322,7 +1320,7 @@ export default function RutasActivas() {
                   onChange={(e) => actualizarCampo("conductorId", e.target.value)}
                   disabled={listsLoading}
                 >
-                  <option value="">Seleccionar conductor…</option>
+                  <option value="">Seleccionar conductorÔÇª</option>
                   {conductores.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.rut || c.id}
@@ -1332,7 +1330,7 @@ export default function RutasActivas() {
                 {renderErrorFormulario("conductorId")}
               </div>
               <div className="lt-field-group">
-                <label className="lt-label" htmlFor="ruta-camion">Camión *</label>
+                <label className="lt-label" htmlFor="ruta-camion">Cami├│n *</label>
                 <select
                   id="ruta-camion"
                   className="lt-select"
@@ -1341,7 +1339,7 @@ export default function RutasActivas() {
                   onChange={(e) => actualizarCampo("camionId", e.target.value)}
                   disabled={listsLoading}
                 >
-                  <option value="">Seleccionar camión…</option>
+                  <option value="">Seleccionar cami├│nÔÇª</option>
                   {camiones.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.patente || c.id} {c.estado ? `(${c.estado})` : ""}
@@ -1366,7 +1364,7 @@ export default function RutasActivas() {
                   readOnly={modoCreacion === MODO_PLANTILLA && !!form.plantillaId}
                   value={form.origen}
                   onChange={(e) => actualizarCampo("origen", e.target.value)}
-                  placeholder="Escribe y selecciona una dirección sugerida…"
+                  placeholder="Escribe y selecciona una direcci├│n sugeridaÔÇª"
                 />
                 {renderErrorFormulario("origen")}
               </div>
@@ -1381,7 +1379,7 @@ export default function RutasActivas() {
                   readOnly={modoCreacion === MODO_PLANTILLA && !!form.plantillaId}
                   value={form.destino}
                   onChange={(e) => actualizarCampo("destino", e.target.value)}
-                  placeholder="Escribe y selecciona una dirección sugerida…"
+                  placeholder="Escribe y selecciona una direcci├│n sugeridaÔÇª"
                 />
                 {renderErrorFormulario("destino")}
               </div>
@@ -1445,7 +1443,7 @@ export default function RutasActivas() {
                       style={{ marginTop: 8 }}
                       value={nombrePlantilla}
                       onChange={(e) => setNombrePlantilla(e.target.value)}
-                      placeholder="Nombre de la nueva ruta (opcional si completó nombre de ruta)"
+                      placeholder="Nombre de la nueva ruta (opcional si complet├│ nombre de ruta)"
                     />
                   )}
                   {renderErrorFormulario("nombrePlantilla")}
@@ -1482,7 +1480,7 @@ export default function RutasActivas() {
                   type="datetime-local"
                   value={form.eta}
                   readOnly
-                  placeholder="Se calcula desde fecha inicio + duración"
+                  placeholder="Se calcula desde fecha inicio + duraci├│n"
                 />
                 {renderErrorFormulario("eta")}
               </div>
@@ -1512,7 +1510,7 @@ export default function RutasActivas() {
                     onClick={calcularDistanciaYFechasForm}
                   >
                     {calculandoEstimacion
-                      ? "Calculando…"
+                      ? "CalculandoÔÇª"
                       : "Calcular distancia y fechas"}
                   </button>
                 </div>
@@ -1528,7 +1526,7 @@ export default function RutasActivas() {
                     inputMode="decimal"
                     value={form.distanciaKm}
                     onChange={(e) => actualizarCampo("distanciaKm", e.target.value)}
-                    placeholder="Vacío = calcular por carretera con origen y destino"
+                    placeholder="Vac├¡o = calcular por carretera con origen y destino"
                   />
                   {renderErrorFormulario("distanciaKm")}
                 </div>
@@ -1561,7 +1559,7 @@ export default function RutasActivas() {
                     {renderErrorFormulario("finRangoEstimado")}
                   </div>
                   <div className="lt-field-group">
-                    <label className="lt-label" htmlFor="ruta-fecha-est-entrega">Día estimado de entrega *</label>
+                    <label className="lt-label" htmlFor="ruta-fecha-est-entrega">D├¡a estimado de entrega *</label>
                     <input
                       id="ruta-fecha-est-entrega"
                       type="date"
@@ -1576,20 +1574,19 @@ export default function RutasActivas() {
             </div>
             <div className="lt-form-actions">
               <button type="submit" className="lt-btn lt-btn--primary" disabled={saving || listsLoading}>
-                {saving ? "Guardando…" : "Crear pedido"}
+                {saving ? "GuardandoÔÇª" : "Crear pedido"}
               </button>
             </div>
           </form>
         )}
       </div>
 
->>>>>>> origin/main
       <div className="lt-card lt-module-card">
-        <h3 className="lt-module-card__title" style={{ textAlign: 'center', padding: '10px', margin: '0' }}>Rutas registradas</h3>
+        <h3 className="lt-module-card__title">Rutas registradas</h3>
         {loading ? (
-          <Spinner message="Cargando rutas…" />
+          <Spinner message="Cargando rutasÔÇª" />
         ) : rutas.length === 0 ? (
-          <div className="lt-empty">No hay rutas para mostrar. Las rutas creadas aparecerán aquí.</div>
+          <div className="lt-empty">No hay rutas para mostrar. Cree una con el bot├│n superior.</div>
         ) : (
           <div className="lt-table-wrap">
             <table className="lt-table">
@@ -1600,19 +1597,14 @@ export default function RutasActivas() {
                   <th>Destino</th>
                   <th>Cliente</th>
                   <th>Estado</th>
-<<<<<<< HEAD
                   <th>Pago (CLP)</th>
                   <th>Estado de Pago</th>
                   <th>Conductor / Camión</th>
                   <th>ETA</th>
                   <th>Fechas estimadas</th>
-=======
-                  <th>ETA</th>
                   <th>Consolidación</th>
                   <th>Costos</th>
->>>>>>> origin/main
                   <th>Acciones</th>
-                  <th>Anomalías</th>
                 </tr>
               </thead>
               <tbody>
@@ -1622,74 +1614,137 @@ export default function RutasActivas() {
                     <td>
                       <strong>{getNombreRuta(ruta)}</strong>
                     </td>
-                    <td>{ruta.origen || "—"}</td>
-                    <td>{ruta.destino || "—"}</td>
-                    <td>{ruta.clientes?.nombre || "—"}</td>
+                    <td>{ruta.origen || "ÔÇö"}</td>
+                    <td>{ruta.destino || "ÔÇö"}</td>
+                    <td>{ruta.clientes?.nombre || "ÔÇö"}</td>
                     <td>
                       <Badge variant={estadoBadgeVariant(ruta.estado)}>
                         {estadoLabel(ruta.estado)}
                       </Badge>
                     </td>
-<<<<<<< HEAD
                     <td>
                       {ruta.total_pagar != null || ruta.tarifa_base_total != null ? (
                         <div style={{ fontSize: "12px", lineHeight: "1.4" }}>
                           {(() => {
-                            const totalCobradoBruto = Math.round(Number(ruta.costo_servicio) > 0 
-                              ? Number(ruta.costo_servicio) 
-                              : Number(ruta.total_pagar || ruta.tarifa_base_total || 0));
-                            
-                            // Extraer el Neto para la ganancia real de la empresa (sin IVA)
-                            const totalCobradoNeto = Math.round(Number(ruta.tarifa_base_total || 0) > 0 
-                              ? Number(ruta.tarifa_base_total) 
-                              : (totalCobradoBruto / 1.19));
-
+                            const totalCobradoBruto = Math.round(
+                              Number(ruta.costo_servicio) > 0
+                                ? Number(ruta.costo_servicio)
+                                : Number(ruta.total_pagar || ruta.tarifa_base_total || 0),
+                            );
+                            const totalCobradoNeto = Math.round(
+                              Number(ruta.tarifa_base_total || 0) > 0
+                                ? Number(ruta.tarifa_base_total)
+                                : totalCobradoBruto / 1.19,
+                            );
                             let pagoConductor = Number(ruta.pago_conductor_base_clp || 0);
                             if (pagoConductor === 0) {
-                              const totalSlots = ruta.bultos?.reduce((acc, b) => acc + (Number(b.cuadrados_equivalentes) || 0), 0) || 1;
+                              const totalSlots =
+                                ruta.bultos?.reduce(
+                                  (acc, b) => acc + (Number(b.cuadrados_equivalentes) || 0),
+                                  0,
+                                ) || 1;
                               const distKm = Number(ruta.distancia_km || 0);
-                              pagoConductor = 5000 + 3000 + (totalSlots * 500) + (distKm * 2 * 150); // HU-37 approx fallback
+                              pagoConductor =
+                                5000 + 3000 + totalSlots * 500 + distKm * 2 * 150;
                             }
-
-                            const gastos = Math.round(Number(ruta.costo_combustible_calculado || 0) + Number(ruta.costo_tac_peajes_clp || 0) + pagoConductor);
+                            const gastos = Math.round(
+                              Number(ruta.costo_combustible_calculado || 0) +
+                                Number(ruta.costo_tac_peajes_clp || 0) +
+                                pagoConductor,
+                            );
                             const ganancia = Math.round(totalCobradoNeto - gastos);
                             return (
                               <>
-                                <div>Cobrado (Cliente): <strong>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(totalCobradoBruto)}</strong></div>
-                                <div>Gastos Op.: <span style={{ color: "#ef4444" }}>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(gastos)}</span></div>
-                                <div style={{ borderTop: "1px dashed rgba(255,255,255,0.15)", marginTop: 4, paddingTop: 4 }}>
-                                  Ganancia Neta (s/IVA): <strong style={{color: "#10b981"}}>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(ganancia)}</strong>
+                                <div>
+                                  Cobrado:{" "}
+                                  <strong>
+                                    {new Intl.NumberFormat("es-CL", {
+                                      style: "currency",
+                                      currency: "CLP",
+                                      maximumFractionDigits: 0,
+                                    }).format(totalCobradoBruto)}
+                                  </strong>
                                 </div>
-                                <button type="button" onClick={() => { setRutaDetalle({ ...ruta, totalCobradoBruto, totalCobradoNeto, gastos, ganancia, pagoConductor }); setShowDetalleModal(true); }} className="lt-btn lt-btn--secondary" style={{ padding: '4px 8px', fontSize: '11px', marginTop: '8px', width: '100%' }}>Ver Detalle</button>
+                                <div>
+                                  Ganancia neta:{" "}
+                                  <strong style={{ color: "#10b981" }}>
+                                    {new Intl.NumberFormat("es-CL", {
+                                      style: "currency",
+                                      currency: "CLP",
+                                      maximumFractionDigits: 0,
+                                    }).format(ganancia)}
+                                  </strong>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setRutaRentabilidad({
+                                      ...ruta,
+                                      totalCobradoBruto,
+                                      totalCobradoNeto,
+                                      gastos,
+                                      ganancia,
+                                      pagoConductor,
+                                    });
+                                    setShowRentabilidadModal(true);
+                                  }}
+                                  className="lt-btn lt-btn--secondary"
+                                  style={{
+                                    padding: "4px 8px",
+                                    fontSize: "11px",
+                                    marginTop: "8px",
+                                    width: "100%",
+                                  }}
+                                >
+                                  Ver detalle
+                                </button>
                               </>
                             );
                           })()}
                         </div>
                       ) : (
-                        <span className="lt-list-item__sub" style={{ opacity: 0.6 }}>No calculado</span>
+                        <span className="lt-list-item__sub" style={{ opacity: 0.6 }}>
+                          No calculado
+                        </span>
                       )}
                     </td>
                     <td>
-                      <span style={{
-                        display: 'inline-block',
-                        padding: '4px 8px',
-                        borderRadius: '4px',
-                        fontSize: '11px',
-                        fontWeight: 'bold',
-                        textTransform: 'uppercase',
-                        backgroundColor: ruta.estado_pago === 'pagado' ? '#10b981' : ruta.estado_pago === 'procesando' ? '#f59e0b' : ruta.estado_pago === 'fallido' ? '#ef4444' : '#64748b',
-                        color: '#fff'
-                      }}>
-                        {ruta.estado_pago || 'PENDIENTE'}
+                      <span
+                        style={{
+                          display: "inline-block",
+                          padding: "4px 8px",
+                          borderRadius: "4px",
+                          fontSize: "11px",
+                          fontWeight: "bold",
+                          textTransform: "uppercase",
+                          backgroundColor:
+                            ruta.estado_pago === "pagado"
+                              ? "#10b981"
+                              : ruta.estado_pago === "procesando"
+                                ? "#f59e0b"
+                                : ruta.estado_pago === "fallido"
+                                  ? "#ef4444"
+                                  : "#64748b",
+                          color: "#fff",
+                        }}
+                      >
+                        {ruta.estado_pago || "PENDIENTE"}
                       </span>
-                      {ruta.estado_pago === 'pagado' && (
-                        <button 
-                          type="button" 
+                      {ruta.estado_pago === "pagado" && (
+                        <button
+                          type="button"
                           onClick={() => setComprobanteRutaId(ruta.id)}
-                          className="lt-btn lt-btn--secondary" 
-                          style={{ padding: '4px 8px', fontSize: '11px', marginTop: '8px', width: '100%', borderColor: '#3B82F6', color: '#3B82F6' }}
+                          className="lt-btn lt-btn--secondary"
+                          style={{
+                            padding: "4px 8px",
+                            fontSize: "11px",
+                            marginTop: "8px",
+                            width: "100%",
+                            borderColor: "#3B82F6",
+                            color: "#3B82F6",
+                          }}
                         >
-                          Ver Comprobante
+                          Ver comprobante
                         </button>
                       )}
                     </td>
@@ -1699,9 +1754,44 @@ export default function RutasActivas() {
                         {ruta.camiones?.patente || "—"}
                       </div>
                     </td>
-=======
->>>>>>> origin/main
                     <td>{fmtDate(ruta.eta)}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="lt-btn lt-btn--secondary lt-btn--sm lt-btn--full"
+                        style={{ marginBottom: 8 }}
+                        disabled={calculandoEstimacionRutaId === ruta.id}
+                        onClick={() => calcularDistanciaYFechasRuta(ruta)}
+                      >
+                        {calculandoEstimacionRutaId === ruta.id
+                          ? "Calculando…"
+                          : "Calcular fechas"}
+                      </button>
+                      <MensajeFilaRuta mensaje={mensajesRuta[ruta.id]?.estimacion} />
+                      <div className="lt-field-group">
+                        <label className="lt-label" htmlFor={`fecha-entrega-${ruta.id}`}>
+                          Día estimado
+                        </label>
+                        <input
+                          id={`fecha-entrega-${ruta.id}`}
+                          type="date"
+                          className="lt-input"
+                          value={(fechasEdit[ruta.id] || fechasFromRuta(ruta)).entrega}
+                          onChange={(e) =>
+                            actualizarFechaRuta(ruta.id, "entrega", e.target.value)
+                          }
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        className="lt-btn lt-btn--secondary lt-btn--sm lt-btn--full"
+                        disabled={savingFechasId === ruta.id}
+                        onClick={() => guardarFechasRuta(ruta.id)}
+                      >
+                        {savingFechasId === ruta.id ? "Guardando…" : "Guardar fechas"}
+                      </button>
+                      <MensajeFilaRuta mensaje={mensajesRuta[ruta.id]?.fechas} />
+                    </td>
                     <td>
                       <button
                         type="button"
@@ -1714,15 +1804,15 @@ export default function RutasActivas() {
                         disabled={!ruta.camion_id}
                         title={
                           ruta.camion_id
-                            ? "Gestionar consolidación de pedidos"
-                            : "Asigne un camión para consolidar pedidos"
+                            ? "Gestionar consolidaci├│n de pedidos"
+                            : "Asigne un cami├│n para consolidar pedidos"
                         }
                       >
                         {consolidacionAbiertaId === ruta.id ? "Cerrar" : "Consolidar"}
                       </button>
                       {!ruta.camion_id && (
                         <p className="lt-list-item__sub" style={{ marginTop: 4 }}>
-                          Requiere camión
+                          Requiere cami├│n
                         </p>
                       )}
                     </td>
@@ -1779,26 +1869,30 @@ export default function RutasActivas() {
                         className="lt-btn lt-btn--success lt-btn--full"
                         disabled={notifyingId === ruta.id}
                         onClick={() => enviarNotificacionRuta(ruta.id)}
-                        style={{ marginBottom: 8 }}
                       >
                         {notifyingId === ruta.id
-                          ? "Enviando…"
+                          ? "EnviandoÔÇª"
                           : "Notificar fecha estimada"}
                       </button>
                       <MensajeFilaRuta mensaje={mensajesRuta[ruta.id]?.notificar} />
                       <button
                         type="button"
                         className="lt-btn lt-btn--full"
-                        style={{ backgroundColor: 'transparent', border: '1px solid #ef4444', color: '#ef4444' }}
+                        style={{
+                          marginTop: 8,
+                          backgroundColor: "transparent",
+                          border: "1px solid #ef4444",
+                          color: "#ef4444",
+                        }}
                         onClick={() => handleDelete(ruta.id)}
                       >
-                        🗑️ Eliminar Ruta
+                        Eliminar ruta
                       </button>
                     </td>
                   </tr>
                   {consolidacionAbiertaId === ruta.id && (
                     <tr key={`${ruta.id}-consolidacion`}>
-                      <td colSpan={9} className="lt-consolidacion-row">
+                      <td colSpan={13} className="lt-consolidacion-row">
                         <ConsolidacionRutaPanel
                           rutaId={ruta.id}
                           onConsolidado={cargarRutas}
@@ -1808,7 +1902,7 @@ export default function RutasActivas() {
                   )}
                   {costosAbiertoId === ruta.id && (
                     <tr key={`${ruta.id}-costos`}>
-                      <td colSpan={9} className="lt-consolidacion-row">
+                      <td colSpan={13} className="lt-consolidacion-row">
                         <CostosOperativosPanel
                           rutaId={ruta.id}
                           rutaEstado={ruta.estado}
@@ -1822,57 +1916,6 @@ export default function RutasActivas() {
             </table>
           </div>
         )}
-<<<<<<< HEAD
-      {comprobanteRutaId && <ComprobanteModal rutaId={comprobanteRutaId} onClose={() => setComprobanteRutaId(null)} />}
-      {/* Modal Detalle Financiero */}
-      {showDetalleModal && rutaDetalle && (
-        <div className="lt-modal-overlay">
-          <div className="lt-modal" style={{ maxWidth: '450px' }}>
-            <div className="lt-modal__header">
-              <h3>Simulador de Rentabilidad Interna</h3>
-              <button type="button" className="lt-modal__close" onClick={() => setShowDetalleModal(false)}>×</button>
-            </div>
-            <div className="lt-modal__content" style={{ fontSize: '13px', background: '#111827', color: '#fff', padding: '16px', borderRadius: '8px' }}>
-              <div style={{ fontWeight: 'bold', color: '#9CA3AF', marginBottom: '8px' }}>INGRESOS (COBRO A CLIENTES)</div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                <span>Subtotal Neto</span>
-                <strong>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(rutaDetalle.totalCobradoNeto)}</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                <span>IVA (19%)</span>
-                <span style={{ color: '#38BDF8' }}>+{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(rutaDetalle.totalCobradoBruto - rutaDetalle.totalCobradoNeto)}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '4px' }}>
-                <strong>Total Recaudado (Total a Pagar)</strong>
-                <strong>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(rutaDetalle.totalCobradoBruto)}</strong>
-              </div>
-
-              <div style={{ fontWeight: 'bold', color: '#9CA3AF', marginBottom: '8px' }}>COSTOS OPERATIVOS (INTERNOS)</div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                <span>Costo Combustible Físico</span>
-                <span style={{ color: '#F87171' }}>-{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(Number(rutaDetalle.costo_combustible_calculado || 0))}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                <span>Pago Conductor</span>
-                <span style={{ color: '#F87171' }}>-{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(rutaDetalle.pagoConductor)}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                <span>Costo TAC / Peajes</span>
-                <span style={{ color: '#F87171' }}>-{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(Number(rutaDetalle.costo_tac_peajes_clp || 0))}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '4px' }}>
-                <strong>Gasto Total Estimado</strong>
-                <strong style={{ color: '#F87171' }}>-{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(rutaDetalle.gastos)}</strong>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(16, 185, 129, 0.1)', padding: '12px', borderRadius: '6px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
-                <strong style={{ color: '#9CA3AF' }}>MARGEN DE GANANCIA (PROFIT)</strong>
-                <strong style={{ color: '#10B981', fontSize: '15px' }}>+{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(rutaDetalle.ganancia)} CLP</strong>
-              </div>
-            </div>
-            <div className="lt-modal__footer" style={{ marginTop: '16px' }}>
-              <button type="button" className="lt-btn lt-btn--secondary" onClick={() => setShowDetalleModal(false)}>Cerrar</button>
-=======
       </div>
 
       <ModalRecurrencia
@@ -1922,7 +1965,7 @@ export default function RutasActivas() {
                 aria-label="Cerrar"
                 onClick={() => setRutaDetalleSeleccionada(null)}
               >
-                ✕
+                Ô£ò
               </button>
             </div>
 
@@ -1930,18 +1973,18 @@ export default function RutasActivas() {
               <div className="lt-form-grid" style={{ gap: 14, gridTemplateColumns: "1fr" }}>
                 <div className="lt-card" style={{ padding: 16 }}>
                   <div className="lt-list-item__title" style={{ marginBottom: 8, color: "var(--lt-success)" }}>
-                    Información del Viaje
+                    Informaci├│n del Viaje
                   </div>
                   <div style={labelStyle}>Cliente</div>
-                  <div style={valueStyle}>{rutaDetalleSeleccionada.clientes?.nombre || "—"}</div>
+                  <div style={valueStyle}>{rutaDetalleSeleccionada.clientes?.nombre || "ÔÇö"}</div>
                   <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginTop: 12 }}>
                     <div style={{ minWidth: 140, flex: "1 1 180px" }}>
                       <div style={labelStyle}>Origen</div>
-                      <div style={valueStyle}>{rutaDetalleSeleccionada.origen || "—"}</div>
+                      <div style={valueStyle}>{rutaDetalleSeleccionada.origen || "ÔÇö"}</div>
                     </div>
                     <div style={{ minWidth: 140, flex: "1 1 180px" }}>
                       <div style={labelStyle}>Destino</div>
-                      <div style={valueStyle}>{rutaDetalleSeleccionada.destino || "—"}</div>
+                      <div style={valueStyle}>{rutaDetalleSeleccionada.destino || "ÔÇö"}</div>
                     </div>
                     <div style={{ minWidth: 120, flex: "1 1 150px" }}>
                       <div style={labelStyle}>Distancia</div>
@@ -1949,7 +1992,7 @@ export default function RutasActivas() {
                         {rutaDetalleSeleccionada.distancia_km != null &&
                         String(rutaDetalleSeleccionada.distancia_km).trim() !== ""
                           ? `${rutaDetalleSeleccionada.distancia_km} km`
-                          : "—"}
+                          : "ÔÇö"}
                       </div>
                     </div>
                     <div style={{ minWidth: 120, flex: "1 1 140px" }}>
@@ -1957,7 +2000,7 @@ export default function RutasActivas() {
                       <div style={valueStyle}>
                         {rutaDetalleSeleccionada.bultos ??
                           rutaDetalleSeleccionada.bultos_despachados ??
-                          "—"}
+                          "ÔÇö"}
                       </div>
                     </div>
                   </div>
@@ -1965,16 +2008,16 @@ export default function RutasActivas() {
 
                 <div className="lt-card" style={{ padding: 16 }}>
                   <div className="lt-list-item__title" style={{ marginBottom: 8, color: "var(--lt-success)" }}>
-                    Logística
+                    Log├¡stica
                   </div>
                   <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
                     <div style={{ minWidth: 160, flex: "1 1 200px" }}>
                       <div style={labelStyle}>Conductor</div>
-                      <div style={valueStyle}>{rutaDetalleSeleccionada.conductores?.rut || "—"}</div>
+                      <div style={valueStyle}>{rutaDetalleSeleccionada.conductores?.rut || "ÔÇö"}</div>
                     </div>
                     <div style={{ minWidth: 160, flex: "1 1 200px" }}>
-                      <div style={labelStyle}>Camión</div>
-                      <div style={valueStyle}>{rutaDetalleSeleccionada.camiones?.patente || "—"}</div>
+                      <div style={labelStyle}>Cami├│n</div>
+                      <div style={valueStyle}>{rutaDetalleSeleccionada.camiones?.patente || "ÔÇö"}</div>
                     </div>
                     <div style={{ minWidth: 160, flex: "1 1 200px" }}>
                       <div style={labelStyle}>Estado actual</div>
@@ -2004,15 +2047,15 @@ export default function RutasActivas() {
                   <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
                     <div style={{ minWidth: 160, flex: "1 1 200px" }}>
                       <div style={labelStyle}>Inicio rango</div>
-                      <div style={valueStyle}>{toInputDate(rutaDetalleSeleccionada.fecha_estimada_inicio) || "—"}</div>
+                      <div style={valueStyle}>{toInputDate(rutaDetalleSeleccionada.fecha_estimada_inicio) || "ÔÇö"}</div>
                     </div>
                     <div style={{ minWidth: 160, flex: "1 1 200px" }}>
                       <div style={labelStyle}>Fin rango</div>
-                      <div style={valueStyle}>{toInputDate(rutaDetalleSeleccionada.fecha_estimada_fin) || "—"}</div>
+                      <div style={valueStyle}>{toInputDate(rutaDetalleSeleccionada.fecha_estimada_fin) || "ÔÇö"}</div>
                     </div>
                     <div style={{ minWidth: 160, flex: "1 1 200px" }}>
-                      <div style={labelStyle}>Día estimado</div>
-                      <div style={valueStyle}>{toInputDate(rutaDetalleSeleccionada.fecha_estimada_entrega) || "—"}</div>
+                      <div style={labelStyle}>D├¡a estimado</div>
+                      <div style={valueStyle}>{toInputDate(rutaDetalleSeleccionada.fecha_estimada_entrega) || "ÔÇö"}</div>
                     </div>
                   </div>
                 </div>
@@ -2112,10 +2155,10 @@ export default function RutasActivas() {
 
                 <div className="lt-card" style={{ padding: 16 }}>
                   <div className="lt-list-item__title" style={{ marginBottom: 8, color: "var(--lt-success)" }}>
-                    Información de pago
+                    Informaci├│n de pago
                   </div>
                   <p className="lt-list-item__sub" style={{ color: "#6b7280", margin: 0 }}>
-                    Datos pendientes de integración
+                    Datos pendientes de integraci├│n
                   </p>
                 </div>
 
@@ -2133,7 +2176,7 @@ export default function RutasActivas() {
                         const titulo =
                           evento?.titulo || evento?.title || evento?.tipo || evento?.nombre || "Evento";
                         const descripcion =
-                          evento?.descripcion || evento?.detalle || evento?.mensaje || "Sin descripción";
+                          evento?.descripcion || evento?.detalle || evento?.mensaje || "Sin descripci├│n";
                         const fecha =
                           evento?.created_at ||
                           evento?.fecha ||
@@ -2176,16 +2219,60 @@ export default function RutasActivas() {
                   Cerrar
                 </button>
               </div>
->>>>>>> origin/main
             </div>
           </div>
         </div>
       )}
-<<<<<<< HEAD
-    </div>
-=======
->>>>>>> origin/main
+      {comprobanteRutaId ? (
+        <ComprobanteModal
+          rutaId={comprobanteRutaId}
+          onClose={() => setComprobanteRutaId(null)}
+        />
+      ) : null}
+      {showRentabilidadModal && rutaRentabilidad ? (
+        <div className="lt-modal-overlay">
+          <div className="lt-modal" style={{ maxWidth: 450 }}>
+            <div className="lt-modal__header">
+              <h3>Simulador de rentabilidad interna</h3>
+              <button
+                type="button"
+                className="lt-modal__close"
+                onClick={() => setShowRentabilidadModal(false)}
+              >
+                ×
+              </button>
+            </div>
+            <div className="lt-modal__content">
+              <p>
+                Total recaudado:{" "}
+                {new Intl.NumberFormat("es-CL", {
+                  style: "currency",
+                  currency: "CLP",
+                  maximumFractionDigits: 0,
+                }).format(rutaRentabilidad.totalCobradoBruto)}
+              </p>
+              <p>
+                Gastos operativos:{" "}
+                {new Intl.NumberFormat("es-CL", {
+                  style: "currency",
+                  currency: "CLP",
+                  maximumFractionDigits: 0,
+                }).format(rutaRentabilidad.gastos)}
+              </p>
+              <p>
+                Ganancia neta:{" "}
+                <strong style={{ color: "#10b981" }}>
+                  {new Intl.NumberFormat("es-CL", {
+                    style: "currency",
+                    currency: "CLP",
+                    maximumFractionDigits: 0,
+                  }).format(rutaRentabilidad.ganancia)}
+                </strong>
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
-

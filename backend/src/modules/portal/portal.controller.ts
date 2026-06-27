@@ -8,8 +8,6 @@ import {
   Body,
   Query,
   UseGuards,
-  Post,
-  Body,
 } from '@nestjs/common';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/user.decorator';
@@ -21,12 +19,9 @@ import type {
   PortalPedidoListResponseDto,
 } from './dto/portal-pedido.dto';
 import { PortalService } from './portal.service';
-<<<<<<< HEAD
-import { CreateRutaDto } from '../rutas/rutas.service';
-=======
+import type { CreateRutaDto } from '../rutas/dto/create-ruta.dto';
 import { RecurrenciasService } from '../recurrencias/recurrencias.service';
 import { CreateRecurrenciaDto } from '../recurrencias/dto/create-recurrencia.dto';
->>>>>>> origin/main
 
 @Controller('api/portal')
 @UseGuards(JwtGuard, RolesGuard)
@@ -75,7 +70,6 @@ export class PortalController {
     return this.portalService.getPedidoById(id, clienteId);
   }
 
-<<<<<<< HEAD
   @Post('pedidos')
   async createPedido(
     @Body() body: Omit<CreateRutaDto, 'cliente_id'>,
@@ -109,7 +103,8 @@ export class PortalController {
   ) {
     const clienteId = this.requireClienteId(user);
     return this.portalService.pagarRetraso(id, clienteId);
-=======
+  }
+
   /** HU-47: listar recurrencias del cliente autenticado */
   @Get('recurrencias')
   listRecurrencias(
@@ -170,7 +165,6 @@ export class PortalController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.recurrenciasService.listEjecuciones(id, user);
->>>>>>> origin/main
   }
 
   private requireClienteId(user: AuthenticatedUser): string {

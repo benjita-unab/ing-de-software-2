@@ -1,11 +1,11 @@
-// src/lib/rutasService.js
-// ─────────────────────────────────────────────────────────────────────────────
-// Servicio para gestión de rutas y asignación de conductores con validación
+﻿// src/lib/rutasService.js
+// ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+// Servicio para gesti├│n de rutas y asignaci├│n de conductores con validaci├│n
 // de licencias (HU-5 CA-3).
 //
-// Toda la lógica crítica pasa por el backend NestJS a través de `apiFetch`.
+// Toda la l├│gica cr├¡tica pasa por el backend NestJS a trav├®s de `apiFetch`.
 // No accedemos a Supabase directamente desde el frontend.
-// ─────────────────────────────────────────────────────────────────────────────
+// ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
 import { apiFetch } from "./apiClient";
 import {
@@ -14,8 +14,8 @@ import {
 } from "./conductorUtils";
 
 /**
- * Crea un pedido/ruta operativa (POST /api/rutas) — HU-58.
- * @param {object} payload — cliente_id, origen, destino, conductor_id, camion_id, fecha_inicio;
+ * Crea un pedido/ruta operativa (POST /api/rutas) ÔÇö HU-58.
+ * @param {object} payload ÔÇö cliente_id, origen, destino, conductor_id, camion_id, fecha_inicio;
  *   opcionales: ruta_plantilla_id, paradas[], observaciones, guardar_como_plantilla.
  * @returns {Promise<{ success: boolean, data?: object, error?: string }>}
  */
@@ -34,7 +34,7 @@ export async function crearRuta(payload) {
     return { success: false, error: "Debe seleccionar un conductor." };
   }
   if (!camionId) {
-    return { success: false, error: "Debe seleccionar un camión." };
+    return { success: false, error: "Debe seleccionar un cami├│n." };
   }
 
   const res = await apiFetch("/api/rutas", {
@@ -83,10 +83,10 @@ export async function validarLicenciaConductor(conductorId) {
 }
 
 /**
- * Asigna un conductor a una ruta después de validar su licencia.
+ * Asigna un conductor a una ruta despu├®s de validar su licencia.
  * @param {string} rutaId - ID de la ruta
  * @param {string} conductorId - ID del conductor
- * @param {string} camionId - ID del camión
+ * @param {string} camionId - ID del cami├│n
  * @param {number} [cargaRequeridaKg] - Carga opcional para validar capacidad
  * @returns {Promise<{success: boolean, data?: object, error?: string}>}
  */
@@ -174,9 +174,9 @@ export async function obtenerConductoresActivos(params = {}) {
 /**
  * Obtiene los camiones disponibles.
  *
- * NOTA: el backend actual no expone aún `/api/camiones`. Mientras se agrega,
- * devolvemos un arreglo vacío sin error para que la UI compile y funcione.
- * Cuando exista el endpoint, basta con cambiar la ruta aquí.
+ * NOTA: el backend actual no expone a├║n `/api/camiones`. Mientras se agrega,
+ * devolvemos un arreglo vac├¡o sin error para que la UI compile y funcione.
+ * Cuando exista el endpoint, basta con cambiar la ruta aqu├¡.
  *
  * @returns {Promise<{data: array, error?: string}>}
  */
@@ -215,7 +215,7 @@ export async function obtenerRutaDetalle(rutaId) {
 }
 
 /**
- * Obtiene las anomalías reportadas de una ruta.
+ * Obtiene las anomal├¡as reportadas de una ruta.
  * @param {string} rutaId
  */
 export async function obtenerAnomaliasRuta(rutaId) {
@@ -226,7 +226,7 @@ export async function obtenerAnomaliasRuta(rutaId) {
   const res = await apiFetch(`/api/rutas/${rutaId}/anomalias`);
 
   if (!res.ok) {
-    return { data: [], error: res.error || "Error al obtener anomalías" };
+    return { data: [], error: res.error || "Error al obtener anomal├¡as" };
   }
 
   const payload = res.data;
@@ -268,7 +268,7 @@ export async function estimarFechasEstimadas(payload) {
   if (!res.ok) {
     return {
       success: false,
-      error: res.error || "No se pudo calcular la estimación",
+      error: res.error || "No se pudo calcular la estimaci├│n",
     };
   }
 
@@ -277,9 +277,9 @@ export async function estimarFechasEstimadas(payload) {
 }
 
 /**
- * HU-9: guarda rango y día estimado de entrega (PATCH /api/rutas/:id/fechas-estimadas).
+ * HU-9: guarda rango y d├¡a estimado de entrega (PATCH /api/rutas/:id/fechas-estimadas).
  * @param {string} rutaId
- * @param {{ fecha_estimada_inicio: string, fecha_estimada_fin: string, fecha_estimada_entrega: string, distancia_km?: number|string }} fechas — YYYY-MM-DD
+ * @param {{ fecha_estimada_inicio: string, fecha_estimada_fin: string, fecha_estimada_entrega: string, distancia_km?: number|string }} fechas ÔÇö YYYY-MM-DD
  */
 export async function actualizarFechasEstimadas(rutaId, fechas) {
   if (!rutaId) {
@@ -324,7 +324,7 @@ export async function actualizarFechasEstimadas(rutaId, fechas) {
 }
 
 /**
- * HU-9: envía notificación de fecha estimada al correo del cliente.
+ * HU-9: env├¡a notificaci├│n de fecha estimada al correo del cliente.
  * @param {string} rutaId
  */
 export async function notificarFechaEstimada(rutaId) {
@@ -339,7 +339,7 @@ export async function notificarFechaEstimada(rutaId) {
   if (!res.ok) {
     return {
       success: false,
-      error: res.error || "No se pudo enviar la notificación",
+      error: res.error || "No se pudo enviar la notificaci├│n",
     };
   }
 
@@ -367,7 +367,7 @@ export async function obtenerConductorDetalle(conductorId) {
 
 /**
  * Obtiene rutas asignadas a un conductor.
- * Usa filtro server-side por UUID y fallback por relación anidada o RUT.
+ * Usa filtro server-side por UUID y fallback por relaci├│n anidada o RUT.
  * @param {string} conductorId
  * @param {string} [conductorRut]
  * @returns {Promise<{data: array, error?: string}>}
@@ -413,8 +413,8 @@ export async function obtenerRutasPorConductor(conductorId, conductorRut) {
 }
 
 /**
- * Obtiene el estado de la licencia de un conductor (días para vencer, etc.).
- * Mantiene el contrato de la versión anterior para no romper la UI.
+ * Obtiene el estado de la licencia de un conductor (d├¡as para vencer, etc.).
+ * Mantiene el contrato de la versi├│n anterior para no romper la UI.
  * @param {string} conductorId
  * @returns {Promise<{data: object|null, error?: string}>}
  */
@@ -461,7 +461,7 @@ export async function obtenerEstadoLicencia(conductorId) {
 }
 
 /**
- * HU-37: métricas operacionales y pago de un conductor por período.
+ * HU-37: m├®tricas operacionales y pago de un conductor por per├¡odo.
  * @param {string} conductorId
  * @param {{ periodo?: string, fechaInicio?: string, fechaFin?: string }} [filtros]
  */
@@ -483,7 +483,7 @@ export async function obtenerMetricasPagoConductor(conductorId, filtros = {}) {
   const res = await apiFetch(path);
 
   if (!res.ok) {
-    return { data: null, error: res.error || "Error al obtener métricas de pago" };
+    return { data: null, error: res.error || "Error al obtener m├®tricas de pago" };
   }
 
   return { data: res.data?.data ?? res.data };
@@ -514,7 +514,6 @@ export async function obtenerComparativaMetricasPago(filtros = {}) {
 }
 
 /**
-<<<<<<< HEAD
  * Crea un nuevo chofer (usuario Auth + perfil conductor).
  */
 export async function crearConductor(data) {
@@ -542,9 +541,8 @@ export async function crearCamion(data) {
   return { data: res.data };
 }
 
-
-=======
- * HU-59: estado de consolidación de una ruta maestra.
+/**
+ * HU-59: estado de consolidaci├│n de una ruta maestra.
  * @param {string} rutaId
  */
 export async function obtenerConsolidacion(rutaId) {
@@ -555,7 +553,7 @@ export async function obtenerConsolidacion(rutaId) {
   const res = await apiFetch(`/api/rutas/${rutaId}/consolidacion`);
 
   if (!res.ok) {
-    return { data: null, error: res.error || "Error al obtener consolidación" };
+    return { data: null, error: res.error || "Error al obtener consolidaci├│n" };
   }
 
   return { data: res.data?.data ?? res.data, error: null };
@@ -602,4 +600,3 @@ export async function consolidarPedidoEnRuta(rutaMaestraId, pedidoId, opciones =
 
   return { success: true, data: res.data?.data ?? res.data };
 }
->>>>>>> origin/main

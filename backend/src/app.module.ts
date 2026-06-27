@@ -25,12 +25,9 @@ import { ConfiguracionPagosModule } from './modules/configuracion-pagos/configur
 import { ChatRutaModule } from './modules/chat-ruta/chat-ruta.module';
 import { PagosClienteModule } from './modules/pagos-cliente/pagos-cliente.module';
 import { RutasPlantillaModule } from './modules/rutas-plantilla/rutas-plantilla.module';
-<<<<<<< HEAD
 import { PagosModule } from './modules/pagos/pagos.module';
-=======
 import { RecurrenciasModule } from './modules/recurrencias/recurrencias.module';
 import { CostosOperativosModule } from './modules/costos-operativos/costos-operativos.module';
->>>>>>> origin/main
 
 @Module({
   imports: [
@@ -65,12 +62,9 @@ import { CostosOperativosModule } from './modules/costos-operativos/costos-opera
     ChatRutaModule,
     PagosClienteModule,
     RutasPlantillaModule,
-<<<<<<< HEAD
     PagosModule,
-=======
     RecurrenciasModule,
     CostosOperativosModule,
->>>>>>> origin/main
   ],
   controllers: [AppController],
   providers: [AppService, SupabaseConfigService, ResendConfigService, JwtStrategy],

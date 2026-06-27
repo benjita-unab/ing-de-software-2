@@ -1,12 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
 import PortalEvidenciasModal from "./PortalEvidenciasModal";
-<<<<<<< HEAD
 import ComprobanteModal from "./ComprobanteModal";
-=======
 import PortalPagos from "./PortalPagos";
 import PortalRecurrencias from "./PortalRecurrencias";
 import ModalRecurrencia from "./ModalRecurrencia";
->>>>>>> origin/main
 import {
   getPortalPedidoById,
   getPortalPedidoEvidencias,
@@ -14,19 +11,18 @@ import {
 } from "../lib/portalService";
 
 const SECCION_PEDIDOS = "pedidos";
-<<<<<<< HEAD
-=======
 const SECCION_PAGOS = "pagos";
 const SECCION_RECURRENCIAS = "recurrencias";
->>>>>>> origin/main
 
-const TAB_TODOS = "todos";
 const TAB_PENDIENTES = "pendientes";
-const TAB_EN_CURSO = "en_curso";
 const TAB_COMPLETADOS = "completados";
-const TAB_PAGO_ATRASO = "pago_atraso";
 
-const getStyles = (isLight) => ({
+/** HU-27 CA-4: ENTREGADO = completado; cualquier otro estado = pendiente. */
+function isPedidoCompletado(estado) {
+  return String(estado || "").trim().toUpperCase() === "ENTREGADO";
+}
+
+const styles = {
   page: {
     minHeight: "100vh",
     background: "#0a0e1a",
@@ -60,17 +56,10 @@ const getStyles = (isLight) => ({
     fontSize: "12px",
     fontWeight: 600,
     background:
-      estado === "ENTREGADO" || estado === "COMPLETADO"
+      estado === "ENTREGADO"
         ? "rgba(34,197,94,0.2)"
-        : estado === "PAGO_ATRASO_PENDIENTE"
-        ? "rgba(239,68,68,0.2)"
         : "rgba(14,165,233,0.2)",
-    color: 
-      estado === "ENTREGADO" || estado === "COMPLETADO"
-        ? "#86efac"
-        : estado === "PAGO_ATRASO_PENDIENTE"
-        ? "#fca5a5"
-        : "#7dd3fc",
+    color: estado === "ENTREGADO" ? "#86efac" : "#7dd3fc",
   }),
   btn: {
     padding: "10px 16px",
@@ -169,65 +158,25 @@ const getStyles = (isLight) => ({
     lineHeight: 1.5,
     color: "#94a3b8",
   },
-  modalOverlay: {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    background: "rgba(0, 0, 0, 0.75)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 1000,
-    padding: "20px",
-  },
-  modalContent: {
-    background: "#0f172a",
-    border: "1px solid rgba(255, 255, 255, 0.15)",
-    borderRadius: "16px",
-    padding: "24px",
-    width: "100%",
-    maxWidth: "600px",
-    maxHeight: "90vh",
-    overflowY: "auto",
-    color: "#e2e8f0",
-  },
-  input: {
-    background: "rgba(255, 255, 255, 0.05)",
-    border: "1px solid rgba(255, 255, 255, 0.15)",
-    borderRadius: "8px",
-    padding: "10px 12px",
-    color: "#fff",
-    width: "100%",
-    marginTop: "4px",
-    fontSize: "14px",
-  },
-  bultoRow: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr 1fr 1fr auto",
-    gap: "10px",
-    alignItems: "end",
-  },
-});
+};
 
-/** HU-27 CA-6: estado vacío cuando el cliente no tiene pedidos. */
-function PortalPedidosEmptyState({ stylesObj }) {
+/** HU-27 CA-6: estado vac├¡o cuando el cliente no tiene pedidos. */
+function PortalPedidosEmptyState() {
   return (
-    <div style={stylesObj.emptyState} role="status" aria-live="polite">
-      <div style={stylesObj.emptyIcon} aria-hidden="true">
-        📦
+    <div style={styles.emptyState} role="status" aria-live="polite">
+      <div style={styles.emptyIcon} aria-hidden="true">
+        ­ƒôª
       </div>
-      <h2 style={stylesObj.emptyTitle}>No tienes pedidos disponibles</h2>
-      <p style={stylesObj.emptyMessage}>
-        Los despachos asignados aparecerán aquí
+      <h2 style={styles.emptyTitle}>No tienes pedidos disponibles</h2>
+      <p style={styles.emptyMessage}>
+        Los despachos asignados aparecer├ín aqu├¡
       </p>
     </div>
   );
 }
 
 function formatDate(value) {
-  if (!value) return "—";
+  if (!value) return "ÔÇö";
   try {
     return new Date(value).toLocaleString("es-CL");
   } catch {
@@ -236,12 +185,9 @@ function formatDate(value) {
 }
 
 export default function ClientPortalShell({ user, onSignOut }) {
-  const [isLight, setIsLight] = useState(false);
-  const stylesObj = useMemo(() => getStyles(isLight), [isLight]);
-
   const [seccionActiva, setSeccionActiva] = useState(SECCION_PEDIDOS);
   const [pedidos, setPedidos] = useState([]);
-  const [activeTab, setActiveTab] = useState(TAB_TODOS);
+  const [activeTab, setActiveTab] = useState(TAB_PENDIENTES);
   const [selectedId, setSelectedId] = useState(null);
   const [detalle, setDetalle] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -251,97 +197,18 @@ export default function ClientPortalShell({ user, onSignOut }) {
   const [evidencias, setEvidencias] = useState(null);
   const [evidenciasLoading, setEvidenciasLoading] = useState(false);
   const [evidenciasError, setEvidenciasError] = useState(null);
-<<<<<<< HEAD
+  const [modalRecurrenciaOpen, setModalRecurrenciaOpen] = useState(false);
   const [comprobanteRutaId, setComprobanteRutaId] = useState(null);
-
+  const [pagandoBase, setPagandoBase] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newOrderForm, setNewOrderForm] = useState({
     origen: "",
     destino: "",
     distancia_km: "",
-    bultos_detalle: [{ categoria: "S" }]
+    bultos_detalle: [{ categoria: "S" }],
   });
   const [creatingOrder, setCreatingOrder] = useState(false);
   const [createError, setCreateError] = useState("");
-
-  const handleAddBulto = () => {
-    setNewOrderForm(prev => ({
-      ...prev,
-      bultos_detalle: [...prev.bultos_detalle, { categoria: "S" }]
-    }));
-  };
-
-  const handleRemoveBulto = (index) => {
-    if (newOrderForm.bultos_detalle.length === 1) return;
-    setNewOrderForm(prev => ({
-      ...prev,
-      bultos_detalle: prev.bultos_detalle.filter((_, i) => i !== index)
-    }));
-  };
-
-  const handleChangeBulto = (index, field, value) => {
-    setNewOrderForm(prev => ({
-      ...prev,
-      bultos_detalle: prev.bultos_detalle.map((b, i) => i === index ? { ...b, [field]: value } : b)
-    }));
-  };
-
-  const handleCreateOrderSubmit = async (e) => {
-    e.preventDefault();
-    setCreateError("");
-    setCreatingOrder(true);
-
-    const origen = newOrderForm.origen.trim();
-    const destino = newOrderForm.destino.trim();
-    const dist = Number(newOrderForm.distancia_km);
-
-    if (!origen || !destino || isNaN(dist) || dist <= 0) {
-      setCreateError("Por favor completa origen, destino y kilómetros aproximados.");
-      setCreatingOrder(false);
-      return;
-    }
-
-    // No need to validate dimensions since we use fixed sizes now
-
-    try {
-      const payload = {
-        origen,
-        destino,
-        distancia_km: dist,
-        bultos_despachados: newOrderForm.bultos_detalle.length,
-        bultos_detalle: newOrderForm.bultos_detalle.map(b => ({
-          alto_cm: Number(b.alto_cm),
-          ancho_cm: Number(b.ancho_cm),
-          largo_cm: Number(b.largo_cm),
-          peso_kg: Number(b.peso_kg),
-        }))
-      };
-
-      const { createPortalPedido } = await import("../lib/portalService");
-      const res = await createPortalPedido(payload);
-
-      if (!res.ok) {
-        setCreateError(res.error || "No se pudo crear el pedido.");
-      } else {
-        alert("✅ Pedido creado exitosamente en estado PENDIENTE_CONFIRMACION.");
-        setShowCreateModal(false);
-        setNewOrderForm({
-          origen: "",
-          destino: "",
-          distancia_km: "",
-          bultos_detalle: [{ categoria: "S" }]
-        });
-        loadPedidos();
-      }
-    } catch (err) {
-      setCreateError(err.message || "Error inesperado al crear pedido.");
-    } finally {
-      setCreatingOrder(false);
-    }
-  };
-=======
-  const [modalRecurrenciaOpen, setModalRecurrenciaOpen] = useState(false);
->>>>>>> origin/main
 
   const loadPedidos = useCallback(async () => {
     setLoading(true);
@@ -363,52 +230,39 @@ export default function ClientPortalShell({ user, onSignOut }) {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const paymentResult = params.get("payment_result");
-    if (paymentResult) {
-      if (paymentResult === "success") {
-        alert("Pago completado con éxito. Su pedido pasará a estar 'En Curso' en breve mientras verificamos la transacción.");
-        // Polling para dar tiempo al webhook
-        let retries = 0;
-        const interval = setInterval(() => {
-          loadPedidos();
-          retries++;
-          if (retries > 3) clearInterval(interval); // Poll for ~15 seconds max
-        }, 5000);
-      } else if (paymentResult === "failed") {
-        alert("El pago no se ha podido completar. Por favor, inténtelo de nuevo.");
-      }
-      // Limpiar la URL para evitar que la alerta vuelva a aparecer al recargar
-      window.history.replaceState({}, document.title, window.location.pathname);
+    if (!paymentResult) return;
+
+    if (paymentResult === "success") {
+      alert(
+        "Pago completado con éxito. Su pedido pasará a estar 'En Curso' en breve mientras verificamos la transacción.",
+      );
+      let retries = 0;
+      const interval = setInterval(() => {
+        loadPedidos();
+        retries += 1;
+        if (retries > 3) clearInterval(interval);
+      }, 5000);
+    } else if (paymentResult === "failed") {
+      alert("El pago no se ha podido completar. Por favor, inténtelo de nuevo.");
     }
+    window.history.replaceState({}, document.title, window.location.pathname);
   }, [loadPedidos]);
 
-  const { pedidosTodos, pedidosPendientes, pedidosEnCurso, pedidosCompletados, pedidosAtraso } = useMemo(() => {
-    const todos = pedidos;
+  const { pedidosPendientes, pedidosCompletados } = useMemo(() => {
     const pendientes = [];
-    const enCurso = [];
     const completados = [];
-    const atraso = [];
     for (const p of pedidos) {
-      if (p.estado_pago !== "pagado") {
-        pendientes.push(p);
-      } else if (p.estado === "PAGO_ATRASO_PENDIENTE") {
-        atraso.push(p);
-      } else if (p.estado === "ENTREGADO" || p.estado === "FINALIZADO" || p.estado === "COMPLETADO") {
+      if (isPedidoCompletado(p.estado)) {
         completados.push(p);
       } else {
-        enCurso.push(p);
+        pendientes.push(p);
       }
     }
-    return { pedidosTodos: todos, pedidosPendientes: pendientes, pedidosEnCurso: enCurso, pedidosCompletados: completados, pedidosAtraso: atraso };
+    return { pedidosPendientes: pendientes, pedidosCompletados: completados };
   }, [pedidos]);
 
-  const pedidosVisibles = useMemo(() => {
-    if (activeTab === TAB_TODOS) return pedidosTodos;
-    if (activeTab === TAB_PENDIENTES) return pedidosPendientes;
-    if (activeTab === TAB_EN_CURSO) return pedidosEnCurso;
-    if (activeTab === TAB_COMPLETADOS) return pedidosCompletados;
-    if (activeTab === TAB_PAGO_ATRASO) return pedidosAtraso;
-    return [];
-  }, [activeTab, pedidosTodos, pedidosPendientes, pedidosEnCurso, pedidosCompletados, pedidosAtraso]);
+  const pedidosVisibles =
+    activeTab === TAB_COMPLETADOS ? pedidosCompletados : pedidosPendientes;
 
   async function handleSelectPedido(id) {
     setSelectedId(id);
@@ -451,87 +305,142 @@ export default function ClientPortalShell({ user, onSignOut }) {
     setEvidenciasLoading(false);
   }
 
-  function emptyMessageForTab() {
-    if (activeTab === TAB_TODOS) return "No tienes pedidos en el sistema.";
-    if (activeTab === TAB_PENDIENTES) return "No tienes pedidos pendientes de pago.";
-    if (activeTab === TAB_EN_CURSO) return "No tienes pedidos en curso.";
-    if (activeTab === TAB_COMPLETADOS) return "No hay pedidos completados.";
-    if (activeTab === TAB_PAGO_ATRASO) return "No tienes cobros por atraso.";
-    return "No hay pedidos en esta sección.";
+  function renderPedidoCard(p) {
+    return (
+      <div
+        key={p.id}
+        role="button"
+        tabIndex={0}
+        style={{
+          ...styles.card,
+          ...(selectedId === p.id ? styles.cardActive : {}),
+        }}
+        onClick={() => handleSelectPedido(p.id)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            handleSelectPedido(p.id);
+          }
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
+          <strong>
+            {p.nombre_ruta || `${p.origen || "ÔÇö"} ÔåÆ ${p.destino || "ÔÇö"}`}
+          </strong>
+          <span style={styles.badge(p.estado)}>{p.estado || "ÔÇö"}</span>
+        </div>
+        <p style={{ margin: "8px 0 0", fontSize: "13px", opacity: 0.8 }}>
+          Entrega estimada: {formatDate(p.fecha_estimada_entrega)}
+          {p.bultos_despachados != null ? ` ┬À ${p.bultos_despachados} bultos` : ""}
+        </p>
+      </div>
+    );
   }
 
-<<<<<<< HEAD
-  const [pagandoBase, setPagandoBase] = useState(false);
-  const [pagandoRetraso, setPagandoRetraso] = useState(false);
+  function emptyMessageForTab() {
+    if (activeTab === TAB_COMPLETADOS) {
+      return "No hay pedidos completados en este momento.";
+    }
+    return "No hay pedidos en curso en este momento.";
+  }
 
-  const handlePagarKhipu = async (id, monto, tipo = 'base', e) => {
-    e.stopPropagation();
+  const handlePagarKhipu = async (id, monto, tipo = "base", e) => {
+    e?.stopPropagation?.();
     setPagandoBase(true);
     try {
       const { apiFetch } = await import("../lib/apiClient");
-      const res = await apiFetch('/api/pagos/crear-cobro', { method: 'POST', json: { rutaId: id, monto, tipo } });
-      if (res.ok && res.data && res.data.paymentUrl) {
+      const res = await apiFetch("/api/pagos/crear-cobro", {
+        method: "POST",
+        json: { rutaId: id, monto, tipo },
+      });
+      if (res.ok && res.data?.paymentUrl) {
         window.location.href = res.data.paymentUrl;
       } else {
         alert(res?.error || "Error al crear el cobro en Transbank Webpay");
       }
-    } catch (err) {
+    } catch {
       alert("Error al comunicarse con Transbank Webpay");
     }
     setPagandoBase(false);
   };
 
-  const handlePagarRetraso = async (id, e) => {
-    e.stopPropagation();
-    setPagandoRetraso(true);
+  const handleCreateOrderSubmit = async (e) => {
+    e.preventDefault();
+    setCreateError("");
+    setCreatingOrder(true);
+
+    const origen = newOrderForm.origen.trim();
+    const destino = newOrderForm.destino.trim();
+    const dist = Number(newOrderForm.distancia_km);
+
+    if (!origen || !destino || Number.isNaN(dist) || dist <= 0) {
+      setCreateError("Por favor completa origen, destino y kilómetros aproximados.");
+      setCreatingOrder(false);
+      return;
+    }
+
     try {
-      const { pagarPortalPedidoRetraso } = await import("../lib/portalService");
-      const res = await pagarPortalPedidoRetraso(id);
-      if (res.ok) {
-        alert("Pago de retraso procesado correctamente.");
-        await loadPedidos();
-        if (selectedId === id) {
-          handleSelectPedido(id);
-        }
+      const payload = {
+        origen,
+        destino,
+        distancia_km: dist,
+        bultos_despachados: newOrderForm.bultos_detalle.length,
+        bultos_detalle: newOrderForm.bultos_detalle.map((b) => ({
+          categoria: b.categoria || "S",
+        })),
+      };
+
+      const { createPortalPedido } = await import("../lib/portalService");
+      const res = await createPortalPedido(payload);
+
+      if (!res.ok) {
+        setCreateError(res.error || "No se pudo crear el pedido.");
       } else {
-        alert("Error: " + res.error);
+        setShowCreateModal(false);
+        setNewOrderForm({
+          origen: "",
+          destino: "",
+          distancia_km: "",
+          bultos_detalle: [{ categoria: "S" }],
+        });
+        loadPedidos();
       }
-    } catch(err) {
-      alert("Error inesperado: " + err.message);
+    } catch (err) {
+      setCreateError(err.message || "Error inesperado al crear pedido.");
     } finally {
-      setPagandoRetraso(false);
+      setCreatingOrder(false);
     }
   };
 
-  const tituloSeccion = "Mis pedidos";
-=======
   const tituloSeccion =
     seccionActiva === SECCION_PAGOS
       ? "Mis pagos"
       : seccionActiva === SECCION_RECURRENCIAS
         ? "Mis recurrencias"
         : "Mis pedidos";
->>>>>>> origin/main
 
   return (
-    <div style={stylesObj.page}>
-      <header style={stylesObj.header}>
+    <div style={styles.page}>
+      <header style={styles.header}>
         <div>
           <h1 style={{ margin: 0, fontSize: "22px" }}>{tituloSeccion}</h1>
           <p style={{ margin: "6px 0 0", opacity: 0.7, fontSize: "14px" }}>
             {user?.email}
           </p>
         </div>
-        <div style={{ display: "flex", gap: "12px" }}>
-
-          <button type="button" style={stylesObj.btn} onClick={onSignOut}>
-            Cerrar sesión
+        <button type="button" style={styles.btn} onClick={onSignOut}>
+          Cerrar sesión
+        </button>
+        {seccionActiva === SECCION_PEDIDOS ? (
+          <button
+            type="button"
+            style={{ ...styles.btn, borderColor: "#0ea5e9", color: "#38bdf8" }}
+            onClick={() => setShowCreateModal(true)}
+          >
+            Crear pedido
           </button>
-        </div>
+        ) : null}
       </header>
 
-<<<<<<< HEAD
-=======
       <div style={styles.tabs} role="tablist" aria-label="Secciones del portal">
         <button
           type="button"
@@ -572,7 +481,6 @@ export default function ClientPortalShell({ user, onSignOut }) {
 
       {seccionActiva !== SECCION_PEDIDOS ? null : (
         <>
->>>>>>> origin/main
       {error ? (
         <p style={{ color: "#f87171", marginBottom: "16px" }} role="alert">
           {error}
@@ -580,195 +488,198 @@ export default function ClientPortalShell({ user, onSignOut }) {
       ) : null}
 
       {loading ? (
-        <p style={{ opacity: 0.7 }}>Cargando pedidos…</p>
+        <p style={{ opacity: 0.7 }}>Cargando pedidosÔÇª</p>
       ) : pedidos.length === 0 ? (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-          <PortalPedidosEmptyState stylesObj={stylesObj} />
-        </div>
+        <PortalPedidosEmptyState />
       ) : (
         <>
-          <div style={{...stylesObj.tabs, borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "12px"}} role="tablist" aria-label="Pedidos por estado">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === TAB_TODOS}
-              style={stylesObj.tab(activeTab === TAB_TODOS)}
-              onClick={() => setActiveTab(TAB_TODOS)}
-            >
-              Todos
-              <span style={stylesObj.tabCount("todos")}>{pedidosTodos.length}</span>
-            </button>
+          <div style={styles.tabs} role="tablist" aria-label="Pedidos por estado">
             <button
               type="button"
               role="tab"
               aria-selected={activeTab === TAB_PENDIENTES}
-              style={stylesObj.tab(activeTab === TAB_PENDIENTES)}
+              style={styles.tab(activeTab === TAB_PENDIENTES)}
               onClick={() => setActiveTab(TAB_PENDIENTES)}
             >
-              Pendientes de Pago
-              <span style={stylesObj.tabCount("pendientes")}>{pedidosPendientes.length}</span>
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === TAB_EN_CURSO}
-              style={stylesObj.tab(activeTab === TAB_EN_CURSO)}
-              onClick={() => setActiveTab(TAB_EN_CURSO)}
-            >
-              En Curso
-              <span style={stylesObj.tabCount("en_curso")}>{pedidosEnCurso.length}</span>
+              Pendientes
+              <span style={styles.tabCount("pendientes")}>{pedidosPendientes.length}</span>
             </button>
             <button
               type="button"
               role="tab"
               aria-selected={activeTab === TAB_COMPLETADOS}
-              style={stylesObj.tab(activeTab === TAB_COMPLETADOS)}
+              style={styles.tab(activeTab === TAB_COMPLETADOS)}
               onClick={() => setActiveTab(TAB_COMPLETADOS)}
             >
               Completados
-              <span style={stylesObj.tabCount("completados")}>{pedidosCompletados.length}</span>
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === TAB_PAGO_ATRASO}
-              style={stylesObj.tab(activeTab === TAB_PAGO_ATRASO)}
-              onClick={() => setActiveTab(TAB_PAGO_ATRASO)}
-            >
-              Pagos por Atraso
-              <span style={stylesObj.tabCount("atraso")}>{pedidosAtraso.length}</span>
+              <span style={styles.tabCount("completados")}>{pedidosCompletados.length}</span>
             </button>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginTop: "16px" }}>
-            <div role="tabpanel" style={{ width: "100%", maxWidth: "800px", margin: "0 auto" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+            <div role="tabpanel">
               {pedidosVisibles.length === 0 ? (
-                <p style={{ opacity: 0.7, textAlign: "center", marginTop: "24px" }}>{emptyMessageForTab()}</p>
+                <p style={{ opacity: 0.7 }}>{emptyMessageForTab()}</p>
               ) : (
-                pedidosVisibles.map((p) => {
-                  const isExpanded = selectedId === p.id;
-                  return (
-                    <div key={p.id} style={{ marginBottom: "12px", background: "rgba(15,23,42,0.85)", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.12)", overflow: "hidden" }}>
-                      <div 
-                        role="button" 
-                        tabIndex={0} 
-                        style={{ padding: "16px", cursor: "pointer", display: "flex", justifyContent: "space-between", gap: "8px", background: isExpanded ? "rgba(14,165,233,0.1)" : "transparent" }}
-                        onClick={() => isExpanded ? setSelectedId(null) : handleSelectPedido(p.id)}
-                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { isExpanded ? setSelectedId(null) : handleSelectPedido(p.id); } }}
-                      >
+                pedidosVisibles.map(renderPedidoCard)
+              )}
+            </div>
+
+            <div style={styles.detail}>
+              {!selectedId ? (
+                <p style={{ opacity: 0.7 }}>Selecciona un pedido para ver el detalle.</p>
+              ) : loadingDetalle ? (
+                <p style={{ opacity: 0.7 }}>Cargando detalleÔÇª</p>
+              ) : detalle?.ruta ? (
+                <>
+                  <h2 style={{ marginTop: 0, fontSize: "18px" }}>Detalle del pedido</h2>
+                  <p>
+                    <span style={styles.badge(detalle.ruta.estado)}>
+                      {detalle.ruta.estado}
+                    </span>
+                  </p>
+                  <p style={{ fontWeight: 600 }}>
+                    {detalle.ruta.nombre_ruta || `${detalle.ruta.origen} → ${detalle.ruta.destino}`}
+                  </p>
+
+                  {detalle.bultos?.length > 0 && (
+                    <>
+                      <h3 style={{ fontSize: "15px", marginTop: "16px" }}>Paquetes registrados</h3>
+                      {Object.entries(
+                        detalle.bultos.reduce((acc, b) => {
+                          const label = b.categoria
+                            ? `Tipo ${b.categoria}`
+                            : `${b.alto_cm}x${b.ancho_cm}x${b.largo_cm} cm`;
+                          acc[label] = (acc[label] || 0) + 1;
+                          return acc;
+                        }, {}),
+                      ).map(([desc, count]) => (
+                        <div key={desc} style={{ fontSize: "13px" }}>
+                          • {count}x {desc}
+                        </div>
+                      ))}
+                    </>
+                  )}
+
+                  {detalle.ruta?.tarifa_base_total != null && (
+                    <>
+                      <h3 style={{ fontSize: "15px", marginTop: "16px" }}>Detalle económico</h3>
+                      <div style={{ fontSize: "14px", lineHeight: 1.6 }}>
                         <div>
-                          <strong style={{ display: "block", fontSize: "16px", marginBottom: "4px", color: isExpanded ? "#38bdf8" : "#fff" }}>
-                            {p.nombre_ruta || `${p.origen || "—"} → ${p.destino || "—"}`}
-                          </strong>
-                          <div style={{ fontSize: "13px", opacity: 0.8 }}>
-                            Entrega estimada: {formatDate(p.fecha_estimada_entrega)}
-                            {p.bultos_despachados != null ? ` · ${p.bultos_despachados} paquetes` : ""}
-                          </div>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                          <span style={stylesObj.badge(p.estado)}>{p.estado || "—"}</span>
-                          <span style={{ transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }}>▼</span>
-                        </div>
-                      </div>
-
-                      {isExpanded && (
-                        <div style={{ padding: "16px", borderTop: "1px solid rgba(255,255,255,0.08)", background: "rgba(8,12,24,0.6)" }}>
-                          {loadingDetalle ? (
-                            <p style={{ opacity: 0.7, margin: 0 }}>Cargando detalle…</p>
-                          ) : !detalle?.ruta ? (
-                            <p style={{ opacity: 0.7, margin: 0 }}>Sin datos de detalle.</p>
-                          ) : (
-                            <>
-                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "20px" }}>
-                                <div>
-                                  <h3 style={{ fontSize: "14px", marginTop: 0, color: "#94a3b8", marginBottom: "8px" }}>Ruta</h3>
-                                  <p style={{ margin: "0 0 4px 0", fontSize: "14px" }}><strong>Origen:</strong> {detalle.ruta.origen}</p>
-                                  <p style={{ margin: "0 0 4px 0", fontSize: "14px" }}><strong>Destino:</strong> {detalle.ruta.destino}</p>
-                                  {detalle.ruta.distancia_km != null && <p style={{ margin: "0", fontSize: "14px" }}><strong>Distancia:</strong> {detalle.ruta.distancia_km} km</p>}
-                                </div>
-                                <div>
-                                  {detalle.bultos && detalle.bultos.length > 0 && (
-                                    <>
-                                      <h3 style={{ fontSize: "14px", marginTop: 0, color: "#94a3b8", marginBottom: "8px" }}>Paquetes Registrados</h3>
-                                      {Object.entries(
-                                        detalle.bultos.reduce((acc, b) => {
-                                          const label = b.categoria ? `Tipo ${b.categoria}` : `${b.alto_cm}x${b.ancho_cm}x${b.largo_cm} cm (${b.peso_kg} kg)`;
-                                          acc[label] = (acc[label] || 0) + 1;
-                                          return acc;
-                                        }, {})
-                                      ).map(([desc, count]) => (
-                                        <div key={desc} style={{ fontSize: "13px", color: "#e2e8f0" }}>• {count}x {desc}</div>
-                                      ))}
-                                    </>
-                                  )}
-                                </div>
-                              </div>
-
-                              <h3 style={{ fontSize: "15px", marginTop: 0, color: "#94a3b8", marginBottom: "12px", borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "4px" }}>Detalle Económico</h3>
-                              {detalle.ruta?.tarifa_base_total != null ? (
-                                <div style={{ fontSize: "14px", lineHeight: "1.6", background: "rgba(255,255,255,0.03)", padding: "16px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.06)", marginBottom: "16px" }}>
-                                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                    <span>Valor total base a pagar:</span>
-                                    <strong>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(Number(detalle.ruta.costo_servicio || detalle.ruta.tarifa_base_total || 0))}</strong>
-                                  </div>
-                                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px" }}>
-                                    <span>Costo de Espera en Destino (Retraso):</span>
-                                    <strong style={{ color: Number(detalle.ruta.costo_espera_total) > 0 ? "#f87171" : "#e2e8f0" }}>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(Number(detalle.ruta.costo_espera_total || 0))}</strong>
-                                  </div>
-                                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: "12px", paddingTop: "12px", borderTop: "1px dashed rgba(255,255,255,0.12)" }}>
-                                    <span>Total a Pagar:</span>
-                                    <strong style={{ color: "#38bdf8", fontSize: "18px" }}>
-                                      {new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(Number((detalle.ruta.costo_servicio || detalle.ruta.tarifa_base_total || 0) + (detalle.ruta.costo_espera_total || 0)))}
-                                    </strong>
-                                  </div>
-
-<<<<<<< HEAD
-                                  <div style={{ marginTop: "24px", display: "flex", justifyContent: "flex-end" }}>
-                                    {detalle.ruta.estado === 'PAGO_ATRASO_PENDIENTE' ? (
-                                      <button type="button" disabled={pagandoBase} style={{ ...stylesObj.btn, background: pagandoBase ? "#64748b" : "#ef4444", borderColor: pagandoBase ? "#64748b" : "#ef4444", fontWeight: 600, padding: "10px 24px" }} onClick={(e) => handlePagarKhipu(p.id, Number(detalle.ruta.costo_espera_total), 'atraso', e)}>
-                                        {pagandoBase ? "Redirigiendo..." : "Pagar Atraso"}
-                                      </button>
-                                    ) : detalle.ruta.estado_pago === 'pagado' ? (
-                                      <button type="button" style={{ ...stylesObj.btn, background: "#3B82F6", borderColor: "#3B82F6", fontWeight: 600, padding: "10px 24px" }} onClick={(e) => { e.stopPropagation(); setComprobanteRutaId(p.id); }}>
-                                        Ver Comprobante
-                                      </button>
-                                    ) : (
-                                      <button type="button" disabled={pagandoBase} style={{ ...stylesObj.btn, background: pagandoBase ? "#64748b" : "#10b981", borderColor: pagandoBase ? "#64748b" : "#10b981", fontWeight: 600, padding: "10px 24px" }} onClick={(e) => handlePagarKhipu(p.id, Number((detalle.ruta.costo_servicio || detalle.ruta.tarifa_base_total || 0)), 'base', e)}>
-                                        {pagandoBase ? "Redirigiendo..." : "Pagar"}
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-                              ) : (
-                                <p style={{ opacity: 0.7, fontSize: "14px", marginBottom: "16px" }}>La tarifa se calculará automáticamente cuando se confirme el pedido.</p>
-                              )}
-
-                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "24px", marginBottom: "12px", borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "4px" }}>
-                                <h3 style={{ fontSize: "15px", margin: 0, color: "#94a3b8" }}>Historial de estados</h3>
-                                <button type="button" style={{ ...stylesObj.btnEvidencias, margin: 0, padding: "6px 12px", fontSize: "12px" }} onClick={(e) => { e.stopPropagation(); handleVerEvidencias(); }}>
-                                  Ver Evidencias Fotográficas
-                                </button>
-                              </div>
-                              
-                              <div style={{ display: "flex", gap: "16px", overflowX: "auto", paddingBottom: "8px" }}>
-                                {(detalle.historial_estados || []).length === 0 ? (
-                                  <p style={{ opacity: 0.7, fontSize: "14px" }}>Sin historial.</p>
-                                ) : (
-                                  detalle.historial_estados.map((h) => (
-                                    <div key={h.id} style={{ ...stylesObj.timelineItem, flexShrink: 0, minWidth: "140px" }}>
-                                      <strong>{h.estado}</strong>
-                                      <div style={{ opacity: 0.75, fontSize: "12px" }}>{formatDate(h.created_at)}</div>
-                                    </div>
-                                  ))
-                                )}
-                              </div>
-                            </>
+                          Total base:{" "}
+                          {new Intl.NumberFormat("es-CL", {
+                            style: "currency",
+                            currency: "CLP",
+                          }).format(
+                            Number(
+                              detalle.ruta.costo_servicio ||
+                                detalle.ruta.tarifa_base_total ||
+                                0,
+                            ),
                           )}
                         </div>
-                      )}
-                    </div>
-                  );
-                })
-=======
+                        <div>
+                          Espera en destino:{" "}
+                          {new Intl.NumberFormat("es-CL", {
+                            style: "currency",
+                            currency: "CLP",
+                          }).format(Number(detalle.ruta.costo_espera_total || 0))}
+                        </div>
+                      </div>
+                      <div style={{ marginTop: 16, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        {detalle.ruta.estado === "PAGO_ATRASO_PENDIENTE" ? (
+                          <button
+                            type="button"
+                            disabled={pagandoBase}
+                            style={{ ...styles.btn, background: "#ef4444", borderColor: "#ef4444" }}
+                            onClick={(e) =>
+                              handlePagarKhipu(
+                                selectedId,
+                                Number(detalle.ruta.costo_espera_total || 0),
+                                "atraso",
+                                e,
+                              )
+                            }
+                          >
+                            {pagandoBase ? "Redirigiendo..." : "Pagar atraso"}
+                          </button>
+                        ) : detalle.ruta.estado_pago === "pagado" ? (
+                          <button
+                            type="button"
+                            style={{ ...styles.btn, background: "#3B82F6", borderColor: "#3B82F6" }}
+                            onClick={() => setComprobanteRutaId(selectedId)}
+                          >
+                            Ver comprobante
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={pagandoBase}
+                            style={{ ...styles.btn, background: "#10b981", borderColor: "#10b981" }}
+                            onClick={(e) =>
+                              handlePagarKhipu(
+                                selectedId,
+                                Number(
+                                  detalle.ruta.costo_servicio ||
+                                    detalle.ruta.tarifa_base_total ||
+                                    0,
+                                ),
+                                "base",
+                                e,
+                              )
+                            }
+                          >
+                            {pagandoBase ? "Redirigiendo..." : "Pagar"}
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  )}
+
+                  <h3 style={{ fontSize: "15px", marginTop: "20px" }}>Historial de estados</h3>
+                  {(detalle.historial_estados || []).length === 0 ? (
+                    <p style={{ opacity: 0.7, fontSize: "14px" }}>Sin historial.</p>
+                  ) : (
+                    detalle.historial_estados.map((h) => (
+                      <div key={h.id} style={styles.timelineItem}>
+                        <strong>{h.estado}</strong>
+                        <div style={{ opacity: 0.75 }}>{formatDate(h.created_at)}</div>
+                      </div>
+                    ))
+                  )}
+
+                  <h3 style={{ fontSize: "15px", marginTop: "16px" }}>Entregas</h3>
+                  {(detalle.entregas || []).length === 0 ? (
+                    <p style={{ opacity: 0.7, fontSize: "14px" }}>Sin registro de entrega.</p>
+                  ) : (
+                    detalle.entregas.map((e) => (
+                      <div key={e.id} style={{ fontSize: "14px", marginBottom: "8px" }}>
+                        {e.estado || "ÔÇö"} ┬À validado: {e.validado ? "s├¡" : "no"}
+                        {e.fecha_entrega_real
+                          ? ` ┬À ${formatDate(e.fecha_entrega_real)}`
+                          : ""}
+                      </div>
+                    ))
+                  )}
+
+                  <h3 style={{ fontSize: "15px", marginTop: "16px" }}>Rutas activas</h3>
+                  {(detalle.guias_despacho || []).length === 0 ? (
+                    <p style={{ opacity: 0.7, fontSize: "14px" }}>Sin rutas activas.</p>
+                  ) : (
+                    detalle.guias_despacho.map((g) => (
+                      <div key={g.id} style={{ fontSize: "14px", marginBottom: "8px" }}>
+                        {g.numero_guia} ┬À {g.estado_recepcion || "ÔÇö"}
+                        {g.url_pdf ? (
+                          <>
+                            {" ┬À "}
+                            <a href={g.url_pdf} target="_blank" rel="noreferrer">
+                              PDF
+                            </a>
+                          </>
+                        ) : null}
+                      </div>
+                    ))
+                  )}
+
                   <button
                     type="button"
                     style={styles.btnEvidencias}
@@ -787,10 +698,11 @@ export default function ClientPortalShell({ user, onSignOut }) {
                 </>
               ) : (
                 <p style={{ opacity: 0.7 }}>Sin datos de detalle.</p>
->>>>>>> origin/main
               )}
             </div>
           </div>
+        </>
+      )}
         </>
       )}
 
@@ -804,166 +716,6 @@ export default function ClientPortalShell({ user, onSignOut }) {
         />
       ) : null}
 
-<<<<<<< HEAD
-      {showCreateModal ? (
-        <div style={stylesObj.modalOverlay}>
-          <div style={stylesObj.modalContent}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-              <h2 style={{ margin: 0, fontSize: "20px", color: "#38bdf8" }}>Crear Nuevo Pedido</h2>
-              <button
-                type="button"
-                style={{ ...stylesObj.btn, padding: "4px 8px", fontSize: "12px" }}
-                onClick={() => setShowCreateModal(false)}
-              >
-                ✕
-              </button>
-            </div>
-
-            {createError ? (
-              <div style={{ color: "#f87171", background: "rgba(248,113,113,0.1)", padding: "10px", borderRadius: "8px", border: "1px solid rgba(248,113,113,0.2)", marginBottom: "16px", fontSize: "14px" }} role="alert">
-                ⚠️ {createError}
-              </div>
-            ) : null}
-
-            <form onSubmit={handleCreateOrderSubmit}>
-              <div style={{ marginBottom: "14px" }}>
-                <label style={{ fontSize: "13px", color: "#94a3b8" }}>Dirección de Origen *</label>
-                <input
-                  type="text"
-                  style={stylesObj.input}
-                  required
-                  placeholder="Ej: Av. Vitacura 1234, Santiago"
-                  value={newOrderForm.origen}
-                  onChange={(e) => setNewOrderForm(prev => ({ ...prev, origen: e.target.value }))}
-                />
-              </div>
-
-              <div style={{ marginBottom: "14px" }}>
-                <label style={{ fontSize: "13px", color: "#94a3b8" }}>Dirección de Destino *</label>
-                <input
-                  type="text"
-                  style={stylesObj.input}
-                  required
-                  placeholder="Ej: Calle Valparaíso 456, Viña del Mar"
-                  value={newOrderForm.destino}
-                  onChange={(e) => setNewOrderForm(prev => ({ ...prev, destino: e.target.value }))}
-                />
-              </div>
-
-              <div style={{ marginBottom: "20px" }}>
-                <label style={{ fontSize: "13px", color: "#94a3b8" }}>Distancia Vial Aproximada (Km) *</label>
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  style={stylesObj.input}
-                  required
-                  placeholder="Ej: 120"
-                  value={newOrderForm.distancia_km}
-                  onChange={(e) => setNewOrderForm(prev => ({ ...prev, distancia_km: e.target.value }))}
-                />
-              </div>
-
-              <div style={{ borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: "14px", marginBottom: "14px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-                  <span style={{ fontWeight: 600, fontSize: "15px" }}>Detalle de Paquetes ({newOrderForm.bultos_detalle.length})</span>
-                  <button
-                    type="button"
-                    style={{ ...stylesObj.btn, padding: "6px 12px", fontSize: "13px", borderColor: "#0ea5e9", color: "#38bdf8" }}
-                    onClick={handleAddBulto}
-                  >
-                    + Agregar Paquete
-                  </button>
-                </div>
-
-                {newOrderForm.bultos_detalle.map((b, idx) => (
-                  <div key={idx} style={stylesObj.bultoRow}>
-                    <div>
-                      <label style={{ fontSize: "11px", color: "#94a3b8" }}>Alto (cm)</label>
-                      <input
-                        type="number"
-                        min="1"
-                        required
-                        style={stylesObj.input}
-                        placeholder="cm"
-                        value={b.alto_cm}
-                        onChange={(e) => handleChangeBulto(idx, "alto_cm", e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ fontSize: "11px", color: "#94a3b8" }}>Ancho (cm)</label>
-                      <input
-                        type="number"
-                        min="1"
-                        required
-                        style={stylesObj.input}
-                        placeholder="cm"
-                        value={b.ancho_cm}
-                        onChange={(e) => handleChangeBulto(idx, "ancho_cm", e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ fontSize: "11px", color: "#94a3b8" }}>Largo (cm)</label>
-                      <input
-                        type="number"
-                        min="1"
-                        required
-                        style={stylesObj.input}
-                        placeholder="cm"
-                        value={b.largo_cm}
-                        onChange={(e) => handleChangeBulto(idx, "largo_cm", e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ fontSize: "11px", color: "#94a3b8" }}>Peso (Kg)</label>
-                      <input
-                        type="number"
-                        min="0.1"
-                        step="0.1"
-                        required
-                        style={stylesObj.input}
-                        placeholder="Kg"
-                        value={b.peso_kg}
-                        onChange={(e) => handleChangeBulto(idx, "peso_kg", e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <button
-                        type="button"
-                        style={{ ...stylesObj.btn, padding: "8px 12px", borderColor: "#f87171", color: "#f87171", opacity: newOrderForm.bultos_detalle.length === 1 ? 0.4 : 1 }}
-                        disabled={newOrderForm.bultos_detalle.length === 1}
-                        onClick={() => handleRemoveBulto(idx)}
-                      >
-                        Eliminar
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end", marginTop: "24px", borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: "16px" }}>
-                <button
-                  type="button"
-                  style={stylesObj.btn}
-                  onClick={() => setShowCreateModal(false)}
-                  disabled={creatingOrder}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  style={{ ...stylesObj.btn, background: "#0ea5e9", borderColor: "#0ea5e9", fontWeight: 600 }}
-                  disabled={creatingOrder}
-                >
-                  {creatingOrder ? "Guardando..." : "Guardar Pedido"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      ) : null}
-      {comprobanteRutaId && <ComprobanteModal rutaId={comprobanteRutaId} onClose={() => setComprobanteRutaId(null)} stylesObj={stylesObj} />}
-=======
       <ModalRecurrencia
         open={modalRecurrenciaOpen}
         onClose={() => setModalRecurrenciaOpen(false)}
@@ -976,9 +728,117 @@ export default function ClientPortalShell({ user, onSignOut }) {
         portalMode
         titulo="Repetir pedido"
       />
-        </>
-      )}
->>>>>>> origin/main
+
+      {comprobanteRutaId ? (
+        <ComprobanteModal
+          rutaId={comprobanteRutaId}
+          onClose={() => setComprobanteRutaId(null)}
+          stylesObj={styles}
+        />
+      ) : null}
+
+      {showCreateModal ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.75)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: 20,
+          }}
+        >
+          <div
+            style={{
+              background: "#0f172a",
+              border: "1px solid rgba(255,255,255,0.15)",
+              borderRadius: 16,
+              padding: 24,
+              width: "100%",
+              maxWidth: 560,
+              color: "#e2e8f0",
+            }}
+          >
+            <h2 style={{ marginTop: 0 }}>Crear nuevo pedido</h2>
+            {createError ? (
+              <p style={{ color: "#f87171" }} role="alert">
+                {createError}
+              </p>
+            ) : null}
+            <form onSubmit={handleCreateOrderSubmit}>
+              <label style={{ display: "block", marginBottom: 12 }}>
+                Origen
+                <input
+                  className="lt-input"
+                  style={{ display: "block", width: "100%", marginTop: 4 }}
+                  value={newOrderForm.origen}
+                  onChange={(e) =>
+                    setNewOrderForm((prev) => ({ ...prev, origen: e.target.value }))
+                  }
+                  required
+                />
+              </label>
+              <label style={{ display: "block", marginBottom: 12 }}>
+                Destino
+                <input
+                  className="lt-input"
+                  style={{ display: "block", width: "100%", marginTop: 4 }}
+                  value={newOrderForm.destino}
+                  onChange={(e) =>
+                    setNewOrderForm((prev) => ({ ...prev, destino: e.target.value }))
+                  }
+                  required
+                />
+              </label>
+              <label style={{ display: "block", marginBottom: 12 }}>
+                Distancia aproximada (km)
+                <input
+                  type="number"
+                  min="1"
+                  className="lt-input"
+                  style={{ display: "block", width: "100%", marginTop: 4 }}
+                  value={newOrderForm.distancia_km}
+                  onChange={(e) =>
+                    setNewOrderForm((prev) => ({ ...prev, distancia_km: e.target.value }))
+                  }
+                  required
+                />
+              </label>
+              <label style={{ display: "block", marginBottom: 16 }}>
+                Cantidad de paquetes
+                <input
+                  type="number"
+                  min="1"
+                  className="lt-input"
+                  style={{ display: "block", width: "100%", marginTop: 4 }}
+                  value={newOrderForm.bultos_detalle.length}
+                  onChange={(e) => {
+                    const n = Math.max(1, Number(e.target.value) || 1);
+                    setNewOrderForm((prev) => ({
+                      ...prev,
+                      bultos_detalle: Array.from({ length: n }, () => ({ categoria: "S" })),
+                    }));
+                  }}
+                />
+              </label>
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                <button type="button" style={styles.btn} onClick={() => setShowCreateModal(false)}>
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  style={{ ...styles.btn, background: "#0ea5e9", borderColor: "#0ea5e9" }}
+                  disabled={creatingOrder}
+                >
+                  {creatingOrder ? "Guardando..." : "Guardar pedido"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
