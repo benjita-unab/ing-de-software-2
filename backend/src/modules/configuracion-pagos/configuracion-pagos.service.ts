@@ -8,24 +8,30 @@ import {
 
 const SINGLETON_KEY = 'default';
 
-export type ConfiguracionPagosRecord = PagoTarifas & {
-  updatedAt: string | null;
-  updatedBy: string | null;
-  source: 'database' | 'env_fallback';
+const DEFAULT_COMBUSTIBLE_LITRO = 1200;
+const DEFAULT_ESPERA_MINUTO = 500;
+
+export type ConfiguracionOperativa = {
+  precioCombustibleLitro: number;
+  precioEsperaMinuto: number;
 };
 
-export type UpdateConfiguracionPagosDto = {
-  precioPorRuta: number;
-  precioPorEntrega: number;
-  precioPorBulto: number;
-  precioPorKm: number;
-};
+export type ConfiguracionPagosRecord = PagoTarifas &
+  ConfiguracionOperativa & {
+    updatedAt: string | null;
+    updatedBy: string | null;
+    source: 'database' | 'env_fallback';
+  };
+
+export type UpdateConfiguracionPagosDto = PagoTarifas & ConfiguracionOperativa;
 
 type ConfiguracionPagosRow = {
   precio_por_ruta: number | string;
   precio_por_entrega: number | string;
   precio_por_bulto: number | string;
   precio_por_km: number | string;
+  precio_combustible_litro?: number | string | null;
+  precio_espera_minuto?: number | string | null;
   updated_at: string | null;
   updated_by: string | null;
 };
@@ -37,10 +43,6 @@ export class ConfiguracionPagosService {
     private readonly config: ConfigService,
   ) {}
 
-  /**
-   * Obtiene tarifas desde Supabase; si no hay fila, usa variables de entorno
-   * y finalmente los defaults estáticos de HU-37.
-   */
   async getTarifas(): Promise<PagoTarifas> {
     const record = await this.getConfiguracion();
     return {
@@ -51,15 +53,24 @@ export class ConfiguracionPagosService {
     };
   }
 
+  /** HU-50: precios globales de combustible y espera. */
+  async getConfiguracionOperativa(): Promise<ConfiguracionOperativa> {
+    const record = await this.getConfiguracion();
+    return {
+      precioCombustibleLitro: record.precioCombustibleLitro,
+      precioEsperaMinuto: record.precioEsperaMinuto,
+    };
+  }
+
   async getConfiguracion(): Promise<ConfiguracionPagosRecord> {
-    const envFallback = getPagoTarifasFromEnv(this.config);
+    const envFallback = this.getEnvFallback();
 
     try {
       const supabase = this.supabaseConfig.getClient();
       const { data, error } = await supabase
         .from('configuracion_pagos')
         .select(
-          'precio_por_ruta, precio_por_entrega, precio_por_bulto, precio_por_km, updated_at, updated_by',
+          'precio_por_ruta, precio_por_entrega, precio_por_bulto, precio_por_km, precio_combustible_litro, precio_espera_minuto, updated_at, updated_by',
         )
         .eq('singleton_key', SINGLETON_KEY)
         .maybeSingle();
@@ -97,6 +108,8 @@ export class ConfiguracionPagosService {
       precio_por_entrega: dto.precioPorEntrega,
       precio_por_bulto: dto.precioPorBulto,
       precio_por_km: dto.precioPorKm,
+      precio_combustible_litro: dto.precioCombustibleLitro,
+      precio_espera_minuto: dto.precioEsperaMinuto,
       updated_at: new Date().toISOString(),
       updated_by: userId,
     };
@@ -105,7 +118,7 @@ export class ConfiguracionPagosService {
       .from('configuracion_pagos')
       .upsert(payload, { onConflict: 'singleton_key' })
       .select(
-        'precio_por_ruta, precio_por_entrega, precio_por_bulto, precio_por_km, updated_at, updated_by',
+        'precio_por_ruta, precio_por_entrega, precio_por_bulto, precio_por_km, precio_combustible_litro, precio_espera_minuto, updated_at, updated_by',
       )
       .single();
 
@@ -115,13 +128,27 @@ export class ConfiguracionPagosService {
       );
     }
 
-    const envFallback = getPagoTarifasFromEnv(this.config);
-    return this.mapRow(data as ConfiguracionPagosRow, envFallback, 'database');
+    return this.mapRow(data as ConfiguracionPagosRow, this.getEnvFallback(), 'database');
+  }
+
+  private getEnvFallback(): PagoTarifas & ConfiguracionOperativa {
+    const tarifas = getPagoTarifasFromEnv(this.config);
+    return {
+      ...tarifas,
+      precioCombustibleLitro: this.parseTarifa(
+        this.config.get<string>('PRECIO_COMBUSTIBLE_LITRO'),
+        DEFAULT_COMBUSTIBLE_LITRO,
+      ),
+      precioEsperaMinuto: this.parseTarifa(
+        this.config.get<string>('PRECIO_ESPERA_MINUTO'),
+        DEFAULT_ESPERA_MINUTO,
+      ),
+    };
   }
 
   private mapRow(
     row: ConfiguracionPagosRow,
-    envFallback: PagoTarifas,
+    envFallback: PagoTarifas & ConfiguracionOperativa,
     source: 'database' | 'env_fallback' = 'database',
   ): ConfiguracionPagosRecord {
     return {
@@ -132,6 +159,14 @@ export class ConfiguracionPagosService {
       ),
       precioPorBulto: this.parseTarifa(row.precio_por_bulto, envFallback.precioPorBulto),
       precioPorKm: this.parseTarifa(row.precio_por_km, envFallback.precioPorKm),
+      precioCombustibleLitro: this.parseTarifa(
+        row.precio_combustible_litro,
+        envFallback.precioCombustibleLitro,
+      ),
+      precioEsperaMinuto: this.parseTarifa(
+        row.precio_espera_minuto,
+        envFallback.precioEsperaMinuto,
+      ),
       updatedAt: row.updated_at ?? null,
       updatedBy: row.updated_by ?? null,
       source,
@@ -150,6 +185,8 @@ export class ConfiguracionPagosService {
       'precioPorEntrega',
       'precioPorBulto',
       'precioPorKm',
+      'precioCombustibleLitro',
+      'precioEsperaMinuto',
     ];
 
     for (const field of fields) {

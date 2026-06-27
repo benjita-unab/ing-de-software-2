@@ -29,6 +29,7 @@ async function bootstrap() {
     'http://localhost:5173',
     'https://ing-de-software-2.vercel.app',
     process.env.FRONTEND_URL,
+    process.env.APP_URL,
   ].filter(Boolean) as string[];
 
   app.enableCors({

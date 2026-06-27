@@ -9,8 +9,22 @@ import { SupabaseConfigService } from '../../config/supabase.config';
 import { ConductoresService } from '../conductores/conductores.service';
 import { EmailService } from '../email/email.service';
 import { calcularDistanciaVialGoogle } from './google-routes-distance.helper';
+import { ConfiguracionPagosService } from '../configuracion-pagos/configuracion-pagos.service';
+import { PagosClienteService } from '../pagos-cliente/pagos-cliente.service';
+import { RutasPlantillaService } from '../rutas-plantilla/rutas-plantilla.service';
+import { CostosOperativosService } from '../costos-operativos/costos-operativos.service';
 import { CreateAnomaliaDto } from './dto/create-anomalia.dto';
+import type { ConsolidarPedidoDto } from './dto/consolidar-pedido.dto';
+import type { CreateRutaDto, ParadaRutaDto } from './dto/create-ruta.dto';
+import {
+  advertenciasCapacidad,
+  advertenciasDistanciaDestinos,
+  calcularCapacidadRuta,
+  type AdvertenciaConsolidacion,
+  type CapacidadRuta,
+} from './consolidacion.helper';
 
+<<<<<<< HEAD
 export type BultoInputDto = {
   alto_cm?: number;
   ancho_cm?: number;
@@ -41,6 +55,9 @@ export type CreateRutaDto = {
   is_tarifa_manual?: boolean | null;
   tarifa_base_total?: number | string | null;
 };
+=======
+export type { CreateRutaDto } from './dto/create-ruta.dto';
+>>>>>>> origin/main
 
 /** POST /api/rutas/estimar-fechas (HU-24). */
 export type EstimarFechasDto = {
@@ -99,6 +116,10 @@ export class RutasService {
     private supabaseConfig: SupabaseConfigService,
     private conductoresService: ConductoresService,
     private emailService: EmailService,
+    private rutasPlantillaService: RutasPlantillaService,
+    private pagosClienteService: PagosClienteService,
+    private configuracionPagosService: ConfiguracionPagosService,
+    private costosOperativosService: CostosOperativosService,
   ) {}
 
   private static readonly FECHAS_ESTIMADAS_SELECT = `
@@ -268,14 +289,34 @@ export class RutasService {
   }
 
   /**
-   * Crea una ruta en Supabase.
-   * Estado inicial: si vienen conductor_id y camion_id → ASIGNADO; si no → PENDIENTE.
-   * Si el cliente envía `estado` explícito, debe ser uno del enum.
+   * Crea una ruta/pedido operativo en Supabase (HU-58).
+   * - Modo plantilla: copia origen/destino desde rutas_plantilla sin modificarla.
+   * - Paradas: se persisten en rutas_paradas (solo afectan al pedido).
+   * - Genera pago pendiente y calcula costo con tarifas configuradas.
    */
   async createRoute(body: CreateRutaDto) {
-    const cliente_id = String(body?.cliente_id ?? '').trim();
-    const origen = String(body?.origen ?? '').trim();
-    const destino = String(body?.destino ?? '').trim();
+    const rutaPlantillaId = this.parseUuidOpcional(body?.ruta_plantilla_id);
+    let plantillaOrigen: Awaited<
+      ReturnType<RutasPlantillaService['getById']>
+    > | null = null;
+
+    if (rutaPlantillaId) {
+      plantillaOrigen = await this.rutasPlantillaService.getById(rutaPlantillaId);
+      if (!plantillaOrigen.activa) {
+        throw new BadRequestException(
+          'La ruta seleccionada no está activa o no existe',
+        );
+      }
+    }
+
+    let cliente_id = String(body?.cliente_id ?? '').trim();
+    let origen = String(body?.origen ?? '').trim();
+    let destino = String(body?.destino ?? '').trim();
+
+    if (plantillaOrigen) {
+      if (!origen) origen = String(plantillaOrigen.origen ?? '').trim();
+      if (!destino) destino = String(plantillaOrigen.destino ?? '').trim();
+    }
 
     if (!cliente_id) {
       throw new BadRequestException('cliente_id es obligatorio');
@@ -287,6 +328,7 @@ export class RutasService {
       throw new BadRequestException('destino es obligatorio');
     }
 
+<<<<<<< HEAD
     // Validar capacidad física permitida
     if (body.bultos_detalle && Array.isArray(body.bultos_detalle)) {
       let volumenAcumulado = 0;
@@ -303,6 +345,11 @@ export class RutasService {
       if (volumenAcumulado > 25000000) {
         throw new BadRequestException('Capacidad de volumen excedida para este envío. Requiere coordinar un camión adicional');
       }
+=======
+    const fechaInicioRaw = body?.fecha_inicio;
+    if (fechaInicioRaw == null || String(fechaInicioRaw).trim() === '') {
+      throw new BadRequestException('fecha_inicio es obligatoria');
+>>>>>>> origin/main
     }
 
     const conductorRaw = body?.conductor_id;
@@ -316,6 +363,7 @@ export class RutasService {
         ? String(camionRaw).trim()
         : null;
 
+<<<<<<< HEAD
     // AUTORESOLVE 1:1 Conductor <-> Camion
     if (camion_id && !conductor_id) {
        const { data: conductorAsociado } = await this.supabaseConfig.getClient()
@@ -326,6 +374,18 @@ export class RutasService {
        if (conductorAsociado) {
            conductor_id = conductorAsociado.id;
        }
+=======
+    const generadoAutomaticamente = body.generado_automaticamente === true;
+    const recurrenciaId = this.parseUuidOpcional(body?.recurrencia_id);
+
+    if (!generadoAutomaticamente) {
+      if (!conductor_id) {
+        throw new BadRequestException('conductor_id es obligatorio');
+      }
+      if (!camion_id) {
+        throw new BadRequestException('camion_id es obligatorio');
+      }
+>>>>>>> origin/main
     }
 
     const estadosValidos = [...RutasService.ESTADOS_RUTA];
@@ -344,8 +404,12 @@ export class RutasService {
       }
       estadoInicial = estadoExplicito;
     } else {
+<<<<<<< HEAD
       // Si no se especifica y tenemos conductor (ya sea explícito o por auto-resolución), ASIGNADO
       estadoInicial = conductor_id ? 'ASIGNADO' : 'PENDIENTE';
+=======
+      estadoInicial = generadoAutomaticamente ? 'PENDIENTE' : 'PENDIENTE';
+>>>>>>> origin/main
     }
 
     const insert: Record<string, unknown> = {
@@ -355,34 +419,64 @@ export class RutasService {
       estado: estadoInicial,
     };
 
+    if (rutaPlantillaId) {
+      insert.ruta_plantilla_id = rutaPlantillaId;
+    }
+
+    if (generadoAutomaticamente) {
+      insert.generado_automaticamente = true;
+      if (recurrenciaId) {
+        insert.recurrencia_id = recurrenciaId;
+      }
+    }
+
+    const observaciones =
+      body.observaciones != null ? String(body.observaciones).trim() : '';
+    if (observaciones) {
+      insert.observaciones = observaciones;
+    }
+
     if (conductor_id) {
       insert.conductor_id = conductor_id;
     }
     if (camion_id) {
       insert.camion_id = camion_id;
     }
-    if (body.nombre_ruta != null && String(body.nombre_ruta).trim() !== '') {
-      insert.nombre_ruta = String(body.nombre_ruta).trim();
+
+    const nombreRutaExplicito =
+      body.nombre_ruta != null && String(body.nombre_ruta).trim() !== ''
+        ? String(body.nombre_ruta).trim()
+        : '';
+    if (nombreRutaExplicito) {
+      insert.nombre_ruta = nombreRutaExplicito;
+    } else if (plantillaOrigen?.nombre) {
+      insert.nombre_ruta = plantillaOrigen.nombre;
     } else {
       const supabase = this.supabaseConfig.getClient();
-      const { count } = await supabase.from('rutas').select('*', { count: 'exact', head: true });
+      const { count } = await supabase
+        .from('rutas')
+        .select('*', { count: 'exact', head: true });
       insert.nombre_ruta = `Ruta #${(count || 0) + 1}`;
     }
 
-    if (body.fecha_inicio != null && String(body.fecha_inicio).trim() !== '') {
-      insert.fecha_inicio = String(body.fecha_inicio).trim();
-    }
+    insert.fecha_inicio = String(fechaInicioRaw).trim();
+
     if (body.eta != null && String(body.eta).trim() !== '') {
       insert.eta = String(body.eta).trim();
     }
 
-    // Aceptar bultos_despachados opcional enviado desde el panel web
-    if (body.bultos_despachados != null && String(body.bultos_despachados).trim() !== '') {
-      const raw = body.bultos_despachados;
-      const val = Number(raw);
+    let bultosDespachados: number | null = null;
+    if (
+      body.bultos_despachados != null &&
+      String(body.bultos_despachados).trim() !== ''
+    ) {
+      const val = Number(body.bultos_despachados);
       if (!Number.isInteger(val) || val < 0) {
-        throw new BadRequestException('bultos_despachados debe ser un entero no negativo');
+        throw new BadRequestException(
+          'bultos_despachados debe ser un entero no negativo',
+        );
       }
+      bultosDespachados = val;
       insert.bultos_despachados = val;
     }
 
@@ -390,7 +484,10 @@ export class RutasService {
       insert.fecha_inicio = new Date().toISOString();
     }
 
-    const distanciaKm = this.parseDistanciaKm(body.distancia_km);
+    let distanciaKm = this.parseDistanciaKm(body.distancia_km);
+    if (distanciaKm == null && plantillaOrigen?.distanciaEstimada != null) {
+      distanciaKm = this.parseDistanciaKm(plantillaOrigen.distanciaEstimada);
+    }
     if (distanciaKm != null) {
       insert.distancia_km = distanciaKm;
     }
@@ -423,7 +520,6 @@ export class RutasService {
       insert.fecha_estimada_entrega = feEntrega;
     }
 
-    // CA-3: bloquear asignación si la licencia está vencida (misma regla que POST /assign)
     if (conductor_id) {
       const licenseValidation =
         await this.conductoresService.validateDriverLicense(conductor_id);
@@ -436,7 +532,6 @@ export class RutasService {
 
     const supabase = this.supabaseConfig.getClient();
 
-    // Validar capacidad del camión si se asigna desde la creación
     if (camion_id && insert.bultos_despachados) {
       const slotsRequeridos = insert.bultos_despachados as number;
       const { data: camion, error: camionError } = await supabase
@@ -449,13 +544,15 @@ export class RutasService {
         throw new NotFoundException('Camión no encontrado');
       }
       if (camion.estado !== 'DISPONIBLE') {
-        throw new ForbiddenException(`El camión no está disponible (estado: ${camion.estado})`);
+        throw new ForbiddenException(
+          `El camión no está disponible (estado: ${camion.estado})`,
+        );
       }
 
       const maxSlots = (camion.slots as number) ?? 96;
       const slotsUtilizados = (camion.slots_utilizados as number) ?? 0;
 
-      if ((slotsUtilizados + slotsRequeridos) > maxSlots) {
+      if (slotsUtilizados + slotsRequeridos > maxSlots) {
         throw new ForbiddenException(
           `Capacidad insuficiente: el camión tiene ${maxSlots} slots en total y ${slotsUtilizados} ocupados. Se requieren ${slotsRequeridos} adicionales.`,
         );
@@ -482,6 +579,7 @@ export class RutasService {
         fecha_estimada_inicio,
         fecha_estimada_fin,
         fecha_estimada_entrega,
+<<<<<<< HEAD
         tarifa_base_total,
         costo_espera_total,
         total_pagar,
@@ -490,6 +588,10 @@ export class RutasService {
         pago_conductor_base_clp,
         costo_combustible_calculado,
         is_tarifa_manual,
+=======
+        ruta_plantilla_id,
+        observaciones,
+>>>>>>> origin/main
         created_at,
         ficha_despacho_url,
         clientes(id, nombre),
@@ -511,6 +613,7 @@ export class RutasService {
       );
     }
 
+<<<<<<< HEAD
     // Insertar bultos si existen
     if (body.bultos_detalle && Array.isArray(body.bultos_detalle) && body.bultos_detalle.length > 0) {
       const inserts = body.bultos_detalle.map(b => {
@@ -544,6 +647,11 @@ export class RutasService {
 
     if (estadoInicial === 'ASIGNADO') {
       await this.calcularYBloquearTarifaRuta(supabase, created.id);
+=======
+    const paradasPedido = this.resolveParadasPedido(body.paradas, plantillaOrigen);
+    if (paradasPedido.length > 0) {
+      await this.insertParadasRuta(created.id, paradasPedido);
+>>>>>>> origin/main
     }
 
     try {
@@ -559,18 +667,15 @@ export class RutasService {
       console.warn('createRoute historial_estados omitido:', msg);
     }
 
-    // Actualizar slots_utilizados si se asignó un camión con bultos en la creación
     if (camion_id && insert.bultos_despachados) {
       try {
         const slotsRequeridos = insert.bultos_despachados as number;
-        // Obtenemos los slots actuales de nuevo para evitar desactualización,
-        // aunque ya lo vimos arriba, es mejor hacer la suma
         const { data: camion } = await supabase
           .from('camiones')
           .select('slots_utilizados')
           .eq('id', camion_id)
           .single();
-          
+
         const slotsUtilizados = (camion?.slots_utilizados as number) ?? 0;
         await supabase
           .from('camiones')
@@ -581,7 +686,140 @@ export class RutasService {
       }
     }
 
-    return created;
+    let pagoGenerado: Awaited<
+      ReturnType<PagosClienteService['crearPagoParaPedido']>
+    > | null = null;
+    try {
+      const costo = await this.calcularCostoPedido(
+        distanciaKm,
+        bultosDespachados,
+      );
+      pagoGenerado = await this.pagosClienteService.crearPagoParaPedido({
+        clienteId: cliente_id,
+        pedidoId: String(created.id),
+        montoTotal: costo.monto,
+        montoCalculado: costo.calculado,
+      });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn('createRoute pago pendiente omitido:', msg);
+    }
+
+    if (!rutaPlantillaId && body.guardar_como_plantilla === true) {
+      try {
+        const nombrePlantilla =
+          body.nombre_plantilla?.trim() ||
+          nombreRutaExplicito ||
+          String(insert.nombre_ruta);
+        await this.rutasPlantillaService.create({
+          nombre: nombrePlantilla,
+          origen,
+          destino,
+          distanciaEstimada: distanciaKm ?? undefined,
+          clienteId: cliente_id,
+          paradas: paradasPedido.map((p) => ({
+            direccion: p.direccion,
+            orden: p.orden,
+            latitud: p.latitud ?? undefined,
+            longitud: p.longitud ?? undefined,
+          })),
+        });
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.warn('createRoute guardar plantilla omitido:', msg);
+      }
+    }
+
+    return {
+      ...created,
+      paradas: paradasPedido,
+      pago: pagoGenerado,
+    };
+  }
+
+  private parseUuidOpcional(value: unknown): string | null {
+    const s = value != null ? String(value).trim() : '';
+    return s || null;
+  }
+
+  private resolveParadasPedido(
+    paradasBody: ParadaRutaDto[] | undefined,
+    plantilla: { paradas?: Array<{ direccion: string; orden: number; latitud?: number | null; longitud?: number | null }> } | null,
+  ): ParadaRutaDto[] {
+    if (paradasBody?.length) {
+      return paradasBody
+        .filter((p) => p.direccion?.trim())
+        .map((p) => ({
+          direccion: p.direccion.trim(),
+          orden: Number(p.orden),
+          latitud: p.latitud ?? null,
+          longitud: p.longitud ?? null,
+          es_temporal: p.es_temporal !== false,
+        }))
+        .filter((p) => Number.isInteger(p.orden) && p.orden > 0)
+        .sort((a, b) => a.orden - b.orden);
+    }
+
+    if (!plantilla?.paradas?.length) {
+      return [];
+    }
+
+    return plantilla.paradas
+      .filter((p) => p.direccion?.trim())
+      .map((p) => ({
+        direccion: p.direccion.trim(),
+        orden: p.orden,
+        latitud: p.latitud ?? null,
+        longitud: p.longitud ?? null,
+        es_temporal: false,
+      }))
+      .sort((a, b) => a.orden - b.orden);
+  }
+
+  private async insertParadasRuta(
+    rutaId: string,
+    paradas: ParadaRutaDto[],
+  ): Promise<void> {
+    if (!paradas.length) return;
+
+    const supabase = this.supabaseConfig.getClient();
+    const rows = paradas.map((p) => ({
+      ruta_id: rutaId,
+      direccion: p.direccion,
+      orden: p.orden,
+      latitud: p.latitud ?? null,
+      longitud: p.longitud ?? null,
+      es_temporal: p.es_temporal !== false,
+    }));
+
+    const { error } = await supabase.from('rutas_paradas').insert(rows);
+
+    if (error) {
+      console.warn('insertParadasRuta omitido:', error.message);
+    }
+  }
+
+  private async calcularCostoPedido(
+    distanciaKm: number | null,
+    bultos: number | null,
+  ): Promise<{ monto: number; calculado: boolean }> {
+    const tarifas = await this.configuracionPagosService.getTarifas();
+    const km = distanciaKm ?? 0;
+    const bultosVal = bultos ?? 0;
+
+    if (km <= 0 && bultosVal <= 0) {
+      return { monto: 0, calculado: false };
+    }
+
+    const monto =
+      tarifas.precioPorRuta +
+      km * tarifas.precioPorKm +
+      bultosVal * tarifas.precioPorBulto;
+
+    return {
+      monto: Math.round(monto * 100) / 100,
+      calculado: true,
+    };
   }
 
   /**
@@ -1108,6 +1346,15 @@ export class RutasService {
       },
     ]);
 
+    if (nuevoEstado === 'ENTREGADO') {
+      try {
+        await this.costosOperativosService.congelarPorRuta(rutaId);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.warn('updateRouteStatus congelar costos omitido:', msg);
+      }
+    }
+
     return {
       success: true,
       message: `Ruta actualizada a estado: ${nuevoEstado}`,
@@ -1261,9 +1508,14 @@ export class RutasService {
     estado?: string;
     conductorId?: string;
     clienteId?: string;
+    search?: string;
     page?: number;
     limit?: number;
+<<<<<<< HEAD
     search?: string;
+=======
+    generadoAutomaticamente?: boolean;
+>>>>>>> origin/main
   }) {
     const supabase = this.supabaseConfig.getClient();
 
@@ -1289,6 +1541,7 @@ export class RutasService {
       cliente_id,
       conductor_id,
       camion_id,
+      ruta_maestra_id,
       ficha_despacho_url,
       distancia_km,
       fecha_estimada_inicio,
@@ -1297,6 +1550,7 @@ export class RutasService {
       notificacion_fecha_estimada_enviada_at,
       notificacion_fecha_estimada_destinatario,
       bultos_despachados,
+<<<<<<< HEAD
       tarifa_base_total,
       costo_espera_total,
       total_pagar,
@@ -1305,10 +1559,17 @@ export class RutasService {
       pago_conductor_base_clp,
       costo_combustible_calculado,
       is_tarifa_manual,
+=======
+      generado_automaticamente,
+      recurrencia_id,
+>>>>>>> origin/main
       clientes(id, nombre, contacto_email),
       conductores(id, rut),
-      camiones(id, patente)
+      camiones(id, patente, slots, slots_utilizados, talla)
     `, { count: 'exact' });
+
+    // HU-59: ocultar pedidos hijos consolidados del listado principal.
+    query = query.is('ruta_maestra_id', null);
 
     if (filters?.estado) {
       query = query.eq('estado', filters.estado);
@@ -1320,6 +1581,12 @@ export class RutasService {
 
     if (filters?.clienteId) {
       query = query.eq('cliente_id', filters.clienteId);
+    }
+
+    if (filters?.generadoAutomaticamente === true) {
+      query = query.eq('generado_automaticamente', true);
+    } else if (filters?.generadoAutomaticamente === false) {
+      query = query.eq('generado_automaticamente', false);
     }
 
     if (filters?.search) {
@@ -1855,6 +2122,7 @@ export class RutasService {
     };
   }
 
+<<<<<<< HEAD
   async calcularYBloquearTarifaRuta(supabase: any, rutaId: string) {
     console.log('calcularYBloquearTarifaRuta -> rutaId:', rutaId);
     try {
@@ -1927,5 +2195,494 @@ export class RutasService {
     } catch (e: any) {
       console.error('Error en calcularYBloquearTarifaRuta:', e);
     }
+=======
+  // ─── HU-59: Consolidación de pedidos en una misma ruta logística ───
+
+  private readonly ESTADOS_CONSOLIDABLES = new Set(['PENDIENTE', 'ASIGNADO']);
+
+  private mapPedidoConsolidacion(row: Record<string, unknown>) {
+    const clientes = row.clientes as { nombre?: string } | null;
+    return {
+      id: row.id as string,
+      nombre_ruta: row.nombre_ruta ?? null,
+      origen: row.origen ?? '',
+      destino: row.destino ?? '',
+      distancia_km:
+        row.distancia_km != null ? Number(row.distancia_km) : null,
+      bultos_despachados:
+        row.bultos_despachados != null
+          ? Number(row.bultos_despachados)
+          : 0,
+      estado: row.estado ?? null,
+      cliente_id: row.cliente_id ?? null,
+      cliente_nombre: clientes?.nombre ?? null,
+      es_maestra: row.ruta_maestra_id == null,
+    };
+  }
+
+  private async resolverRutaMaestra(
+    rutaId: string,
+  ): Promise<Record<string, unknown>> {
+    const supabase = this.supabaseConfig.getClient();
+    const { data: ruta, error } = await supabase
+      .from('rutas')
+      .select(
+        'id, nombre_ruta, origen, destino, estado, cliente_id, conductor_id, camion_id, ruta_maestra_id, distancia_km, bultos_despachados, camiones(id, patente, slots, slots_utilizados, talla)',
+      )
+      .eq('id', rutaId)
+      .single();
+
+    if (error || !ruta) {
+      throw new NotFoundException(`Ruta no encontrada: ${rutaId}`);
+    }
+
+    if (ruta.ruta_maestra_id) {
+      const { data: maestra, error: maestraError } = await supabase
+        .from('rutas')
+        .select(
+          'id, nombre_ruta, origen, destino, estado, cliente_id, conductor_id, camion_id, ruta_maestra_id, distancia_km, bultos_despachados, camiones(id, patente, slots, slots_utilizados, talla)',
+        )
+        .eq('id', ruta.ruta_maestra_id)
+        .single();
+
+      if (maestraError || !maestra) {
+        throw new NotFoundException(
+          `Ruta maestra no encontrada para pedido ${rutaId}`,
+        );
+      }
+      return maestra;
+    }
+
+    return ruta;
+  }
+
+  private async cargarPedidosGrupo(
+    maestraId: string,
+  ): Promise<Record<string, unknown>[]> {
+    const supabase = this.supabaseConfig.getClient();
+
+    const { data: maestra, error: maestraError } = await supabase
+      .from('rutas')
+      .select(
+        'id, nombre_ruta, origen, destino, estado, cliente_id, conductor_id, camion_id, ruta_maestra_id, distancia_km, bultos_despachados, clientes(id, nombre)',
+      )
+      .eq('id', maestraId)
+      .single();
+
+    if (maestraError || !maestra) {
+      throw new NotFoundException(`Ruta maestra no encontrada: ${maestraId}`);
+    }
+
+    const { data: hijos, error: hijosError } = await supabase
+      .from('rutas')
+      .select(
+        'id, nombre_ruta, origen, destino, estado, cliente_id, conductor_id, camion_id, ruta_maestra_id, distancia_km, bultos_despachados, clientes(id, nombre)',
+      )
+      .eq('ruta_maestra_id', maestraId)
+      .order('created_at', { ascending: true });
+
+    if (hijosError) {
+      throw new BadRequestException(
+        `Error al cargar pedidos consolidados: ${hijosError.message}`,
+      );
+    }
+
+    return [maestra, ...(hijos || [])];
+  }
+
+  private async cargarParadasMapa(
+    pedidoIds: string[],
+  ): Promise<
+    Array<{
+      pedido_id: string;
+      tipo: 'origen' | 'destino' | 'parada';
+      direccion: string;
+      latitud: number | null;
+      longitud: number | null;
+      orden: number;
+    }>
+  > {
+    if (!pedidoIds.length) return [];
+
+    const supabase = this.supabaseConfig.getClient();
+    const { data: rutas, error } = await supabase
+      .from('rutas')
+      .select('id, origen, destino')
+      .in('id', pedidoIds);
+
+    if (error) {
+      throw new BadRequestException(
+        `Error al cargar paradas de mapa: ${error.message}`,
+      );
+    }
+
+    const { data: paradas, error: paradasError } = await supabase
+      .from('rutas_paradas')
+      .select('ruta_id, direccion, orden, latitud, longitud')
+      .in('ruta_id', pedidoIds)
+      .order('orden', { ascending: true });
+
+    if (paradasError) {
+      console.warn('cargarParadasMapa paradas omitidas:', paradasError.message);
+    }
+
+    const puntos: Array<{
+      pedido_id: string;
+      tipo: 'origen' | 'destino' | 'parada';
+      direccion: string;
+      latitud: number | null;
+      longitud: number | null;
+      orden: number;
+    }> = [];
+
+    for (const ruta of rutas || []) {
+      const rid = ruta.id as string;
+      puntos.push({
+        pedido_id: rid,
+        tipo: 'origen',
+        direccion: String(ruta.origen ?? ''),
+        latitud: null,
+        longitud: null,
+        orden: 0,
+      });
+
+      (paradas || [])
+        .filter((p) => p.ruta_id === rid)
+        .forEach((p) => {
+          puntos.push({
+            pedido_id: rid,
+            tipo: 'parada',
+            direccion: String(p.direccion ?? ''),
+            latitud: p.latitud != null ? Number(p.latitud) : null,
+            longitud: p.longitud != null ? Number(p.longitud) : null,
+            orden: Number(p.orden) || 0,
+          });
+        });
+
+      puntos.push({
+        pedido_id: rid,
+        tipo: 'destino',
+        direccion: String(ruta.destino ?? ''),
+        latitud: null,
+        longitud: null,
+        orden: 9999,
+      });
+    }
+
+    return puntos;
+  }
+
+  private async calcularDistanciasEntreDestinos(
+    destinos: string[],
+  ): Promise<number[]> {
+    const unicos = destinos
+      .map((d) => String(d ?? '').trim())
+      .filter(Boolean);
+    if (unicos.length < 2) return [];
+
+    const apiKey = this.getGoogleMapsApiKey();
+    const distancias: number[] = [];
+
+    for (let i = 0; i < unicos.length; i++) {
+      for (let j = i + 1; j < unicos.length; j++) {
+        const result = await calcularDistanciaVialGoogle(
+          unicos[i],
+          unicos[j],
+          apiKey,
+        );
+        if (result.ok) {
+          distancias.push(result.distancia_km);
+        }
+      }
+    }
+
+    return distancias;
+  }
+
+  private async evaluarConsolidacion(
+    maestra: Record<string, unknown>,
+    pedidosGrupo: Record<string, unknown>[],
+    pedidoAdicional?: Record<string, unknown>,
+  ): Promise<{
+    capacidad: CapacidadRuta;
+    advertencias: AdvertenciaConsolidacion[];
+  }> {
+    const camion = maestra.camiones as
+      | { slots?: number; slots_utilizados?: number; talla?: string }
+      | null
+      | undefined;
+
+    const slotsCamion = (camion?.slots as number) ?? 96;
+    const bultosGrupo = pedidosGrupo.map((p) =>
+      Number(p.bultos_despachados ?? 0),
+    );
+    const bultosAdicional = pedidoAdicional
+      ? Number(pedidoAdicional.bultos_despachados ?? 0)
+      : 0;
+
+    const capacidad = calcularCapacidadRuta(slotsCamion, [
+      ...bultosGrupo,
+      ...(pedidoAdicional ? [bultosAdicional] : []),
+    ]);
+
+    if (camion?.talla) {
+      capacidad.talla = String(camion.talla);
+    }
+
+    const advertencias = advertenciasCapacidad(
+      calcularCapacidadRuta(slotsCamion, bultosGrupo),
+      bultosAdicional,
+    );
+
+    const pedidosParaDistancia = [
+      ...pedidosGrupo,
+      ...(pedidoAdicional ? [pedidoAdicional] : []),
+    ].map((p) => ({
+      id: String(p.id),
+      destino: String(p.destino ?? ''),
+      distancia_km:
+        p.distancia_km != null ? Number(p.distancia_km) : null,
+    }));
+
+    const destinos = pedidosParaDistancia.map((p) => p.destino).filter(Boolean);
+    const distanciasEntreDestinos =
+      destinos.length >= 2
+        ? await this.calcularDistanciasEntreDestinos(destinos)
+        : [];
+
+    advertencias.push(
+      ...advertenciasDistanciaDestinos(
+        pedidosParaDistancia,
+        distanciasEntreDestinos,
+      ),
+    );
+
+    return { capacidad, advertencias };
+  }
+
+  async getConsolidacionInfo(rutaId: string) {
+    const maestra = await this.resolverRutaMaestra(rutaId);
+    const maestraId = String(maestra.id);
+    const pedidosGrupo = await this.cargarPedidosGrupo(maestraId);
+    const { capacidad, advertencias } = await this.evaluarConsolidacion(
+      maestra,
+      pedidosGrupo,
+    );
+
+    const supabase = this.supabaseConfig.getClient();
+    const idsGrupo = new Set(pedidosGrupo.map((p) => String(p.id)));
+
+    const { data: disponibles, error } = await supabase
+      .from('rutas')
+      .select(
+        'id, nombre_ruta, origen, destino, estado, cliente_id, distancia_km, bultos_despachados, clientes(id, nombre)',
+      )
+      .is('ruta_maestra_id', null)
+      .in('estado', ['PENDIENTE', 'ASIGNADO'])
+      .neq('id', maestraId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      throw new BadRequestException(
+        `Error al listar pedidos disponibles: ${error.message}`,
+      );
+    }
+
+    const pedidosDisponibles = (disponibles || [])
+      .filter((p) => !idsGrupo.has(String(p.id)))
+      .map((p) => this.mapPedidoConsolidacion(p as Record<string, unknown>));
+
+    const paradasMapa = await this.cargarParadasMapa(
+      pedidosGrupo.map((p) => String(p.id)),
+    );
+
+    return {
+      ruta_maestra_id: maestraId,
+      es_maestra: String(rutaId) === maestraId,
+      pedidos: pedidosGrupo.map((p) => ({
+        ...this.mapPedidoConsolidacion(p as Record<string, unknown>),
+        es_maestra: String(p.id) === maestraId,
+      })),
+      capacidad,
+      advertencias,
+      paradas_mapa: paradasMapa,
+      pedidos_disponibles: pedidosDisponibles,
+    };
+  }
+
+  async consolidarPedido(rutaMaestraId: string, body: ConsolidarPedidoDto) {
+    const pedidoId = String(body?.pedido_id ?? '').trim();
+    if (!pedidoId) {
+      throw new BadRequestException('pedido_id es requerido');
+    }
+
+    const supabase = this.supabaseConfig.getClient();
+    const maestra = await this.resolverRutaMaestra(rutaMaestraId);
+    const maestraId = String(maestra.id);
+
+    if (maestra.ruta_maestra_id) {
+      throw new BadRequestException(
+        'Solo se puede consolidar bajo una ruta maestra',
+      );
+    }
+
+    if (pedidoId === maestraId) {
+      throw new BadRequestException(
+        'No se puede consolidar un pedido consigo mismo',
+      );
+    }
+
+    if (!maestra.camion_id) {
+      throw new BadRequestException(
+        'La ruta maestra debe tener un camión asignado para consolidar pedidos',
+      );
+    }
+
+    const { data: pedidoHijo, error: hijoError } = await supabase
+      .from('rutas')
+      .select(
+        'id, nombre_ruta, origen, destino, estado, cliente_id, conductor_id, camion_id, ruta_maestra_id, distancia_km, bultos_despachados',
+      )
+      .eq('id', pedidoId)
+      .single();
+
+    if (hijoError || !pedidoHijo) {
+      throw new NotFoundException(`Pedido no encontrado: ${pedidoId}`);
+    }
+
+    if (pedidoHijo.ruta_maestra_id) {
+      throw new BadRequestException('El pedido ya está consolidado en otra ruta');
+    }
+
+    if (!this.ESTADOS_CONSOLIDABLES.has(String(pedidoHijo.estado))) {
+      throw new BadRequestException(
+        `El pedido debe estar en estado PENDIENTE o ASIGNADO (actual: ${pedidoHijo.estado})`,
+      );
+    }
+
+    const pedidosGrupo = await this.cargarPedidosGrupo(maestraId);
+    const { advertencias } = await this.evaluarConsolidacion(
+      maestra,
+      pedidosGrupo,
+      pedidoHijo as Record<string, unknown>,
+    );
+
+    const bloqueantes = advertencias.filter((a) => a.bloqueante);
+    if (bloqueantes.length > 0) {
+      throw new ForbiddenException({
+        message: bloqueantes[0].mensaje,
+        advertencias: bloqueantes,
+      });
+    }
+
+    const advertenciasSuaves = advertencias.filter((a) => !a.bloqueante);
+    if (advertenciasSuaves.length > 0) {
+      const ignoraOcupacion = body.ignorar_advertencias_ocupacion === true;
+      const ignoraDistancia = body.ignorar_advertencias_distancia === true;
+
+      const pendientes = advertenciasSuaves.filter((a) => {
+        if (a.tipo === 'ocupacion_baja') return !ignoraOcupacion;
+        if (a.tipo === 'distancia_destinos') return !ignoraDistancia;
+        return true;
+      });
+
+      if (pendientes.length > 0) {
+        throw new BadRequestException({
+          message: pendientes[0].mensaje,
+          advertencias: advertenciasSuaves,
+          requiere_confirmacion: true,
+        });
+      }
+    }
+
+    const bultosHijo = Number(pedidoHijo.bultos_despachados ?? 0);
+    const camionMaestraId = String(maestra.camion_id);
+    const camionHijoId = pedidoHijo.camion_id
+      ? String(pedidoHijo.camion_id)
+      : null;
+
+    if (bultosHijo > 0) {
+      const { data: camionMaestra } = await supabase
+        .from('camiones')
+        .select('slots, slots_utilizados')
+        .eq('id', camionMaestraId)
+        .single();
+
+      const slotsMaestra = (camionMaestra?.slots as number) ?? 96;
+      const utilizadosMaestra =
+        (camionMaestra?.slots_utilizados as number) ?? 0;
+      const bultosGrupo = pedidosGrupo.reduce(
+        (sum, p) => sum + Number(p.bultos_despachados ?? 0),
+        0,
+      );
+
+      if (bultosGrupo + bultosHijo > slotsMaestra) {
+        throw new ForbiddenException(
+          `Capacidad insuficiente: se requieren ${bultosGrupo + bultosHijo} slots y el camión tiene ${slotsMaestra}.`,
+        );
+      }
+
+      if (camionHijoId !== camionMaestraId) {
+        await supabase
+          .from('camiones')
+          .update({ slots_utilizados: utilizadosMaestra + bultosHijo })
+          .eq('id', camionMaestraId);
+      }
+
+      if (camionHijoId && camionHijoId !== camionMaestraId && bultosHijo > 0) {
+        const { data: camionHijo } = await supabase
+          .from('camiones')
+          .select('slots_utilizados')
+          .eq('id', camionHijoId)
+          .single();
+
+        const utilizadosHijo = (camionHijo?.slots_utilizados as number) ?? 0;
+        await supabase
+          .from('camiones')
+          .update({
+            slots_utilizados: Math.max(0, utilizadosHijo - bultosHijo),
+          })
+          .eq('id', camionHijoId);
+      }
+    }
+
+    const updatePayload: Record<string, unknown> = {
+      ruta_maestra_id: maestraId,
+      conductor_id: maestra.conductor_id ?? null,
+      camion_id: maestra.camion_id ?? null,
+    };
+
+    const estadoMaestra = String(maestra.estado ?? '');
+    if (
+      estadoMaestra === 'ASIGNADO' &&
+      String(pedidoHijo.estado) === 'PENDIENTE'
+    ) {
+      updatePayload.estado = 'ASIGNADO';
+    }
+
+    const { error: updateError } = await supabase
+      .from('rutas')
+      .update(updatePayload)
+      .eq('id', pedidoId);
+
+    if (updateError) {
+      throw new BadRequestException(
+        `Error al consolidar pedido: ${updateError.message}`,
+      );
+    }
+
+    if (updatePayload.estado) {
+      try {
+        await supabase.from('historial_estados').insert({
+          ruta_id: pedidoId,
+          estado: updatePayload.estado,
+        });
+      } catch (e: unknown) {
+        console.warn('consolidarPedido historial_estados omitido:', e);
+      }
+    }
+
+    return this.getConsolidacionInfo(maestraId);
+>>>>>>> origin/main
   }
 }

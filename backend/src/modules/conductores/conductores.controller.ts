@@ -154,8 +154,38 @@ export class ConductoresController {
    */
   @Get()
   @UseGuards(JwtGuard)
-  async listActiveDrivers() {
-    return await this.conductoresService.listActiveDrivers();
+  async listActiveDrivers(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+    @Query('orden') orden?: string,
+  ) {
+    const pageNum = page ? parseInt(page, 10) : undefined;
+    const limitNum = limit ? parseInt(limit, 10) : undefined;
+    return await this.conductoresService.listActiveDrivers({
+      page: pageNum,
+      limit: limitNum,
+      search,
+      orden,
+    });
+  }
+
+
+  /**
+   * POST /api/conductores/:id/licencias/:licenseId/approve
+   * Aprobar o rechazar la licencia de un conductor
+   */
+  @Post(':id/licencias/:licenseId/status')
+  @UseGuards(JwtGuard)
+  async updateLicenseStatus(
+    @Param('id') conductorId: string,
+    @Param('licenseId') licenseId: string,
+    @Body('status') status: 'approved' | 'rejected',
+  ) {
+    if (!['approved', 'rejected'].includes(status)) {
+      throw new BadRequestException('Estado inválido');
+    }
+    return await this.conductoresService.updateLicenseStatus(conductorId, licenseId, status);
   }
 
   /**

@@ -196,6 +196,30 @@ export default function MapView({
             });
           }
         });
+
+        (route.paradas || []).forEach((parada, idx) => {
+          const lat = parada.latitud != null ? Number(parada.latitud) : null;
+          const lng = parada.longitud != null ? Number(parada.longitud) : null;
+          if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+          const eid = `${route.id}-parada-${idx}`;
+          activeEndpointIds.add(eid);
+          const coords = { lat, lng };
+
+          if (endpointMarkersRef.current[eid]) {
+            endpointMarkersRef.current[eid].setPosition(coords);
+          } else {
+            endpointMarkersRef.current[eid] = new window.google.maps.Marker({
+              position: coords,
+              map: googleMapRef.current,
+              icon: buildDotIcon("#f59e0b", 5),
+              title: parada.direccion || `Parada ${idx + 1}`,
+              zIndex: 75,
+            });
+            endpointMarkersRef.current[eid].addListener("click", () => {
+              onRouteSelect?.(route.id);
+            });
+          }
+        });
       }
 
       if (route.markerCoords && !route.vehicleGps) {

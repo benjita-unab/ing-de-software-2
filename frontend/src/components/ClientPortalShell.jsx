@@ -1,6 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import PortalEvidenciasModal from "./PortalEvidenciasModal";
+<<<<<<< HEAD
 import ComprobanteModal from "./ComprobanteModal";
+=======
+import PortalPagos from "./PortalPagos";
+import PortalRecurrencias from "./PortalRecurrencias";
+import ModalRecurrencia from "./ModalRecurrencia";
+>>>>>>> origin/main
 import {
   getPortalPedidoById,
   getPortalPedidoEvidencias,
@@ -8,6 +14,11 @@ import {
 } from "../lib/portalService";
 
 const SECCION_PEDIDOS = "pedidos";
+<<<<<<< HEAD
+=======
+const SECCION_PAGOS = "pagos";
+const SECCION_RECURRENCIAS = "recurrencias";
+>>>>>>> origin/main
 
 const TAB_TODOS = "todos";
 const TAB_PENDIENTES = "pendientes";
@@ -240,6 +251,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
   const [evidencias, setEvidencias] = useState(null);
   const [evidenciasLoading, setEvidenciasLoading] = useState(false);
   const [evidenciasError, setEvidenciasError] = useState(null);
+<<<<<<< HEAD
   const [comprobanteRutaId, setComprobanteRutaId] = useState(null);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -327,6 +339,9 @@ export default function ClientPortalShell({ user, onSignOut }) {
       setCreatingOrder(false);
     }
   };
+=======
+  const [modalRecurrenciaOpen, setModalRecurrenciaOpen] = useState(false);
+>>>>>>> origin/main
 
   const loadPedidos = useCallback(async () => {
     setLoading(true);
@@ -445,6 +460,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
     return "No hay pedidos en esta sección.";
   }
 
+<<<<<<< HEAD
   const [pagandoBase, setPagandoBase] = useState(false);
   const [pagandoRetraso, setPagandoRetraso] = useState(false);
 
@@ -488,6 +504,14 @@ export default function ClientPortalShell({ user, onSignOut }) {
   };
 
   const tituloSeccion = "Mis pedidos";
+=======
+  const tituloSeccion =
+    seccionActiva === SECCION_PAGOS
+      ? "Mis pagos"
+      : seccionActiva === SECCION_RECURRENCIAS
+        ? "Mis recurrencias"
+        : "Mis pedidos";
+>>>>>>> origin/main
 
   return (
     <div style={stylesObj.page}>
@@ -506,6 +530,49 @@ export default function ClientPortalShell({ user, onSignOut }) {
         </div>
       </header>
 
+<<<<<<< HEAD
+=======
+      <div style={styles.tabs} role="tablist" aria-label="Secciones del portal">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={seccionActiva === SECCION_PEDIDOS}
+          style={styles.tab(seccionActiva === SECCION_PEDIDOS)}
+          onClick={() => setSeccionActiva(SECCION_PEDIDOS)}
+        >
+          Pedidos
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={seccionActiva === SECCION_PAGOS}
+          style={styles.tab(seccionActiva === SECCION_PAGOS)}
+          onClick={() => setSeccionActiva(SECCION_PAGOS)}
+        >
+          Pagos
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={seccionActiva === SECCION_RECURRENCIAS}
+          style={styles.tab(seccionActiva === SECCION_RECURRENCIAS)}
+          onClick={() => setSeccionActiva(SECCION_RECURRENCIAS)}
+        >
+          Recurrencias
+        </button>
+      </div>
+
+      {seccionActiva === SECCION_PAGOS ? (
+        <PortalPagos clienteId={user?.clienteId} />
+      ) : null}
+
+      {seccionActiva === SECCION_RECURRENCIAS ? (
+        <PortalRecurrencias />
+      ) : null}
+
+      {seccionActiva !== SECCION_PEDIDOS ? null : (
+        <>
+>>>>>>> origin/main
       {error ? (
         <p style={{ color: "#f87171", marginBottom: "16px" }} role="alert">
           {error}
@@ -654,6 +721,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
                                     </strong>
                                   </div>
 
+<<<<<<< HEAD
                                   <div style={{ marginTop: "24px", display: "flex", justifyContent: "flex-end" }}>
                                     {detalle.ruta.estado === 'PAGO_ATRASO_PENDIENTE' ? (
                                       <button type="button" disabled={pagandoBase} style={{ ...stylesObj.btn, background: pagandoBase ? "#64748b" : "#ef4444", borderColor: pagandoBase ? "#64748b" : "#ef4444", fontWeight: 600, padding: "10px 24px" }} onClick={(e) => handlePagarKhipu(p.id, Number(detalle.ruta.costo_espera_total), 'atraso', e)}>
@@ -700,6 +768,26 @@ export default function ClientPortalShell({ user, onSignOut }) {
                     </div>
                   );
                 })
+=======
+                  <button
+                    type="button"
+                    style={styles.btnEvidencias}
+                    onClick={handleVerEvidencias}
+                  >
+                    Ver evidencias
+                  </button>
+
+                  <button
+                    type="button"
+                    style={{ ...styles.btnEvidencias, marginLeft: 8 }}
+                    onClick={() => setModalRecurrenciaOpen(true)}
+                  >
+                    Repetir pedido
+                  </button>
+                </>
+              ) : (
+                <p style={{ opacity: 0.7 }}>Sin datos de detalle.</p>
+>>>>>>> origin/main
               )}
             </div>
           </div>
@@ -716,6 +804,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
         />
       ) : null}
 
+<<<<<<< HEAD
       {showCreateModal ? (
         <div style={stylesObj.modalOverlay}>
           <div style={stylesObj.modalContent}>
@@ -874,6 +963,22 @@ export default function ClientPortalShell({ user, onSignOut }) {
         </div>
       ) : null}
       {comprobanteRutaId && <ComprobanteModal rutaId={comprobanteRutaId} onClose={() => setComprobanteRutaId(null)} stylesObj={stylesObj} />}
+=======
+      <ModalRecurrencia
+        open={modalRecurrenciaOpen}
+        onClose={() => setModalRecurrenciaOpen(false)}
+        onSuccess={() => {
+          setModalRecurrenciaOpen(false);
+          setSeccionActiva(SECCION_RECURRENCIAS);
+        }}
+        clienteId={user?.clienteId || detalle?.ruta?.cliente_id}
+        rutaOrigenId={selectedId}
+        portalMode
+        titulo="Repetir pedido"
+      />
+        </>
+      )}
+>>>>>>> origin/main
     </div>
   );
 }

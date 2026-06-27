@@ -14,8 +14,9 @@ import {
 } from "./conductorUtils";
 
 /**
- * Crea una ruta (POST /api/rutas).
- * @param {object} payload — cliente_id, origen, destino, conductor_id y camion_id obligatorios; fecha_inicio, eta opcionales (ISO string).
+ * Crea un pedido/ruta operativa (POST /api/rutas) — HU-58.
+ * @param {object} payload — cliente_id, origen, destino, conductor_id, camion_id, fecha_inicio;
+ *   opcionales: ruta_plantilla_id, paradas[], observaciones, guardar_como_plantilla.
  * @returns {Promise<{ success: boolean, data?: object, error?: string }>}
  */
 export async function crearRuta(payload) {
@@ -144,10 +145,20 @@ export async function obtenerRutasSinAsignar() {
 
 /**
  * Obtiene los conductores activos con su estado de licencia.
- * @returns {Promise<{data: array, error?: string}>}
+ * @param {object} [params]
+ * @returns {Promise<{data: array, meta?: object, error?: string}>}
  */
-export async function obtenerConductoresActivos() {
-  const res = await apiFetch(`/api/conductores`);
+export async function obtenerConductoresActivos(params = {}) {
+  const qs = new URLSearchParams();
+  if (params.page) qs.set("page", params.page);
+  if (params.limit) qs.set("limit", params.limit);
+  if (params.search) qs.set("search", params.search);
+  if (params.orden) qs.set("orden", params.orden);
+
+  const qString = qs.toString();
+  const url = qString ? `/api/conductores?${qString}` : "/api/conductores";
+
+  const res = await apiFetch(url);
 
   if (!res.ok) {
     return { data: [], error: res.error || "Error al obtener conductores" };
@@ -155,7 +166,9 @@ export async function obtenerConductoresActivos() {
 
   const payload = res.data;
   const data = Array.isArray(payload) ? payload : payload?.data ?? [];
-  return { data };
+  const meta = payload?.meta;
+
+  return meta ? { data, meta } : { data };
 }
 
 /**
@@ -501,6 +514,7 @@ export async function obtenerComparativaMetricasPago(filtros = {}) {
 }
 
 /**
+<<<<<<< HEAD
  * Crea un nuevo chofer (usuario Auth + perfil conductor).
  */
 export async function crearConductor(data) {
@@ -529,3 +543,63 @@ export async function crearCamion(data) {
 }
 
 
+=======
+ * HU-59: estado de consolidación de una ruta maestra.
+ * @param {string} rutaId
+ */
+export async function obtenerConsolidacion(rutaId) {
+  if (!rutaId) {
+    return { data: null, error: "rutaId es requerido" };
+  }
+
+  const res = await apiFetch(`/api/rutas/${rutaId}/consolidacion`);
+
+  if (!res.ok) {
+    return { data: null, error: res.error || "Error al obtener consolidación" };
+  }
+
+  return { data: res.data?.data ?? res.data, error: null };
+}
+
+/**
+ * HU-59: consolida un pedido bajo una ruta maestra.
+ * @param {string} rutaMaestraId
+ * @param {string} pedidoId
+ * @param {{ ignorar_advertencias_ocupacion?: boolean, ignorar_advertencias_distancia?: boolean }} [opciones]
+ */
+export async function consolidarPedidoEnRuta(rutaMaestraId, pedidoId, opciones = {}) {
+  if (!rutaMaestraId || !pedidoId) {
+    return { success: false, error: "rutaId y pedidoId son requeridos" };
+  }
+
+  const res = await apiFetch(`/api/rutas/${rutaMaestraId}/consolidar`, {
+    method: "POST",
+    json: {
+      pedido_id: pedidoId,
+      ignorar_advertencias_ocupacion: opciones.ignorar_advertencias_ocupacion === true,
+      ignorar_advertencias_distancia: opciones.ignorar_advertencias_distancia === true,
+    },
+  });
+
+  if (!res.ok) {
+    const payload = res.data || {};
+    const advertencias = payload.advertencias || payload.message?.advertencias;
+    const requiere =
+      payload.requiere_confirmacion === true ||
+      payload.message?.requiere_confirmacion === true;
+
+    return {
+      success: false,
+      error:
+        (typeof payload.message === "string" ? payload.message : null) ||
+        payload.message?.message ||
+        res.error ||
+        "No se pudo consolidar el pedido",
+      advertencias: Array.isArray(advertencias) ? advertencias : [],
+      requiere_confirmacion: requiere,
+    };
+  }
+
+  return { success: true, data: res.data?.data ?? res.data };
+}
+>>>>>>> origin/main

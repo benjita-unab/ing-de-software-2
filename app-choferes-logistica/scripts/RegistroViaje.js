@@ -538,40 +538,82 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
 
 
   const enviarAnomalia = async () => {
+    console.log('[HU-29] Iniciando submit de anomalía');
+    console.log('[HU-29] Estado inicial:', {
+      rutaId,
+      tieneFoto: Boolean(anomaliaFotoUri),
+      tituloLength: anomaliaTitulo?.trim()?.length ?? 0,
+      descripcionLength: anomaliaDescripcion?.trim()?.length ?? 0,
+      prioritario: anomaliaEsPrioritario,
+    });
+
     if (!anomaliaTitulo.trim() || !anomaliaDescripcion.trim()) {
+      console.log('[HU-29] Validación fallida: faltan título o descripción');
       Alert.alert('Validación', 'Título y descripción son obligatorios.');
       return;
     }
 
     if (!rutaId || !String(rutaId).trim()) {
+      console.log('[HU-29] Validación fallida: rutaId inválido');
       Alert.alert('Ruta no disponible', 'Debes tener una ruta activa para generar un reporte.');
       return;
     }
 
+    // Evita bloqueos silenciosos si una promesa de red queda colgada.
+    const withTimeout = (promise, ms, step) =>
+      Promise.race([
+        promise,
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error(`Timeout en ${step} (${ms}ms)`)), ms),
+        ),
+      ]);
+
     setIsSendingAnomalia(true);
+
     try {
       let foto_url;
+      console.log('[HU-29] Preparando payload de anomalía');
+
       if (anomaliaFotoUri) {
+        console.log('[HU-29] Preparando imagen para upload:', anomaliaFotoUri);
         const ext = anomaliaFotoUri.split('.').pop()?.split('?')[0]?.toLowerCase() || 'jpg';
         const fileExtension = ['jpg', 'jpeg', 'png', 'webp'].includes(ext) ? ext : 'jpg';
+        const mimeType = `image/${fileExtension === 'jpg' ? 'jpeg' : fileExtension}`;
+
         const formData = new FormData();
         formData.append('file', {
           uri: anomaliaFotoUri,
           name: `anomalia_${Date.now()}.${fileExtension}`,
-          type: `image/${fileExtension === 'jpg' ? 'jpeg' : fileExtension}`,
+          type: mimeType,
         });
         formData.append('bucket', 'fotos_anomalias');
         formData.append('folder', `anomalias/${rutaId}`);
 
-        const uploadResponse = await bffFetch('/api/storage/upload', {
-          method: 'POST',
-          body: formData,
-        });
+        console.log('[HU-29] Subiendo a Storage...');
+        const uploadResponse = await withTimeout(
+          bffFetch('/api/storage/upload', {
+            method: 'POST',
+            body: formData,
+          }),
+          20000,
+          'subida de imagen',
+        );
+
         const uploadPayload = await uploadResponse.json().catch(() => ({}));
+        console.log('[HU-29] Respuesta upload:', {
+          ok: uploadResponse.ok,
+          status: uploadResponse.status,
+          payload: uploadPayload,
+        });
+
         if (!uploadResponse.ok) {
           throw new Error(uploadPayload?.error ?? 'No se pudo subir la fotografía.');
         }
+
         foto_url = uploadPayload.publicUrl ?? uploadPayload.filePath;
+        console.log('[HU-29] Imagen subida, URL/path:', foto_url);
+      } else {
+        console.log('[HU-29] Submit sin fotografía');
       }
 
       const body = {
@@ -581,19 +623,29 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
         ...(foto_url ? { foto_url } : {}),
       };
 
-      const response = await bffFetch(`/api/rutas/${rutaId}/anomalias`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      });
+      console.log('[HU-29] Insertando en BD vía BFF /api/rutas/:id/anomalias');
+      const response = await withTimeout(
+        bffFetch(`/api/rutas/${rutaId}/anomalias`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        }),
+        20000,
+        'insert de anomalía',
+      );
 
       const payload = await response.json().catch(() => ({}));
+      console.log('[HU-29] Respuesta insert:', {
+        ok: response.ok,
+        status: response.status,
+        payload,
+      });
+
       if (!response.ok) {
         throw new Error(payload?.error ?? 'No se pudo enviar el reporte.');
       }
 
+      console.log('[HU-29] Submit exitoso, limpiando formulario');
       setAnomaliaTitulo('');
       setAnomaliaDescripcion('');
       setAnomaliaEsPrioritario(false);
@@ -601,9 +653,11 @@ export default function RegistroViaje({ onSyncComplete, rutaId }) {
       setIsAnomaliaModalVisible(false);
       Alert.alert('Reporte enviado', 'La anomalía se registró correctamente.');
     } catch (error) {
+      console.log('[HU-29] Error en catch:', error);
       const message = error instanceof Error ? error.message : 'No fue posible enviar el reporte.';
       Alert.alert('Error', message);
     } finally {
+      console.log('[HU-29] Finalizando submit, liberando loading');
       setIsSendingAnomalia(false);
     }
   };

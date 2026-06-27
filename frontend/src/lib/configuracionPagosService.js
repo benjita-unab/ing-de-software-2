@@ -26,7 +26,7 @@ export async function obtenerConfiguracionPagos() {
 }
 
 /**
- * @param {{ precioPorRuta: number, precioPorEntrega: number, precioPorBulto: number, precioPorKm: number }} payload
+ * @param {{ precioPorRuta: number, precioPorEntrega: number, precioPorBulto: number, precioPorKm: number, precioCombustibleLitro: number, precioEsperaMinuto: number }} payload
  * @returns {Promise<{data: object|null, error?: string}>}
  */
 export async function actualizarConfiguracionPagos(payload) {

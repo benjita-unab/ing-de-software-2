@@ -12,6 +12,7 @@ const ESTADOS_OPCIONES = [
 const INITIAL_FORM = {
   patente: "",
   slots: "",
+  km_l: "",
   slots_utilizados: 0,
   estado: "DISPONIBLE",
   ultima_mantencion: "",
@@ -36,6 +37,7 @@ export default function FormularioCamion({
         patente: camion.patente || "",
         slots:
           camion.slots != null ? String(camion.slots) : "",
+        km_l: camion.km_l != null ? String(camion.km_l) : "",
         slots_utilizados: camion.slots_utilizados ?? 0,
         estado: camion.estado || "DISPONIBLE",
         ultima_mantencion: toDateInputValue(
@@ -61,6 +63,7 @@ export default function FormularioCamion({
 
     const patente = form.patente.trim();
     const capacidad = Number(form.slots);
+    const kmL = Number(form.km_l);
 
     if (!isEdit && !patente) {
       setError("La patente es obligatoria.");
@@ -69,6 +72,16 @@ export default function FormularioCamion({
 
     if (!form.slots || Number.isNaN(capacidad) || capacidad <= 0 || capacidad > 96) {
       setError("La capacidad debe ser entre 1 y 96 slots.");
+      return;
+    }
+
+    if (!isEdit && (Number.isNaN(kmL) || kmL <= 0)) {
+      setError("El rendimiento (Km/L) es obligatorio y debe ser mayor a 0.");
+      return;
+    }
+
+    if (isEdit && form.km_l.trim() && (Number.isNaN(kmL) || kmL <= 0)) {
+      setError("El rendimiento (Km/L) debe ser mayor a 0.");
       return;
     }
 
@@ -88,6 +101,9 @@ export default function FormularioCamion({
           ultima_mantencion: form.ultima_mantencion || null,
           proxima_mantencion: form.proxima_mantencion || null,
         };
+        if (form.km_l.trim()) {
+          payload.km_l = kmL;
+        }
 
         const res = await actualizarCamion(camion.id, payload);
         if (res.error) {
@@ -99,6 +115,7 @@ export default function FormularioCamion({
         const payload = {
           patente,
           slots: capacidad,
+          km_l: kmL,
           estado: form.estado || "DISPONIBLE",
           ultima_mantencion: form.ultima_mantencion || undefined,
           proxima_mantencion: form.proxima_mantencion || undefined,
@@ -199,6 +216,26 @@ export default function FormularioCamion({
               onChange={(e) => actualizarCampo("slots", e.target.value)}
               required
             />
+          </div>
+
+          <div className="lt-field-group" style={{ marginBottom: 16 }}>
+            <label className="lt-label" htmlFor="camion-km-l">
+              Rendimiento (Km/L) {!isEdit ? "*" : ""}
+            </label>
+            <input
+              id="camion-km-l"
+              type="number"
+              min="0.01"
+              step="0.1"
+              className="lt-input"
+              value={form.km_l}
+              onChange={(e) => actualizarCampo("km_l", e.target.value)}
+              placeholder="Ej: 8.5"
+              required={!isEdit}
+            />
+            <div className="lt-card__subtitle" style={{ marginTop: 4 }}>
+              Consumo de combustible para costos operativos (HU-50)
+            </div>
           </div>
 
           {isEdit && (

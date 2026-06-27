@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
+import { ScheduleModule } from '@nestjs/schedule';
 import { SupabaseConfigService } from './config/supabase.config';
 import { ResendConfigService } from './config/resend.config';
 import { JwtStrategy } from './common/strategies/jwt.strategy';
@@ -24,7 +25,12 @@ import { ConfiguracionPagosModule } from './modules/configuracion-pagos/configur
 import { ChatRutaModule } from './modules/chat-ruta/chat-ruta.module';
 import { PagosClienteModule } from './modules/pagos-cliente/pagos-cliente.module';
 import { RutasPlantillaModule } from './modules/rutas-plantilla/rutas-plantilla.module';
+<<<<<<< HEAD
 import { PagosModule } from './modules/pagos/pagos.module';
+=======
+import { RecurrenciasModule } from './modules/recurrencias/recurrencias.module';
+import { CostosOperativosModule } from './modules/costos-operativos/costos-operativos.module';
+>>>>>>> origin/main
 
 @Module({
   imports: [
@@ -32,6 +38,7 @@ import { PagosModule } from './modules/pagos/pagos.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
+    ScheduleModule.forRoot(),
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -58,7 +65,12 @@ import { PagosModule } from './modules/pagos/pagos.module';
     ChatRutaModule,
     PagosClienteModule,
     RutasPlantillaModule,
+<<<<<<< HEAD
     PagosModule,
+=======
+    RecurrenciasModule,
+    CostosOperativosModule,
+>>>>>>> origin/main
   ],
   controllers: [AppController],
   providers: [AppService, SupabaseConfigService, ResendConfigService, JwtStrategy],
