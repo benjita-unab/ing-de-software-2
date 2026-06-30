@@ -14,6 +14,26 @@ import {
 } from "./conductorUtils";
 
 /**
+ * Cotización comercial de tarifa (POST /api/rutas/estimar-tarifa).
+ * Única fuente de verdad para montos al cliente.
+ */
+export async function estimarTarifaComercial(payload) {
+  const res = await apiFetch("/api/rutas/estimar-tarifa", {
+    method: "POST",
+    json: payload,
+  });
+
+  if (!res.ok) {
+    return {
+      success: false,
+      error: res.error || "No se pudo estimar la tarifa",
+    };
+  }
+
+  return { success: true, data: res.data };
+}
+
+/**
  * Crea un pedido/ruta operativa (POST /api/rutas) — HU-58.
  * @param {object} payload — cliente_id, origen, destino, conductor_id, camion_id, fecha_inicio;
  *   opcionales: ruta_plantilla_id, paradas[], observaciones, guardar_como_plantilla.

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { apiFetch } from '../lib/apiClient';
-import { crearRuta, estimarFechasEstimadas } from '../lib/rutasService';
+import { crearRuta, estimarFechasEstimadas, estimarTarifaComercial } from '../lib/rutasService';
 import { getRutaPlantillaById, getRutasPlantilla } from '../lib/rutasPlantillaService';
 import { useGooglePlacesAutocomplete } from '../hooks/useGooglePlacesAutocomplete';
 import '../LiquidGlass.css';
@@ -38,24 +38,6 @@ const SIZES_CONFIG = {
   L: { label: "L (24 Slots)", slots: 24, color: "#FBBF24", textDark: true },
   XL: { label: "XL (48 Slots)", slots: 48, color: "#8B5CF6", textDark: true },
   MAXIMO: { label: "MÁXIMO (96)", slots: 96, color: "#DC2626", textDark: false }
-};
-
-const OBTENER_TARIFA_POR_TRAMO = (categoria, km) => {
-  // Ahora la tarifa es dinámica y por bloques de 50km
-  const bloques_50km = Math.ceil(km / 50) || 1;
-  const precioBasePorSlot = 1000 + (bloques_50km * 550); // $1000 base + $550 por tramo de 50km (30% mas barato)
-
-  const rules = {
-    XS: { slots: 1, desc: 1.00 }, // 0% descuento
-    S: { slots: 4, desc: 0.95 }, // 5% descuento
-    M: { slots: 12, desc: 0.90 }, // 10% descuento
-    L: { slots: 24, desc: 0.85 }, // 15% descuento
-    XL: { slots: 48, desc: 0.80 }, // 20% descuento
-    MAXIMO: { slots: 96, desc: 0.75 }  // 25% descuento
-  };
-
-  const config = rules[categoria] || rules['XS'];
-  return Math.round(precioBasePorSlot * config.slots * config.desc);
 };
 
 const CALCULAR_DIAS_ENTREGA = (km) => {
@@ -240,16 +222,12 @@ export default function CreadorCarga() {
   const [rendimientoCamion, setRendimientoCamion] = useState(4.5);
 
   const [costoTac, setCostoTac] = useState("");
-  const [precioDiesel, setPrecioDiesel] = useState(1498);
-  const [tarifasConfig, setTarifasConfig] = useState({
-    precioPorRuta: 5000,
-    precioPorEntrega: 3000,
-    precioPorBulto: 500,
-    precioPorKm: 150
-  });
 
   const [isTarifaManual, setIsTarifaManual] = useState(false);
   const [tarifaManualTotal, setTarifaManualTotal] = useState("");
+  const [cotizacion, setCotizacion] = useState(null);
+  const [cotizacionLoading, setCotizacionLoading] = useState(false);
+  const [cotizacionError, setCotizacionError] = useState("");
 
   const [saving, setSaving] = useState(false);
   const [calculandoRuta, setCalculandoRuta] = useState(false);
@@ -332,14 +310,6 @@ export default function CreadorCarga() {
       try {
         const resCli = await apiFetch("/api/clientes");
         if (resCli.ok) setClientes(Array.isArray(resCli.data) ? resCli.data : resCli.data?.data || []);
-
-        const resTarifas = await apiFetch("/api/configuracion-pagos");
-        if (resTarifas.ok && resTarifas.data) {
-          setTarifasConfig(resTarifas.data);
-          if (resTarifas.data.precioCombustibleLitro != null) {
-            setPrecioDiesel(Number(resTarifas.data.precioCombustibleLitro));
-          }
-        }
 
         const resCond = await apiFetch("/api/conductores");
         if (resCond.ok) {
@@ -457,75 +427,67 @@ export default function CreadorCarga() {
   });
   const remainingSlots = CAPACIDAD_MAXIMA_SLOTS - totalSlotsUsed;
 
-  // ----------------------------------------------------
-  // SIMULADOR DE RENTABILIDAD Y COSTOS OPERATIVOS
-  // ----------------------------------------------------
-
-  const costoCombustibleCalculado = distanciaLogisticaKm > 0 && rendimientoCamion > 0
-    ? Math.round((distanciaLogisticaKm / rendimientoCamion) * precioDiesel)
-    : 0;
-
-  // CONSOLIDACION MATEMATICA DE TARIFAS POR PARADA (INGRESOS CLIENTES)
-  let tarifaCalculadaBultos = 0;
-  let breakdown = [];
-
-  paradas.forEach((p, idx) => {
-    const bultosParada = bultos.filter(b => b.paradaId === p.id);
-    const slotsParada = bultosParada.reduce((acc, b) => acc + b.slots, 0);
-    if (slotsParada === 0) return;
-
-    let slotsToPrice = slotsParada;
-    const countXL = Math.floor(slotsToPrice / 48); slotsToPrice %= 48;
-    const countL = Math.floor(slotsToPrice / 24); slotsToPrice %= 24;
-    const countM = Math.floor(slotsToPrice / 12); slotsToPrice %= 12;
-    const countS = Math.floor(slotsToPrice / 4); slotsToPrice %= 4;
-    const countXS = slotsToPrice;
-
-    const fromPrev = p.distanceFromPrev || p.distanceKm || 0;
-    const toOrigin = p.distanceToOrigin || fromPrev;
-
-    // Facturación fraccionada justa: Cada destino paga el trayecto exacto que el camión recorrió para llegar a él.
-    // El último destino asume el costo logístico de devolver el camión vacío a la central.
-    let billedDistanceKm = 0;
-    if (modoCarga === 'RETORNO') {
-      billedDistanceKm = Math.round(fromPrev);
-    } else {
-      const isLastParada = idx === paradas.length - 1;
-      billedDistanceKm = Math.round(fromPrev + (isLastParada ? toOrigin : 0));
+  useEffect(() => {
+    if (bultos.length === 0 || paradas.length === 0) {
+      setCotizacion(null);
+      setCotizacionError("");
+      return undefined;
     }
-    
-    const shortAddr = p.address.split(',')[0];
 
-    if (countXL > 0) { tarifaCalculadaBultos += countXL * OBTENER_TARIFA_POR_TRAMO("XL", billedDistanceKm); breakdown.push({ cat: "XL", qty: countXL, parada: shortAddr, kmFacturado: billedDistanceKm }); }
-    if (countL > 0) { tarifaCalculadaBultos += countL * OBTENER_TARIFA_POR_TRAMO("L", billedDistanceKm); breakdown.push({ cat: "L", qty: countL, parada: shortAddr, kmFacturado: billedDistanceKm }); }
-    if (countM > 0) { tarifaCalculadaBultos += countM * OBTENER_TARIFA_POR_TRAMO("M", billedDistanceKm); breakdown.push({ cat: "M", qty: countM, parada: shortAddr, kmFacturado: billedDistanceKm }); }
-    if (countS > 0) { tarifaCalculadaBultos += countS * OBTENER_TARIFA_POR_TRAMO("S", billedDistanceKm); breakdown.push({ cat: "S", qty: countS, parada: shortAddr, kmFacturado: billedDistanceKm }); }
-    if (countXS > 0) { tarifaCalculadaBultos += countXS * OBTENER_TARIFA_POR_TRAMO("XS", billedDistanceKm); breakdown.push({ cat: "XS", qty: countXS, parada: shortAddr, kmFacturado: billedDistanceKm }); }
-  });
+    const timer = setTimeout(async () => {
+      setCotizacionLoading(true);
+      setCotizacionError("");
+      const res = await estimarTarifaComercial({
+        distancia_km: distanciaLogisticaKm,
+        bultos_detalle: bultos.map((b) => ({ categoria: b.categoria })),
+        is_tarifa_manual: isTarifaManual,
+        tarifa_base_total: isTarifaManual ? Number(tarifaManualTotal || 0) : undefined,
+        costo_tac_peajes_clp: Number(costoTac || 0),
+        bultos_despachados: totalSlotsUsed,
+        cantidad_paradas: paradas.length,
+        rendimiento_km_l: rendimientoCamion,
+        modo_retorno: modoCarga === 'RETORNO',
+      });
+      setCotizacionLoading(false);
+      if (res.success) {
+        setCotizacion(res.data);
+      } else {
+        setCotizacion(null);
+        setCotizacionError(res.error || "No se pudo calcular la tarifa");
+      }
+    }, 400);
 
-  const tarifaFinalBase = isTarifaManual ? Number(tarifaManualTotal || 0) : tarifaCalculadaBultos;
+    return () => clearTimeout(timer);
+  }, [
+    bultos,
+    paradas.length,
+    distanciaLogisticaKm,
+    isTarifaManual,
+    tarifaManualTotal,
+    costoTac,
+    totalSlotsUsed,
+    rendimientoCamion,
+    modoCarga,
+  ]);
 
-  const pagoConductorAutomatico = paradas.length === 0 ? 0 : (
-    tarifasConfig.precioPorRuta + 
-    (paradas.length * tarifasConfig.precioPorEntrega) + 
-    (totalSlotsUsed * tarifasConfig.precioPorBulto) + 
-    (distanciaLogisticaKm * tarifasConfig.precioPorKm)
-  );
-
-  const costosOperativosTerceros = Number(costoTac || 0) + pagoConductorAutomatico;
-  const totalCostosOperativos = (modoCarga === 'RETORNO' ? 0 : costoCombustibleCalculado) + costosOperativosTerceros;
-
-  const margenGanancia = tarifaFinalBase - totalCostosOperativos;
-
-  // Calculo de IVA (19%)
-  const ivaCalculado = Math.round(tarifaFinalBase * 0.19);
-  const totalAPagarCliente = tarifaFinalBase + ivaCalculado;
+  const tarifaFinalBase = cotizacion?.tarifaBaseTotal ?? 0;
+  const ivaCalculado = cotizacion?.iva ?? 0;
+  const totalAPagarCliente = cotizacion?.totalPagar ?? 0;
+  const desgloseTarifa = cotizacion?.desglose ?? [];
+  const pagoConductorAutomatico = cotizacion?.costosOperativos?.conductor ?? 0;
+  const costoCombustibleCalculado = cotizacion?.costosOperativos?.combustible ?? 0;
+  const totalCostosOperativos = cotizacion?.costosOperativos?.total ?? 0;
+  const margenGanancia = cotizacion?.costosOperativos?.margen ?? 0;
 
   const handleCrearRuta = async (e) => {
     e.preventDefault();
     if (isCapacidadExcedida) return;
     if (!clienteId || !camionId || bultos.length === 0 || paradas.length === 0 || !fechaEntregaTimestamp) {
       setMensaje({ tipo: "error", texto: "Revisa: Cliente, Camión, Fecha y al menos 1 parada/bulto deben ser definidos." });
+      return;
+    }
+    if (!cotizacion && !isTarifaManual) {
+      setMensaje({ tipo: "error", texto: cotizacionError || "Espere el cálculo de tarifa del servidor." });
       return;
     }
 
@@ -548,11 +510,14 @@ export default function CreadorCarga() {
         distancia_km: distanciaLogisticaKm,
         costo_tac_peajes_clp: Number(costoTac || 0),
         pago_conductor_base_clp: pagoConductorAutomatico,
-        tarifa_base_total: tarifaFinalBase,
         is_tarifa_manual: isTarifaManual,
         bultos_despachados: totalSlotsUsed,
         bultos_detalle: bultos.map((b) => ({ categoria: b.categoria })),
       };
+
+      if (isTarifaManual && tarifaFinalBase > 0) {
+        payload.tarifa_base_total = tarifaFinalBase;
+      }
 
       if (rutaPlantillaId) payload.ruta_plantilla_id = rutaPlantillaId;
       if (observaciones?.trim()) payload.observaciones = observaciones.trim();
@@ -950,13 +915,23 @@ export default function CreadorCarga() {
 
           {/* BALANCE FINANCIERO */}
           <div className="liquid-resume" style={{ padding: '20px', borderRadius: '16px', marginTop: '16px' }}>
+            {cotizacionLoading && (
+              <div className="liquid-text" style={{ fontSize: '14px', marginBottom: '12px', opacity: 0.8 }}>
+                Calculando tarifas con el servidor…
+              </div>
+            )}
+            {cotizacionError && (
+              <div style={{ color: '#EF4444', fontSize: '14px', marginBottom: '12px', fontWeight: '600' }}>
+                {cotizacionError}
+              </div>
+            )}
             <div style={{ fontSize: '16px', fontWeight: '900', color: '#38BDF8', borderBottom: '1px solid rgba(56,189,248,0.3)', paddingBottom: '8px', marginBottom: '12px' }}>
               INGRESOS (COBRO A CLIENTES)
             </div>
-            {breakdown.map((bk, i) => (
-              <div key={i} className="liquid-text" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '4px', fontWeight: '500' }}>
-                <span>Carga {bk.parada} ({bk.kmFacturado}km facturados): {bk.qty}x {bk.cat}</span>
-                <span>+${(bk.qty * OBTENER_TARIFA_POR_TRAMO(bk.cat, bk.kmFacturado)).toLocaleString()}</span>
+            {desgloseTarifa.map((bk) => (
+              <div key={bk.indice} className="liquid-text" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '4px', fontWeight: '500' }}>
+                <span>Bulto #{bk.indice}: {bk.categoria} ({distanciaLogisticaKm} km)</span>
+                <span>+${Number(bk.tarifaClp || 0).toLocaleString()}</span>
               </div>
             ))}
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '15px', marginBottom: '8px', fontWeight: '700', color: '#6EE7B7' }}>
@@ -1000,7 +975,7 @@ export default function CreadorCarga() {
 
           {/* BOTONES DE DECISION */}
           <div style={{ display: 'flex', gap: '16px', marginTop: '20px' }}>
-            <button type="submit" disabled={saving || bultos.length === 0 || !camionId || !isCargaMinimaRetornoValida} style={{ flex: 1, padding: '16px', borderRadius: '12px', background: 'linear-gradient(90deg, #10B981, #059669)', color: '#fff', fontSize: '18px', fontWeight: '900', border: 'none', cursor: 'pointer', boxShadow: '0 4px 15px rgba(16, 185, 129, 0.4)', transition: 'all 0.2s', textTransform: 'uppercase', opacity: (!isCargaMinimaRetornoValida || bultos.length === 0 || !camionId) ? 0.5 : 1 }}>
+            <button type="submit" disabled={saving || bultos.length === 0 || !camionId || !isCargaMinimaRetornoValida || cotizacionLoading || (!cotizacion && !isTarifaManual)} style={{ flex: 1, padding: '16px', borderRadius: '12px', background: 'linear-gradient(90deg, #10B981, #059669)', color: '#fff', fontSize: '18px', fontWeight: '900', border: 'none', cursor: 'pointer', boxShadow: '0 4px 15px rgba(16, 185, 129, 0.4)', transition: 'all 0.2s', textTransform: 'uppercase', opacity: (!isCargaMinimaRetornoValida || bultos.length === 0 || !camionId || cotizacionLoading || (!cotizacion && !isTarifaManual)) ? 0.5 : 1 }}>
               {saving ? "Procesando..." : "Aprobar Ruta para Salida"}
             </button>
           </div>

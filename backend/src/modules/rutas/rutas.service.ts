@@ -16,6 +16,11 @@ import { CostosOperativosService } from '../costos-operativos/costos-operativos.
 import { CreateAnomaliaDto } from './dto/create-anomalia.dto';
 import type { ConsolidarPedidoDto } from './dto/consolidar-pedido.dto';
 import type { CreateRutaDto, ParadaRutaDto } from './dto/create-ruta.dto';
+import type {
+  EstimarTarifaDto,
+  TarifaComercialResultDto,
+  DesgloseTarifaBultoDto,
+} from './dto/estimar-tarifa.dto';
 import {
   advertenciasCapacidad,
   advertenciasDistanciaDestinos,
@@ -25,6 +30,12 @@ import {
 } from './consolidacion.helper';
 
 export type { CreateRutaDto } from './dto/create-ruta.dto';
+export type {
+  EstimarTarifaDto,
+  TarifaComercialResultDto,
+} from './dto/estimar-tarifa.dto';
+
+const IVA_TARIFA_CLIENTE = 0.19;
 
 /** POST /api/rutas/estimar-fechas (HU-24). */
 export type EstimarFechasDto = {
@@ -458,7 +469,7 @@ export class RutasService {
     if (body.is_tarifa_manual != null) {
       insert.is_tarifa_manual = Boolean(body.is_tarifa_manual);
     }
-    if (body.tarifa_base_total != null && String(body.tarifa_base_total).trim() !== '') {
+    if (body.is_tarifa_manual && body.tarifa_base_total != null && String(body.tarifa_base_total).trim() !== '') {
       insert.tarifa_base_total = Number(body.tarifa_base_total);
     }
 
@@ -605,10 +616,14 @@ export class RutasService {
           `Error al registrar el detalle de bultos: ${bultosError.message}`,
         );
       }
-    }
 
-    if (estadoInicial === 'ASIGNADO') {
-      await this.calcularYBloquearTarifaRuta(supabase, created.id);
+      await this.aplicarTarifaComercialARuta(supabase, created.id, {
+        distanciaKm: distanciaKm ?? 0,
+        bultosDetalle: body.bultos_detalle,
+        isTarifaManual: Boolean(body.is_tarifa_manual),
+        tarifaBaseManual: this.parseTarifaManual(body.tarifa_base_total),
+        costoEsperaTotal: 0,
+      });
     }
 
     try {
@@ -647,15 +662,26 @@ export class RutasService {
       ReturnType<PagosClienteService['crearPagoParaPedido']>
     > | null = null;
     try {
-      const costo = await this.calcularCostoPedido(
-        distanciaKm,
-        bultosDespachados,
-      );
+      const { data: rutaTarifada } = await supabase
+        .from('rutas')
+        .select('total_pagar, tarifa_base_total')
+        .eq('id', created.id)
+        .single();
+
+      const montoPago =
+        rutaTarifada?.total_pagar != null
+          ? Number(rutaTarifada.total_pagar)
+          : 0;
+      const montoCalculado =
+        montoPago > 0 ||
+        (rutaTarifada?.tarifa_base_total != null &&
+          Number(rutaTarifada.tarifa_base_total) > 0);
+
       pagoGenerado = await this.pagosClienteService.crearPagoParaPedido({
         clienteId: cliente_id,
         pedidoId: String(created.id),
-        montoTotal: costo.monto,
-        montoCalculado: costo.calculado,
+        montoTotal: montoPago,
+        montoCalculado,
       });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -756,27 +782,300 @@ export class RutasService {
     }
   }
 
-  private async calcularCostoPedido(
-    distanciaKm: number | null,
-    bultos: number | null,
-  ): Promise<{ monto: number; calculado: boolean }> {
-    const tarifas = await this.configuracionPagosService.getTarifas();
-    const km = distanciaKm ?? 0;
-    const bultosVal = bultos ?? 0;
+  /**
+   * POST /api/rutas/estimar-tarifa — cotización comercial (única fuente de verdad).
+   */
+  async estimarTarifaComercial(
+    body: EstimarTarifaDto,
+  ): Promise<TarifaComercialResultDto> {
+    const distanciaKm = this.parseDistanciaKm(body.distancia_km) ?? 0;
+    const bultosDetalle = Array.isArray(body.bultos_detalle)
+      ? body.bultos_detalle
+      : [];
+    const isTarifaManual = body.is_tarifa_manual === true;
+    const tarifaBaseManual = this.parseTarifaManual(body.tarifa_base_total);
+    const costoEsperaTotal = this.parseTarifaManual(body.costo_espera_total) ?? 0;
 
-    if (km <= 0 && bultosVal <= 0) {
-      return { monto: 0, calculado: false };
+    const supabase = this.supabaseConfig.getClient();
+    const tarifa = await this.calcularTarifaComercial(supabase, {
+      distanciaKm,
+      bultosDetalle,
+      isTarifaManual,
+      tarifaBaseManual,
+      costoEsperaTotal,
+    });
+
+    const incluirCostos =
+      body.costo_tac_peajes_clp != null ||
+      body.bultos_despachados != null ||
+      body.cantidad_paradas != null;
+
+    if (incluirCostos) {
+      tarifa.costosOperativos = await this.calcularCostosOperativosPreview({
+        distanciaKm,
+        bultosDespachados: Number(body.bultos_despachados) || bultosDetalle.length,
+        cantidadParadas: Number(body.cantidad_paradas) || 0,
+        costoTac: this.parseTarifaManual(body.costo_tac_peajes_clp) ?? 0,
+        rendimientoKmL: Number(body.rendimiento_km_l) > 0
+          ? Number(body.rendimiento_km_l)
+          : 4.5,
+        modoRetorno: body.modo_retorno === true,
+        tarifaBaseTotal: tarifa.tarifaBaseTotal,
+      });
     }
 
-    const monto =
-      tarifas.precioPorRuta +
-      km * tarifas.precioPorKm +
-      bultosVal * tarifas.precioPorBulto;
+    return tarifa;
+  }
+
+  private parseTarifaManual(value: unknown): number | null {
+    if (value == null || String(value).trim() === '') return null;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  private async calcularTarifaComercial(
+    supabase: ReturnType<SupabaseConfigService['getClient']>,
+    params: {
+      distanciaKm: number;
+      bultosDetalle: { categoria?: string | null }[];
+      isTarifaManual: boolean;
+      tarifaBaseManual: number | null;
+      costoEsperaTotal: number;
+    },
+  ): Promise<TarifaComercialResultDto> {
+    const {
+      distanciaKm,
+      bultosDetalle,
+      isTarifaManual,
+      tarifaBaseManual,
+      costoEsperaTotal,
+    } = params;
+
+    let tarifaBaseTotal = 0;
+    let fuente: TarifaComercialResultDto['fuente'] = 'sin_bultos';
+    const desglose: DesgloseTarifaBultoDto[] = [];
+
+    if (isTarifaManual && tarifaBaseManual != null && tarifaBaseManual >= 0) {
+      tarifaBaseTotal = Math.round(tarifaBaseManual);
+      fuente = 'manual';
+    } else if (bultosDetalle.length > 0) {
+      const matriz = await this.cargarMatrizTarifas(supabase);
+      if (!matriz.length) {
+        throw new BadRequestException(
+          'No hay matriz de tarifas configurada para calcular el monto comercial',
+        );
+      }
+
+      bultosDetalle.forEach((b, indice) => {
+        const cat = String(b.categoria || 'XS').toUpperCase();
+        const tarifaClp = this.resolverTarifaMatriz(matriz, cat, distanciaKm);
+        tarifaBaseTotal += tarifaClp;
+        desglose.push({ indice: indice + 1, categoria: cat, tarifaClp });
+      });
+      fuente = 'matriz';
+    }
+
+    const iva = Math.round(tarifaBaseTotal * IVA_TARIFA_CLIENTE);
+    const costoServicio = tarifaBaseTotal + iva;
+    const costoEspera = Math.max(0, costoEsperaTotal);
+    const totalPagar = costoServicio + costoEspera;
 
     return {
-      monto: Math.round(monto * 100) / 100,
-      calculado: true,
+      tarifaBaseTotal,
+      iva,
+      costoServicio,
+      costoEsperaTotal: costoEspera,
+      totalPagar,
+      isTarifaManual,
+      desglose,
+      fuente,
     };
+  }
+
+  private async cargarMatrizTarifas(
+    supabase: ReturnType<SupabaseConfigService['getClient']>,
+  ): Promise<
+    Array<{
+      tramo_min_km: number;
+      tramo_max_km: number;
+      categoria: string;
+      tarifa_clp: number;
+    }>
+  > {
+    const { data: matriz, error } = await supabase
+      .from('tarifas_matriz')
+      .select('*');
+
+    if (error || !matriz) {
+      return [];
+    }
+    return matriz as Array<{
+      tramo_min_km: number;
+      tramo_max_km: number;
+      categoria: string;
+      tarifa_clp: number;
+    }>;
+  }
+
+  private resolverTarifaMatriz(
+    matriz: Array<{
+      tramo_min_km: number;
+      tramo_max_km: number;
+      categoria: string;
+      tarifa_clp: number;
+    }>,
+    categoria: string,
+    km: number,
+  ): number {
+    const queryKm = Math.min(3500, Math.max(0, km));
+    const matching = matriz.find(
+      (t) =>
+        queryKm >= t.tramo_min_km &&
+        queryKm <= t.tramo_max_km &&
+        t.categoria.toUpperCase() === categoria.toUpperCase(),
+    );
+    return matching ? Number(matching.tarifa_clp) : 0;
+  }
+
+  private async aplicarTarifaComercialARuta(
+    supabase: ReturnType<SupabaseConfigService['getClient']>,
+    rutaId: string,
+    params: {
+      distanciaKm: number;
+      bultosDetalle: { categoria?: string | null }[];
+      isTarifaManual: boolean;
+      tarifaBaseManual: number | null;
+      costoEsperaTotal: number;
+    },
+  ): Promise<TarifaComercialResultDto | null> {
+    try {
+      const tarifa = await this.calcularTarifaComercial(supabase, params);
+
+      const { error: updateError } = await supabase
+        .from('rutas')
+        .update({
+          tarifa_base_total: tarifa.tarifaBaseTotal,
+          costo_servicio: tarifa.costoServicio,
+          total_pagar: tarifa.totalPagar,
+          costo_espera_total: tarifa.costoEsperaTotal,
+        })
+        .eq('id', rutaId);
+
+      if (updateError) {
+        console.warn('aplicarTarifaComercialARuta:', updateError.message);
+        return null;
+      }
+
+      if (tarifa.desglose.length > 0) {
+        const { data: bultos } = await supabase
+          .from('bultos')
+          .select('id')
+          .eq('ruta_id', rutaId)
+          .order('created_at', { ascending: true });
+
+        for (let i = 0; i < (bultos || []).length; i++) {
+          const item = tarifa.desglose[i];
+          if (!item || !bultos?.[i]?.id) continue;
+          await supabase
+            .from('bultos')
+            .update({ tarifa_calculada_clp: item.tarifaClp })
+            .eq('id', bultos[i].id);
+        }
+      }
+
+      return tarifa;
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn('aplicarTarifaComercialARuta omitido:', msg);
+      return null;
+    }
+  }
+
+  private async calcularCostosOperativosPreview(params: {
+    distanciaKm: number;
+    bultosDespachados: number;
+    cantidadParadas: number;
+    costoTac: number;
+    rendimientoKmL: number;
+    modoRetorno: boolean;
+    tarifaBaseTotal: number;
+  }): Promise<{
+    combustible: number;
+    conductor: number;
+    tac: number;
+    total: number;
+    margen: number;
+  }> {
+    const tarifas = await this.configuracionPagosService.getTarifas();
+    const operativa = await this.configuracionPagosService.getConfiguracionOperativa();
+
+    const conductor = Math.round(
+      tarifas.precioPorRuta +
+        params.cantidadParadas * tarifas.precioPorEntrega +
+        params.bultosDespachados * tarifas.precioPorBulto +
+        params.distanciaKm * tarifas.precioPorKm,
+    );
+
+    const kmCombustible = params.modoRetorno
+      ? params.distanciaKm
+      : params.distanciaKm * 2;
+    const combustibleCalculado =
+      params.distanciaKm > 0 && params.rendimientoKmL > 0
+        ? Math.round(
+            (kmCombustible / params.rendimientoKmL) *
+              operativa.precioCombustibleLitro,
+          )
+        : 0;
+    const combustible = params.modoRetorno ? 0 : combustibleCalculado;
+
+    const tac = Math.round(params.costoTac);
+    const total = combustible + tac + conductor;
+    const margen = Math.round(params.tarifaBaseTotal - total);
+
+    return {
+      combustible: combustibleCalculado,
+      conductor,
+      tac,
+      total,
+      margen,
+    };
+  }
+
+  /** @deprecated Usar calcularTarifaComercial — se mantiene el alias para asignación de ruta. */
+  async calcularYBloquearTarifaRuta(supabase: any, rutaId: string) {
+    try {
+      const { data: ruta, error: rErr } = await supabase
+        .from('rutas')
+        .select(
+          'id, distancia_km, costo_espera_total, is_tarifa_manual, tarifa_base_total',
+        )
+        .eq('id', rutaId)
+        .single();
+
+      if (rErr || !ruta) {
+        console.warn('calcularYBloquearTarifaRuta: no se pudo cargar la ruta', rErr);
+        return;
+      }
+
+      const { data: bultos, error: bErr } = await supabase
+        .from('bultos')
+        .select('categoria')
+        .eq('ruta_id', rutaId);
+
+      if (bErr || !bultos || bultos.length === 0) {
+        return;
+      }
+
+      await this.aplicarTarifaComercialARuta(supabase, rutaId, {
+        distanciaKm: Number(ruta.distancia_km || 0),
+        bultosDetalle: bultos,
+        isTarifaManual: Boolean(ruta.is_tarifa_manual),
+        tarifaBaseManual: this.parseTarifaManual(ruta.tarifa_base_total),
+        costoEsperaTotal: Number(ruta.costo_espera_total || 0),
+      });
+    } catch (e: unknown) {
+      console.error('Error en calcularYBloquearTarifaRuta:', e);
+    }
   }
 
   /**
@@ -2045,75 +2344,6 @@ export class RutasService {
       rutaId: ruta.id,
       resendId,
     };
-  }
-
-  async calcularYBloquearTarifaRuta(supabase: any, rutaId: string) {
-    try {
-      const { data: ruta, error: rErr } = await supabase
-        .from('rutas')
-        .select('id, distancia_km, tarifa_base_total, costo_espera_total')
-        .eq('id', rutaId)
-        .single();
-
-      if (rErr || !ruta) {
-        console.warn('calcularYBloquearTarifaRuta: no se pudo cargar la ruta', rErr);
-        return;
-      }
-
-      const { data: bultos, error: bErr } = await supabase
-        .from('bultos')
-        .select('*')
-        .eq('ruta_id', rutaId);
-
-      if (bErr || !bultos || bultos.length === 0) {
-        return;
-      }
-
-      const dist = Number(ruta.distancia_km || 0);
-      let baseTotal = 0;
-
-      const { data: matriz, error: mErr } = await supabase
-        .from('tarifas_matriz')
-        .select('*');
-
-      if (mErr || !matriz) {
-        console.warn('calcularYBloquearTarifaRuta: no se pudo cargar la matriz de tarifas', mErr);
-        return;
-      }
-
-      const getTarifa = (categoria: string, km: number): number => {
-        const queryKm = Math.min(3500, Math.max(0, km));
-        const matching = matriz.find(
-          (t: { tramo_min_km: number; tramo_max_km: number; categoria: string; tarifa_clp: number }) =>
-            queryKm >= t.tramo_min_km &&
-            queryKm <= t.tramo_max_km &&
-            t.categoria.toUpperCase() === categoria.toUpperCase(),
-        );
-        return matching ? Number(matching.tarifa_clp) : 0;
-      };
-
-      for (const b of bultos) {
-        const cat = b.categoria || 'XS';
-        const tarifa = getTarifa(cat, dist);
-        baseTotal += tarifa;
-
-        await supabase
-          .from('bultos')
-          .update({ tarifa_calculada_clp: tarifa })
-          .eq('id', b.id);
-      }
-
-      const costoEspera = Number(ruta.costo_espera_total || 0);
-      await supabase
-        .from('rutas')
-        .update({
-          tarifa_base_total: baseTotal,
-          total_pagar: baseTotal + costoEspera,
-        })
-        .eq('id', rutaId);
-    } catch (e: unknown) {
-      console.error('Error en calcularYBloquearTarifaRuta:', e);
-    }
   }
 
   // ─── HU-59: Consolidación de pedidos en una misma ruta logística ───

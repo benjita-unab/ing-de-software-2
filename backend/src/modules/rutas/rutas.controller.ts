@@ -14,6 +14,7 @@ import {
   RutasService,
   CreateRutaDto,
   EstimarFechasDto,
+  EstimarTarifaDto,
 } from './rutas.service';
 import { CreateAnomaliaDto } from './dto/create-anomalia.dto';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -36,6 +37,11 @@ export class RutasController {
   @Post()
   async createRoute(@Body() body: CreateRutaDto) {
     return await this.rutasService.createRoute(body);
+  }
+
+  @Post('estimar-tarifa')
+  async estimarTarifa(@Body() body: EstimarTarifaDto) {
+    return await this.rutasService.estimarTarifaComercial(body);
   }
 
   /**
