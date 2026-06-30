@@ -1,5 +1,6 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { DashboardService, DashboardResumenFilters } from './dashboard.service';
+import { DashboardFinancieroService } from './dashboard-financiero.service';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtGuard } from '../../common/guards/jwt.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -8,7 +9,10 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 @UseGuards(JwtGuard, RolesGuard)
 @Roles('ADMIN', 'OPERADOR')
 export class DashboardController {
-  constructor(private readonly dashboardService: DashboardService) {}
+  constructor(
+    private readonly dashboardService: DashboardService,
+    private readonly dashboardFinancieroService: DashboardFinancieroService,
+  ) {}
 
   /**
    * GET /api/dashboard/resumen
@@ -38,5 +42,23 @@ export class DashboardController {
   @Get('graficos')
   async getGraficos() {
     return await this.dashboardService.getGraficos();
+  }
+
+  /**
+   * GET /api/dashboard/financiero/resumen
+   * KPIs financieros agregados (ingresos, cartera, margen básico).
+   * Query opcionales: clienteId, desde (YYYY-MM-DD), hasta (YYYY-MM-DD).
+   */
+  @Get('financiero/resumen')
+  async getFinancieroResumen(
+    @Query('clienteId') clienteId?: string,
+    @Query('desde') desde?: string,
+    @Query('hasta') hasta?: string,
+  ) {
+    return await this.dashboardFinancieroService.getResumen({
+      clienteId,
+      desde,
+      hasta,
+    });
   }
 }
