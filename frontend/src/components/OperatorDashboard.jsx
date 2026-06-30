@@ -17,6 +17,7 @@ import Clientes from "./Clientes";
 import HistorialDespachos from "./HistorialDespachos";
 import PagosCliente from "./PagosCliente";
 import DashboardFinanciero from "./DashboardFinanciero";
+import DashboardRentabilidad from "./DashboardRentabilidad";
 import RutasPlantilla from "./RutasPlantilla";
 import ModulePage from "./ui/ModulePage";
 
@@ -40,6 +41,22 @@ export default function OperatorDashboard({ operator, onSignOut }) {
   const [activeSection, setActiveSection] = useState("dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [pagosView, setPagosView] = useState("gestion");
+
+  const pagosPageMeta =
+    pagosView === "financiero"
+      ? {
+          title: "Dashboard financiero",
+          subtitle: "Indicadores de ingresos, cartera y margen bruto",
+        }
+      : pagosView === "rentabilidad"
+        ? {
+            title: "Dashboard de rentabilidad",
+            subtitle: "Indicadores de margen y costos operativos por ruta",
+          }
+        : {
+            title: "Pagos de clientes",
+            subtitle: "Consulta y gestión de cobros B2B asociados a pedidos",
+          };
 
   return (
     <div className="lt-app-shell">
@@ -128,12 +145,8 @@ export default function OperatorDashboard({ operator, onSignOut }) {
   {
     activeSection === "pagos" && (
       <ModulePage
-        title={pagosView === "financiero" ? "Dashboard financiero" : "Pagos de clientes"}
-        subtitle={
-          pagosView === "financiero"
-            ? "Indicadores de ingresos, cartera y margen bruto"
-            : "Consulta y gestión de cobros B2B asociados a pedidos"
-        }
+        title={pagosPageMeta.title}
+        subtitle={pagosPageMeta.subtitle}
         actions={
           <div className="lt-dashboard__map-filters">
             <button
@@ -150,10 +163,23 @@ export default function OperatorDashboard({ operator, onSignOut }) {
             >
               Resumen financiero
             </button>
+            <button
+              type="button"
+              className={`lt-btn--filter ${pagosView === "rentabilidad" ? "lt-btn--filter-active" : ""}`}
+              onClick={() => setPagosView("rentabilidad")}
+            >
+              Resumen rentabilidad
+            </button>
           </div>
         }
       >
-        {pagosView === "financiero" ? <DashboardFinanciero /> : <PagosCliente />}
+        {pagosView === "financiero" ? (
+          <DashboardFinanciero />
+        ) : pagosView === "rentabilidad" ? (
+          <DashboardRentabilidad />
+        ) : (
+          <PagosCliente />
+        )}
       </ModulePage>
     )
   }
