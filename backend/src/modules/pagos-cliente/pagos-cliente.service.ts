@@ -9,6 +9,11 @@ import { SupabaseConfigService } from '../../config/supabase.config';
 import type { AuthenticatedUser } from '../../common/strategies/jwt.strategy';
 import { CreatePagoDto } from './dto/create-pago.dto';
 import { UpdateEstadoPagoDto } from './dto/update-estado-pago.dto';
+import {
+  ESTADO_PAGO_OFICIAL,
+  normalizarEstadoOficial,
+} from './pago-estado.constants';
+import { PagoEstadoOrchestrator } from './pago-estado.orchestrator';
 
 export type PagoClienteItemDto = {
   id: string;
@@ -34,10 +39,6 @@ export type PagosClienteListResponse = {
   pagosSinMontoCalculado: number;
 };
 
-const ESTADO_PAGO_PENDIENTE = 'PENDIENTE';
-const ESTADO_PAGO_PROCESANDO = 'PROCESANDO';
-const ESTADO_PAGO_PAGADO = 'PAGADO';
-
 const PAGO_SELECT_FIELDS = `
   id,
   cliente_id,
@@ -55,7 +56,10 @@ const PAGO_SELECT_FIELDS = `
 
 @Injectable()
 export class PagosClienteService {
-  constructor(private readonly supabaseConfig: SupabaseConfigService) {}
+  constructor(
+    private readonly supabaseConfig: SupabaseConfigService,
+    private readonly pagoEstadoOrchestrator: PagoEstadoOrchestrator,
+  ) {}
 
   assertClienteAccess(user: AuthenticatedUser, clienteId: string): void {
     if (user.role === 'CLIENTE') {
@@ -143,7 +147,7 @@ export class PagosClienteService {
         pedido_id: dto.pedidoId?.trim() || null,
         monto_total: montoTotal,
         monto_calculado: montoCalculado,
-        estado: ESTADO_PAGO_PENDIENTE,
+        estado: ESTADO_PAGO_OFICIAL.PENDIENTE,
         metodo_pago: dto.metodoPago?.trim() || null,
         proveedor_pago: dto.proveedorPago?.trim() || null,
         referencia_transaccion: dto.referenciaTransaccion?.trim() || null,
@@ -154,6 +158,14 @@ export class PagosClienteService {
     if (pagoError || !pago) {
       throw new InternalServerErrorException(
         `No fue posible crear el pago: ${pagoError?.message}`,
+      );
+    }
+
+    const pedidoId = dto.pedidoId?.trim();
+    if (pedidoId) {
+      await this.pagoEstadoOrchestrator.sincronizarEspejoPorPedidoId(
+        pedidoId,
+        ESTADO_PAGO_OFICIAL.PENDIENTE,
       );
     }
 
@@ -203,23 +215,12 @@ export class PagosClienteService {
       throw new NotFoundException('Pago no encontrado');
     }
 
-    const estadoNormalizado = this.normalizarEstadoPago(dto.estado);
-    const estadosValidos = [
-      ESTADO_PAGO_PENDIENTE,
-      ESTADO_PAGO_PROCESANDO,
-      ESTADO_PAGO_PAGADO,
-    ];
-    if (!estadosValidos.includes(estadoNormalizado)) {
-      throw new BadRequestException(
-        'El estado debe ser PENDIENTE, PROCESANDO o PAGADO',
-      );
-    }
+    const estadoNormalizado = normalizarEstadoOficial(dto.estado);
 
     const supabase = this.supabaseConfig.getClient();
-
     const { data: existing, error: findError } = await supabase
       .from('pagos_cliente')
-      .select(PAGO_SELECT_FIELDS)
+      .select('cliente_id')
       .eq('id', pagoId.trim())
       .maybeSingle();
 
@@ -234,38 +235,25 @@ export class PagosClienteService {
 
     this.assertClienteAccess(user, existing.cliente_id);
 
-    const updateRow: Record<string, unknown> = {
-      estado: estadoNormalizado,
-    };
+    await this.pagoEstadoOrchestrator.transicionarPorPagoId(
+      pagoId.trim(),
+      estadoNormalizado,
+      {
+        metodoPago: dto.metodoPago,
+        proveedorPago: dto.proveedorPago,
+        referenciaTransaccion: dto.referenciaTransaccion,
+      },
+    );
 
-    if (dto.metodoPago !== undefined) {
-      updateRow.metodo_pago = dto.metodoPago?.trim() || null;
-    }
-
-    if (dto.proveedorPago !== undefined) {
-      updateRow.proveedor_pago = dto.proveedorPago?.trim() || null;
-    }
-
-    if (dto.referenciaTransaccion !== undefined) {
-      updateRow.referencia_transaccion = dto.referenciaTransaccion?.trim() || null;
-    }
-
-    if (estadoNormalizado === ESTADO_PAGO_PAGADO) {
-      updateRow.fecha_pago = new Date().toISOString();
-    } else if (estadoNormalizado === ESTADO_PAGO_PENDIENTE) {
-      updateRow.fecha_pago = null;
-    }
-
-    const { data: updated, error: updateError } = await supabase
+    const { data: updated, error: reloadError } = await supabase
       .from('pagos_cliente')
-      .update(updateRow)
-      .eq('id', pagoId.trim())
       .select(PAGO_SELECT_FIELDS)
+      .eq('id', pagoId.trim())
       .single();
 
-    if (updateError || !updated) {
+    if (reloadError || !updated) {
       throw new InternalServerErrorException(
-        `No fue posible actualizar el pago: ${updateError?.message}`,
+        `No fue posible recargar el pago: ${reloadError?.message}`,
       );
     }
 
@@ -287,7 +275,7 @@ export class PagosClienteService {
       pedidoId: row.pedido_id ? String(row.pedido_id) : null,
       montoTotal: this.redondearMonto(Number(row.monto_total ?? 0)),
       montoCalculado: row.monto_calculado === true || row.monto_calculado === 'true',
-      estado: this.normalizarEstadoPago(String(row.estado ?? ESTADO_PAGO_PENDIENTE)),
+      estado: normalizarEstadoOficial(String(row.estado ?? ESTADO_PAGO_OFICIAL.PENDIENTE)),
       fechaCreacion: String(row.fecha_creacion),
       fechaPago: row.fecha_pago ? String(row.fecha_pago) : null,
       metodoPago: row.metodo_pago ? String(row.metodo_pago) : null,
@@ -311,13 +299,6 @@ export class PagosClienteService {
     );
   }
 
-  private normalizarEstadoPago(estado: string): string {
-    const upper = String(estado || '').trim().toUpperCase();
-    if (upper === ESTADO_PAGO_PAGADO) return ESTADO_PAGO_PAGADO;
-    if (upper === ESTADO_PAGO_PROCESANDO) return ESTADO_PAGO_PROCESANDO;
-    return ESTADO_PAGO_PENDIENTE;
-  }
-
   private montoParaAgregado(pago: PagoClienteItemDto): number {
     return pago.montoCalculado ? pago.montoTotal : 0;
   }
@@ -327,14 +308,14 @@ export class PagosClienteService {
       items
         .filter(
           (p) =>
-            p.estado === ESTADO_PAGO_PENDIENTE ||
-            p.estado === ESTADO_PAGO_PROCESANDO,
+            p.estado === ESTADO_PAGO_OFICIAL.PENDIENTE ||
+            p.estado === ESTADO_PAGO_OFICIAL.PROCESANDO,
         )
         .map((p) => this.montoParaAgregado(p)),
     );
     const totalPagado = this.sumarMontos(
       items
-        .filter((p) => p.estado === ESTADO_PAGO_PAGADO)
+        .filter((p) => p.estado === ESTADO_PAGO_OFICIAL.PAGADO)
         .map((p) => this.montoParaAgregado(p)),
     );
 

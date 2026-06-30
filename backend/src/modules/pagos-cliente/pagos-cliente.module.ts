@@ -17,10 +17,11 @@ import { Module } from '@nestjs/common';
 import { SupabaseConfigService } from '../../config/supabase.config';
 import { PagosClienteController } from './pagos-cliente.controller';
 import { PagosClienteService } from './pagos-cliente.service';
+import { PagoEstadoOrchestrator } from './pago-estado.orchestrator';
 
 @Module({
-  providers: [PagosClienteService, SupabaseConfigService],
+  providers: [PagosClienteService, PagoEstadoOrchestrator, SupabaseConfigService],
   controllers: [PagosClienteController],
-  exports: [PagosClienteService],
+  exports: [PagosClienteService, PagoEstadoOrchestrator],
 })
 export class PagosClienteModule {}

@@ -1,7 +1,17 @@
-import { Injectable, InternalServerErrorException, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
+import type { AuthenticatedUser } from '../../common/strategies/jwt.strategy';
 import { ConfigService } from '@nestjs/config';
 import { SupabaseConfigService } from '../../config/supabase.config';
 import { WebpayPlus, Options, IntegrationApiKeys, Environment, IntegrationCommerceCodes } from 'transbank-sdk';
+import { PagoEstadoOrchestrator } from '../pagos-cliente/pago-estado.orchestrator';
+import { ESTADO_PAGO_OFICIAL } from '../pagos-cliente/pago-estado.constants';
 
 @Injectable()
 export class PagosService {
@@ -12,23 +22,31 @@ export class PagosService {
   constructor(
     private readonly supabaseConfig: SupabaseConfigService,
     private readonly configService: ConfigService,
+    private readonly pagoEstadoOrchestrator: PagoEstadoOrchestrator,
   ) {
     this.tx = new WebpayPlus.Transaction(new Options(IntegrationCommerceCodes.WEBPAY_PLUS, IntegrationApiKeys.WEBPAY, Environment.Integration));
   }
 
-  async crearCobro(rutaId: string, monto: number, tipo: 'base' | 'atraso' = 'base') {
+  async crearCobro(
+    rutaId: string,
+    monto: number,
+    tipo: 'base' | 'atraso' = 'base',
+    user: AuthenticatedUser,
+  ) {
     const supabase = this.supabaseConfig.getClient();
 
     // 1. Validar que la ruta existe
     const { data: ruta, error: rutaError } = await supabase
       .from('rutas')
-      .select('id, nombre_ruta, estado_pago, estado')
+      .select('id, nombre_ruta, estado_pago, estado, cliente_id')
       .eq('id', rutaId)
       .single();
 
     if (rutaError || !ruta) {
       throw new NotFoundException(`Ruta ${rutaId} no encontrada`);
     }
+
+    this.assertRutaClienteAccess(user, String(ruta.cliente_id ?? ''));
 
     if (ruta.estado_pago === 'pagado' && ruta.estado !== 'PAGO_ATRASO_PENDIENTE') {
       throw new BadRequestException('La ruta ya se encuentra pagada y no tiene atrasos pendientes.');
@@ -50,6 +68,18 @@ export class PagosService {
         returnUrl
       );
 
+      if (tipo !== 'atraso') {
+        await this.pagoEstadoOrchestrator.transicionarPorPedidoId(
+          rutaId,
+          ESTADO_PAGO_OFICIAL.PROCESANDO,
+          {
+            metodoPago: 'transbank',
+            proveedorPago: 'transbank',
+            referenciaTransaccion: response.token,
+          },
+        );
+      }
+
       return {
         paymentUrl: `${response.url}?token_ws=${response.token}`,
         paymentId: response.token,
@@ -66,7 +96,14 @@ export class PagosService {
 
       if (response.status !== 'AUTHORIZED') {
         this.logger.log(`El pago no fue autorizado. Estado actual: ${response.status}`);
-        return { success: false, message: 'Pago no autorizado o anulado', status: response.status, rutaId: response.session_id };
+        const rutaIdRechazo = response.session_id;
+        if (rutaIdRechazo && !response.buy_order?.startsWith('LOGI-A-')) {
+          await this.pagoEstadoOrchestrator.transicionarPorPedidoId(
+            rutaIdRechazo,
+            ESTADO_PAGO_OFICIAL.PENDIENTE,
+          );
+        }
+        return { success: false, message: 'Pago no autorizado o anulado', status: response.status, rutaId: rutaIdRechazo };
       }
 
       const rutaId = response.session_id; // Guardamos el rutaId en el sessionId
@@ -111,14 +148,23 @@ export class PagosService {
           newState = 'COMPLETADO';
         }
 
-        // 1. Actualizar estado_pago y estado en rutas
+        await this.pagoEstadoOrchestrator.transicionarPorPedidoId(
+          rutaId,
+          ESTADO_PAGO_OFICIAL.PAGADO,
+          {
+            metodoPago: 'transbank',
+            proveedorPago: 'transbank',
+            referenciaTransaccion: response.buy_order,
+          },
+        );
+
         const { error: updateError } = await supabase
           .from('rutas')
-          .update({ estado_pago: 'pagado', estado: newState })
+          .update({ estado: newState })
           .eq('id', rutaId);
 
         if (updateError) {
-          throw new InternalServerErrorException('Error al actualizar estado_pago de la ruta');
+          throw new InternalServerErrorException('Error al actualizar estado operativo de la ruta');
         }
 
         // 2. Guardar comprobante
@@ -146,8 +192,26 @@ export class PagosService {
     }
   }
 
-  async obtenerComprobante(rutaId: string) {
+  async obtenerComprobante(rutaId: string, user: AuthenticatedUser) {
     const supabase = this.supabaseConfig.getClient();
+
+    const { data: ruta, error: rutaError } = await supabase
+      .from('rutas')
+      .select('id, cliente_id')
+      .eq('id', rutaId)
+      .maybeSingle();
+
+    if (rutaError) {
+      throw new InternalServerErrorException(
+        `Error al verificar la ruta: ${rutaError.message}`,
+      );
+    }
+    if (!ruta) {
+      throw new NotFoundException('Comprobantes no encontrados para esta ruta');
+    }
+
+    this.assertRutaClienteAccess(user, String(ruta.cliente_id ?? ''));
+
     const { data, error } = await supabase
       .from('comprobantes_pago')
       .select(`
@@ -170,5 +234,25 @@ export class PagosService {
     }
 
     return data;
+  }
+
+  private assertRutaClienteAccess(
+    user: AuthenticatedUser,
+    rutaClienteId: string,
+  ): void {
+    if (user.role !== 'CLIENTE') {
+      return;
+    }
+
+    const clienteId = user.clienteId?.trim();
+    if (!clienteId) {
+      throw new ForbiddenException(
+        'Sesión sin cliente vinculado. Vuelve a iniciar sesión.',
+      );
+    }
+
+    if (clienteId !== rutaClienteId?.trim()) {
+      throw new ForbiddenException('No tienes acceso a esta ruta');
+    }
   }
 }

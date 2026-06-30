@@ -1,4 +1,18 @@
-import { Body, Controller, Get, Param, Post, Query, Redirect } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  Redirect,
+  UseGuards,
+} from '@nestjs/common';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { CurrentUser } from '../../common/decorators/user.decorator';
+import { JwtGuard } from '../../common/guards/jwt.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import type { AuthenticatedUser } from '../../common/strategies/jwt.strategy';
 import { PagosService } from './pagos.service';
 
 @Controller('api/pagos')
@@ -6,11 +20,21 @@ export class PagosController {
   constructor(private readonly pagosService: PagosService) {}
 
   @Post('crear-cobro')
-  async crearCobro(@Body() body: { rutaId: string; monto: number; tipo?: 'base' | 'atraso' }) {
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles('CLIENTE', 'ADMIN', 'OPERADOR')
+  async crearCobro(
+    @Body() body: { rutaId: string; monto: number; tipo?: 'base' | 'atraso' },
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
     if (!body.rutaId || !body.monto) {
       return { error: 'Faltan parámetros requeridos (rutaId, monto)' };
     }
-    return this.pagosService.crearCobro(body.rutaId, body.monto, body.tipo || 'base');
+    return this.pagosService.crearCobro(
+      body.rutaId,
+      body.monto,
+      body.tipo || 'base',
+      user,
+    );
   }
 
   @Get('transbank-return')
@@ -50,7 +74,12 @@ export class PagosController {
   }
 
   @Get('comprobante/:rutaId')
-  async getComprobante(@Param('rutaId') rutaId: string) {
-    return this.pagosService.obtenerComprobante(rutaId);
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles('CLIENTE', 'ADMIN', 'OPERADOR')
+  async getComprobante(
+    @Param('rutaId') rutaId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.pagosService.obtenerComprobante(rutaId, user);
   }
 }
