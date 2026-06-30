@@ -343,14 +343,14 @@ export default function ClientPortalShell({ user, onSignOut }) {
     return "No hay pedidos en curso en este momento.";
   }
 
-  const handlePagarKhipu = async (id, monto, tipo = "base", e) => {
+  const handlePagarKhipu = async (id, tipo = "base", e) => {
     e?.stopPropagation?.();
     setPagandoBase(true);
     try {
       const { apiFetch } = await import("../lib/apiClient");
       const res = await apiFetch("/api/pagos/crear-cobro", {
         method: "POST",
-        json: { rutaId: id, monto, tipo },
+        json: { rutaId: id, tipo },
       });
       if (res.ok && res.data?.paymentUrl) {
         window.location.href = res.data.paymentUrl;
@@ -592,12 +592,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
                             disabled={pagandoBase}
                             style={{ ...styles.btn, background: "#ef4444", borderColor: "#ef4444" }}
                             onClick={(e) =>
-                              handlePagarKhipu(
-                                selectedId,
-                                Number(detalle.ruta.costo_espera_total || 0),
-                                "atraso",
-                                e,
-                              )
+                              handlePagarKhipu(selectedId, "atraso", e)
                             }
                           >
                             {pagandoBase ? "Redirigiendo..." : "Pagar atraso"}
@@ -615,18 +610,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
                             type="button"
                             disabled={pagandoBase}
                             style={{ ...styles.btn, background: "#10b981", borderColor: "#10b981" }}
-                            onClick={(e) =>
-                              handlePagarKhipu(
-                                selectedId,
-                                Number(
-                                  detalle.ruta.costo_servicio ||
-                                    detalle.ruta.tarifa_base_total ||
-                                    0,
-                                ),
-                                "base",
-                                e,
-                              )
-                            }
+                            onClick={(e) => handlePagarKhipu(selectedId, "base", e)}
                           >
                             {pagandoBase ? "Redirigiendo..." : "Pagar"}
                           </button>

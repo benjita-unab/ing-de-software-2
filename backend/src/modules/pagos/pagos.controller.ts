@@ -23,18 +23,13 @@ export class PagosController {
   @UseGuards(JwtGuard, RolesGuard)
   @Roles('CLIENTE', 'ADMIN', 'OPERADOR')
   async crearCobro(
-    @Body() body: { rutaId: string; monto: number; tipo?: 'base' | 'atraso' },
+    @Body() body: { rutaId: string; tipo?: 'base' | 'atraso' },
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    if (!body.rutaId || !body.monto) {
-      return { error: 'Faltan parámetros requeridos (rutaId, monto)' };
+    if (!body.rutaId) {
+      return { error: 'Faltan parámetros requeridos (rutaId)' };
     }
-    return this.pagosService.crearCobro(
-      body.rutaId,
-      body.monto,
-      body.tipo || 'base',
-      user,
-    );
+    return this.pagosService.crearCobro(body.rutaId, body.tipo || 'base', user);
   }
 
   @Get('transbank-return')

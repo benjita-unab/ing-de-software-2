@@ -29,16 +29,16 @@ export class PagosService {
 
   async crearCobro(
     rutaId: string,
-    monto: number,
     tipo: 'base' | 'atraso' = 'base',
     user: AuthenticatedUser,
   ) {
     const supabase = this.supabaseConfig.getClient();
 
-    // 1. Validar que la ruta existe
     const { data: ruta, error: rutaError } = await supabase
       .from('rutas')
-      .select('id, nombre_ruta, estado_pago, estado, cliente_id')
+      .select(
+        'id, nombre_ruta, estado_pago, estado, cliente_id, total_pagar, costo_espera_total',
+      )
       .eq('id', rutaId)
       .single();
 
@@ -52,7 +52,8 @@ export class PagosService {
       throw new BadRequestException('La ruta ya se encuentra pagada y no tiene atrasos pendientes.');
     }
 
-    // 2. Preparar payload para Transbank Webpay Plus
+    const monto = this.resolverMontoCobro(ruta, tipo);
+
     const backendUrl = this.configService.get<string>('BACKEND_URL') || process.env.BACKEND_URL || 'http://localhost:3000';
     const returnUrl = `${backendUrl}/api/pagos/transbank-return`;
 
@@ -254,5 +255,23 @@ export class PagosService {
     if (clienteId !== rutaClienteId?.trim()) {
       throw new ForbiddenException('No tienes acceso a esta ruta');
     }
+  }
+
+  private resolverMontoCobro(
+    ruta: { total_pagar?: unknown; costo_espera_total?: unknown },
+    tipo: 'base' | 'atraso',
+  ): number {
+    const raw =
+      tipo === 'atraso' ? ruta.costo_espera_total : ruta.total_pagar;
+    const monto = Math.round(Number(raw ?? 0));
+
+    if (!Number.isFinite(monto) || monto <= 0) {
+      const campo = tipo === 'atraso' ? 'costo_espera_total' : 'total_pagar';
+      throw new BadRequestException(
+        `No hay monto válido en la ruta (${campo}) para iniciar el cobro`,
+      );
+    }
+
+    return monto;
   }
 }
