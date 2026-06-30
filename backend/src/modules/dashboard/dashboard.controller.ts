@@ -1,6 +1,7 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { DashboardService, DashboardResumenFilters } from './dashboard.service';
 import { DashboardFinancieroService } from './dashboard-financiero.service';
+import { DashboardRentabilidadService } from './dashboard-rentabilidad.service';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtGuard } from '../../common/guards/jwt.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -12,6 +13,7 @@ export class DashboardController {
   constructor(
     private readonly dashboardService: DashboardService,
     private readonly dashboardFinancieroService: DashboardFinancieroService,
+    private readonly dashboardRentabilidadService: DashboardRentabilidadService,
   ) {}
 
   /**
@@ -56,6 +58,24 @@ export class DashboardController {
     @Query('hasta') hasta?: string,
   ) {
     return await this.dashboardFinancieroService.getResumen({
+      clienteId,
+      desde,
+      hasta,
+    });
+  }
+
+  /**
+   * GET /api/dashboard/rentabilidad/resumen
+   * KPIs de rentabilidad agregados (margen, costos, rutas extremas).
+   * Query opcionales: clienteId, desde (YYYY-MM-DD), hasta (YYYY-MM-DD).
+   */
+  @Get('rentabilidad/resumen')
+  async getRentabilidadResumen(
+    @Query('clienteId') clienteId?: string,
+    @Query('desde') desde?: string,
+    @Query('hasta') hasta?: string,
+  ) {
+    return await this.dashboardRentabilidadService.getResumen({
       clienteId,
       desde,
       hasta,
