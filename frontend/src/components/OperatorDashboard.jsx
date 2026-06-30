@@ -16,6 +16,7 @@ import GuiasDespacho from "./GuiasDespacho";
 import Clientes from "./Clientes";
 import HistorialDespachos from "./HistorialDespachos";
 import PagosCliente from "./PagosCliente";
+import DashboardFinanciero from "./DashboardFinanciero";
 import RutasPlantilla from "./RutasPlantilla";
 import ModulePage from "./ui/ModulePage";
 
@@ -38,6 +39,7 @@ export default function OperatorDashboard({ operator, onSignOut }) {
 
   const [activeSection, setActiveSection] = useState("dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [pagosView, setPagosView] = useState("gestion");
 
   return (
     <div className="lt-app-shell">
@@ -126,10 +128,32 @@ export default function OperatorDashboard({ operator, onSignOut }) {
   {
     activeSection === "pagos" && (
       <ModulePage
-        title="Pagos de clientes"
-        subtitle="Consulta y gestión de cobros B2B asociados a pedidos"
+        title={pagosView === "financiero" ? "Dashboard financiero" : "Pagos de clientes"}
+        subtitle={
+          pagosView === "financiero"
+            ? "Indicadores de ingresos, cartera y margen bruto"
+            : "Consulta y gestión de cobros B2B asociados a pedidos"
+        }
+        actions={
+          <div className="lt-dashboard__map-filters">
+            <button
+              type="button"
+              className={`lt-btn--filter ${pagosView === "gestion" ? "lt-btn--filter-active" : ""}`}
+              onClick={() => setPagosView("gestion")}
+            >
+              Gestión de cobros
+            </button>
+            <button
+              type="button"
+              className={`lt-btn--filter ${pagosView === "financiero" ? "lt-btn--filter-active" : ""}`}
+              onClick={() => setPagosView("financiero")}
+            >
+              Resumen financiero
+            </button>
+          </div>
+        }
       >
-        <PagosCliente />
+        {pagosView === "financiero" ? <DashboardFinanciero /> : <PagosCliente />}
       </ModulePage>
     )
   }

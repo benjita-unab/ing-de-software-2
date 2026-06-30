@@ -1,0 +1,244 @@
+import React, { useCallback, useEffect, useState } from "react";
+import {
+  Banknote,
+  CalendarDays,
+  CircleDollarSign,
+  Clock,
+  Loader2,
+  RefreshCw,
+  TrendingUp,
+  Wallet,
+  CheckCircle2,
+} from "lucide-react";
+import KpiCard from "./ui/KpiCard";
+import { getDashboardFinancieroResumen } from "../lib/dashboardFinancieroService";
+
+const ROW_INGRESOS = [
+  {
+    key: "ingresosHoy",
+    label: "Ingresos de hoy",
+    icon: Banknote,
+    iconClass: "lt-kpi-icon--green",
+    format: "clp",
+  },
+  {
+    key: "ingresosMesMtd",
+    label: "Ingresos del mes",
+    icon: CalendarDays,
+    iconClass: "lt-kpi-icon--blue",
+    format: "clp",
+  },
+  {
+    key: "montoPorCobrar",
+    label: "Monto por cobrar",
+    icon: Wallet,
+    iconClass: "lt-kpi-icon--amber",
+    format: "clp",
+  },
+  {
+    key: "margenBrutoBasico",
+    label: "Margen bruto",
+    icon: TrendingUp,
+    iconClass: "lt-kpi-icon--purple",
+    format: "clp",
+  },
+];
+
+const ROW_PAGOS = [
+  {
+    key: "pagosPendientes",
+    label: "Pagos pendientes",
+    icon: Clock,
+    iconClass: "lt-kpi-icon--amber",
+    format: "count",
+  },
+  {
+    key: "pagosProcesando",
+    label: "Pagos procesando",
+    icon: Loader2,
+    iconClass: "lt-kpi-icon--blue",
+    format: "count",
+  },
+  {
+    key: "pagosCompletados",
+    label: "Pagos completados",
+    icon: CheckCircle2,
+    iconClass: "lt-kpi-icon--green",
+    format: "count",
+  },
+];
+
+function formatClp(value) {
+  const n = Number(value);
+  const safe = Number.isFinite(n) ? n : 0;
+  return new Intl.NumberFormat("es-CL", {
+    style: "currency",
+    currency: "CLP",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(safe);
+}
+
+function formatKpiValue(item, data) {
+  if (!data) return "—";
+  const raw = data[item.key];
+  if (item.format === "clp") return formatClp(raw);
+  const n = Number(raw);
+  return Number.isFinite(n) ? String(n) : "—";
+}
+
+function KpiSkeleton({ label }) {
+  return (
+    <div className="lt-kpi-card" style={{ opacity: 0.5 }} aria-hidden="true">
+      <div className="lt-kpi-card__icon lt-kpi-icon--blue" />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="lt-kpi-card__label">{label || "···"}</div>
+        <div className="lt-kpi-card__value">—</div>
+      </div>
+    </div>
+  );
+}
+
+function KpiRow({ items, data, loading }) {
+  return (
+    <div
+      className="lt-kpi-strip"
+      style={{
+        gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))`,
+      }}
+    >
+      {items.map((item) =>
+        loading ? (
+          <KpiSkeleton key={item.key} label={item.label} />
+        ) : (
+          <KpiCard
+            key={item.key}
+            icon={item.icon}
+            label={item.label}
+            value={formatKpiValue(item, data)}
+            iconClass={item.iconClass}
+          />
+        ),
+      )}
+    </div>
+  );
+}
+
+export default function DashboardFinanciero() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const loadResumen = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    const res = await getDashboardFinancieroResumen();
+    if (res.error) {
+      setError(res.error);
+      setData(null);
+    } else {
+      setData(res.data);
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    loadResumen();
+  }, [loadResumen]);
+
+  const margenSub =
+    !loading && data?.filtros?.margenDesde && data?.filtros?.margenHasta
+      ? `Período margen: ${data.filtros.margenDesde} → ${data.filtros.margenHasta}`
+      : null;
+
+  return (
+    <div className="lt-module-inner">
+      <div
+        className="lt-toolbar"
+        style={{ marginBottom: "var(--lt-space-4)", justifyContent: "flex-end" }}
+      >
+        <button
+          type="button"
+          className="lt-btn lt-btn--ghost"
+          onClick={loadResumen}
+          disabled={loading}
+        >
+          <RefreshCw size={16} />
+          Actualizar
+        </button>
+      </div>
+
+      {error ? (
+        <div
+          className="lt-error-banner lt-error-banner--compact"
+          role="alert"
+          style={{ marginBottom: "var(--lt-space-4)" }}
+        >
+          <span>{error}</span>
+          <button
+            type="button"
+            className="lt-btn lt-btn--secondary"
+            style={{ marginLeft: "12px" }}
+            onClick={loadResumen}
+          >
+            Reintentar
+          </button>
+        </div>
+      ) : null}
+
+      <section aria-label="Indicadores de ingresos y cartera">
+        <h2
+          className="lt-text-muted"
+          style={{
+            fontSize: "12px",
+            fontWeight: 600,
+            textTransform: "uppercase",
+            letterSpacing: "0.06em",
+            margin: "0 0 var(--lt-space-3)",
+          }}
+        >
+          Ingresos y cartera
+        </h2>
+        <KpiRow items={ROW_INGRESOS} data={data} loading={loading} />
+      </section>
+
+      <section aria-label="Estado de pagos" style={{ marginTop: "var(--lt-space-5)" }}>
+        <h2
+          className="lt-text-muted"
+          style={{
+            fontSize: "12px",
+            fontWeight: 600,
+            textTransform: "uppercase",
+            letterSpacing: "0.06em",
+            margin: "0 0 var(--lt-space-3)",
+          }}
+        >
+          Estado de pagos
+        </h2>
+        <KpiRow items={ROW_PAGOS} data={data} loading={loading} />
+      </section>
+
+      {margenSub && !error ? (
+        <p
+          className="lt-text-muted"
+          style={{ marginTop: "var(--lt-space-4)", fontSize: "13px" }}
+        >
+          <CircleDollarSign
+            size={14}
+            style={{ verticalAlign: "middle", marginRight: 6 }}
+          />
+          {margenSub}
+        </p>
+      ) : null}
+
+      {loading && !data ? (
+        <p
+          className="lt-text-muted"
+          style={{ marginTop: "var(--lt-space-4)", fontSize: "13px", textAlign: "center" }}
+        >
+          Cargando indicadores financieros…
+        </p>
+      ) : null}
+    </div>
+  );
+}
