@@ -426,7 +426,7 @@ export default function CreadorCarga() {
     }
     const neededSlots = SIZES_CONFIG[activeSizeBrush].slots;
     if (totalSlotsUsed + neededSlots > CAPACIDAD_MAXIMA_SLOTS) {
-      alert(`Capacidad excedida. Solo quedan ${CAPACIDAD_MAXIMA_SLOTS - totalSlotsUsed} slots libres.`);
+      alert(`Capacidad excedida. Solo quedan ${CAPACIDAD_MAXIMA_SLOTS - totalSlotsUsed} Slots disponibles.`);
       return;
     }
 
@@ -602,7 +602,7 @@ export default function CreadorCarga() {
         )}
       </div>
       <p className="liquid-text" style={{ fontSize: '14px', marginBottom: '24px', lineHeight: '1.5', fontWeight: '500' }}>
-        Arma tu carga (96 Micro-bloques). Usa <b>Click Izquierdo</b> para pintar en el camión y <b>Click Derecho</b> para borrar paquetes.
+        Arma tu carga (96 Slots). Usa <b>Click Izquierdo</b> para pintar en el camión y <b>Click Derecho</b> para borrar paquetes.
       </p>
 
       {mensaje && (
@@ -810,8 +810,48 @@ export default function CreadorCarga() {
               })}
             </div>
           </div>
-          <div style={{ textAlign: 'right', fontSize: '14px', fontWeight: 'bold', color: remainingSlots === 0 ? '#DC2626' : '#38BDF8', marginTop: '6px' }}>
-            {remainingSlots} Micro-bloques Libres (100% = 96)
+          <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <p
+              className="liquid-text"
+              style={{
+                fontSize: '12px',
+                lineHeight: 1.5,
+                margin: 0,
+                padding: '8px 12px',
+                borderRadius: '8px',
+                background: 'rgba(128,128,128,0.12)',
+                border: '1px solid rgba(128,128,128,0.2)',
+              }}
+            >
+              <strong>¿Qué es un Slot?</strong>{' '}
+              Cada celda de la grilla representa 1 Slot. Los Slots representan la capacidad utilizada del camión
+              {' '}(96 Slots = carga completa).
+            </p>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '6px',
+                textAlign: 'right',
+              }}
+            >
+              <span className="liquid-text" style={{ fontSize: '14px', fontWeight: 'bold', width: '100%' }}>
+                <span style={{ color: totalSlotsUsed > 0 ? '#1D4ED8' : 'inherit' }}>
+                  {totalSlotsUsed} / {CAPACIDAD_MAXIMA_SLOTS} Slots utilizados
+                </span>
+                <span
+                  style={{
+                    fontWeight: '600',
+                    marginLeft: '10px',
+                    color: remainingSlots === 0 ? '#DC2626' : '#38BDF8',
+                  }}
+                >
+                  · Disponibles: {remainingSlots} Slots
+                </span>
+              </span>
+            </div>
           </div>
 
           {isCargaMaximizada && (
@@ -821,7 +861,7 @@ export default function CreadorCarga() {
           )}
           {modoCarga === 'RETORNO' && totalSlotsUsed > 0 && !isCargaMinimaRetornoValida && (
             <div style={{ color: '#FBBF24', fontWeight: 'bold', fontSize: '14px', marginTop: '10px', textAlign: 'right' }}>
-              ⚠️ Mínimo 25% (24 slots) requerido para Retorno. Faltan {24 - totalSlotsUsed} slots.
+              ⚠️ Mínimo 25% (24 Slots) requerido para Retorno. Faltan {24 - totalSlotsUsed} Slots.
             </div>
           )}
 
@@ -859,7 +899,7 @@ export default function CreadorCarga() {
           {totalSlotsUsed === 0 ? (
             <div style={{ color: '#DC2626', fontSize: '14px', marginBottom: '10px', fontWeight: '600' }}>⚠️ Agrega carga en el Paso 1 para buscar camiones.</div>
           ) : (
-            <div style={{ color: '#38BDF8', fontSize: '14px', marginBottom: '10px', fontWeight: '600' }}>✓ Buscando camiones con al menos {totalSlotsUsed} micro-bloques disponibles.</div>
+            <div style={{ color: '#38BDF8', fontSize: '14px', marginBottom: '10px', fontWeight: '600' }}>✓ Buscando camiones con al menos {totalSlotsUsed} Slots disponibles.</div>
           )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -869,8 +909,12 @@ export default function CreadorCarga() {
               {camionesDisponiblesParaEstaCarga.map(c => {
                 const maxCap = c.slots || CAPACIDAD_MAXIMA_SLOTS;
                 const available = modoCarga === 'RETORNO' ? maxCap : (camionesDisponibilidad[c.id] ?? maxCap);
+                const ocupadosFlota = Math.max(0, maxCap - available);
                 return (
-                  <option key={c.id} value={c.id}>{c.patente || c.placa} ({c.modelo}) - Espacio Libre: {available} Slots {modoCarga === 'RETORNO' && "(Cerca de origen)"}</option>
+                  <option key={c.id} value={c.id}>
+                    {c.patente || c.placa} ({c.modelo}) — {ocupadosFlota}/{maxCap} Slots utilizados · Disponibles: {available} Slots
+                    {modoCarga === 'RETORNO' ? ' (Cerca de origen)' : ''}
+                  </option>
                 );
               })}
             </select>
@@ -878,7 +922,7 @@ export default function CreadorCarga() {
               <div style={{ color: '#FBBF24', fontSize: '13px', marginTop: '6px', fontWeight: 'bold' }}>No hay camiones en ruta retornando a menos de 100km de tu Origen. Intenta otra ubicación.</div>
             )}
             {totalSlotsUsed > 0 && modoCarga === 'CENTRAL' && camionesDisponiblesParaEstaCarga.length === 0 && (
-              <div style={{ color: '#DC2626', fontSize: '13px', marginTop: '6px', fontWeight: 'bold' }}>No hay camiones en la flota con {totalSlotsUsed} micro-bloques disponibles en este momento.</div>
+              <div style={{ color: '#DC2626', fontSize: '13px', marginTop: '6px', fontWeight: 'bold' }}>No hay camiones en la flota con {totalSlotsUsed} Slots disponibles en este momento.</div>
             )}
           </div>
         </div>
