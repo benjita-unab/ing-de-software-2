@@ -20,7 +20,8 @@ export default function CrearChoferModal({ onClose, onCreated }) {
 
   const [formCamion, setFormCamion] = useState({
     patente: '',
-    slots: ''
+    slots: '',
+    km_l: ''
   });
 
   const [selectedCamionId, setSelectedCamionId] = useState('');
@@ -59,6 +60,7 @@ export default function CrearChoferModal({ onClose, onCreated }) {
         const resCamion = await crearCamion({
           patente: formCamion.patente.trim().toUpperCase(),
           slots: parseInt(formCamion.slots) || 0,
+          km_l: parseFloat(formCamion.km_l) || 4.5,
           estado: 'DISPONIBLE'
         });
         if (resCamion.error) throw new Error(`Error al crear camión: ${resCamion.error}`);
@@ -204,6 +206,10 @@ export default function CrearChoferModal({ onClose, onCreated }) {
                   <div className="lt-form-group" style={{ flex: 1 }}>
                     <label className="lt-label">Capacidad (Slots)</label>
                     <input required={modoCamion === 'nuevo'} type="number" className="lt-input" name="slots" value={formCamion.slots} onChange={handleChangeCamion} placeholder="Ej: 64" />
+                  </div>
+                  <div className="lt-form-group" style={{ flex: 1 }}>
+                    <label className="lt-label">Rendimiento (Km/L)</label>
+                    <input type="number" step="0.01" min="0.01" className="lt-input" name="km_l" value={formCamion.km_l} onChange={handleChangeCamion} placeholder="Ej: 4.5" />
                   </div>
                 </div>
               </div>

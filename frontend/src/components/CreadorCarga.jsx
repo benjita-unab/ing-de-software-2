@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { apiFetch } from '../lib/apiClient';
 import { estimarFechasEstimadas } from '../lib/rutasService';
+import { getRutaPlantillaById, getRutasPlantilla } from '../lib/rutasPlantillaService';
 import { useGooglePlacesAutocomplete } from '../hooks/useGooglePlacesAutocomplete';
 import '../LiquidGlass.css';
 
@@ -69,6 +70,10 @@ export default function CreadorCarga() {
   const [camionesRetornoCercanos, setCamionesRetornoCercanos] = useState([]);
 
   const [clienteId, setClienteId] = useState(draft?.clienteId || "");
+  const [rutaPlantillaId, setRutaPlantillaId] = useState(draft?.rutaPlantillaId || "");
+  const [rutasReutilizables, setRutasReutilizables] = useState([]);
+  const [observaciones, setObservaciones] = useState(draft?.observaciones || "");
+  const [cargandoRutasReutilizables, setCargandoRutasReutilizables] = useState(false);
   const [nombreRuta, setNombreRuta] = useState(draft?.nombreRuta || "");
   const [origen, setOrigen] = useState(draft?.origen || "");
   const [origenInput, setOrigenInput] = useState(draft?.origenInput || "");
@@ -135,16 +140,75 @@ export default function CreadorCarga() {
   const [activeParadaId, setActiveParadaId] = useState("");
 
   // Guardar en localStorage cuando cambian los datos críticos
+
+
+  useEffect(() => {
+    let cancelled = false;
+    async function cargarRutasReutilizables() {
+      if (modoCarga !== 'CENTRAL') {
+        setRutasReutilizables([]);
+        return;
+      }
+      setCargandoRutasReutilizables(true);
+      const params = { activa: "true" };
+      if (clienteId) params.clienteId = clienteId;
+      const res = await getRutasPlantilla(params);
+      if (cancelled) return;
+      const lista = res.data?.data ?? res.data ?? [];
+      setRutasReutilizables(Array.isArray(lista) ? lista : []);
+      setCargandoRutasReutilizables(false);
+    }
+    cargarRutasReutilizables();
+    return () => { cancelled = true; };
+  }, [modoCarga, clienteId]);
+
+  const aplicarPlantilla = async (plantillaId) => {
+    setRutaPlantillaId(plantillaId);
+    if (!plantillaId) {
+      setOrigen(""); setOrigenInput(""); setParadas([]); setBultos([]);
+      if (origenRef.current) origenRef.current.value = "";
+      return;
+    }
+    const res = await getRutaPlantillaById(plantillaId);
+    if (res.error || !res.data) {
+      setMensaje({ tipo: "error", texto: res.error || "No se pudo cargar la ruta." });
+      return;
+    }
+    const plantilla = res.data;
+    setOrigen(plantilla.origen);
+    setOrigenInput(plantilla.origen);
+    if (origenRef.current) origenRef.current.value = plantilla.origen;
+    
+    const nuevasParadas = [];
+    let cumulative = 0;
+    const pList = plantilla.paradas || [];
+    for (let i = 0; i < pList.length; i++) {
+      const p = pList[i];
+      const fromPrev = Number(p.distancia_tramo_km || 0);
+      cumulative += fromPrev;
+      nuevasParadas.push({
+        id: Math.random().toString(),
+        address: p.direccion || "",
+        distanceFromPrev: fromPrev,
+        distanceToOrigin: 0,
+        distanceKm: cumulative
+      });
+    }
+    setParadas(nuevasParadas);
+    setBultos([]);
+  };
+
   useEffect(() => {
     localStorage.setItem('creadorCargaDraft', JSON.stringify({
-      modoCarga, clienteId, nombreRuta, origen, origenInput, paradas, bultos
+      modoCarga, clienteId, nombreRuta, origen, origenInput, paradas, bultos, rutaPlantillaId, observaciones
     }));
-  }, [modoCarga, clienteId, nombreRuta, origen, origenInput, paradas, bultos]);
+  }, [modoCarga, clienteId, nombreRuta, origen, origenInput, paradas, bultos, rutaPlantillaId, observaciones]);
 
   const handleNuevoPedido = () => {
     if(window.confirm("¿Estás seguro de que quieres borrar el pedido actual y empezar uno nuevo?")) {
       localStorage.removeItem('creadorCargaDraft');
       setModoCarga('CENTRAL'); setClienteId(""); setNombreRuta(""); setOrigen(""); setOrigenInput("");
+      setRutaPlantillaId(""); setObservaciones(""); setRutasReutilizables([]);
       setParadas([]); setBultos([]); setCostoTac("");
       setFechaEntregaStr(""); setFechaEntregaTimestamp(""); setActiveSizeBrush(null);
       setIsTarifaManual(false); setCamionId(""); setActiveParadaId("");
@@ -494,6 +558,8 @@ export default function CreadorCarga() {
         .from("rutas")
         .insert([{
           cliente_id: clienteId,
+          ruta_plantilla_id: rutaPlantillaId || null,
+          observaciones: observaciones || null,
           camion_id: camionId || null,
           conductor_id: conductorIdParaInsertar,
           nombre_ruta: nombreRuta || null,
@@ -534,6 +600,7 @@ export default function CreadorCarga() {
 
       localStorage.removeItem('creadorCargaDraft');
       setOrigen(""); setOrigenInput(""); setParadas([]); setCostoTac("");
+      setRutaPlantillaId(""); setObservaciones(""); setRutasReutilizables([]);
       setFechaEntregaStr(""); setFechaEntregaTimestamp(""); setBultos([]); setActiveSizeBrush(null); setIsTarifaManual(false);
       setCamionId(""); setActiveParadaId("");
       if (origenRef.current) origenRef.current.value = "";
@@ -675,6 +742,17 @@ export default function CreadorCarga() {
               </div>
             </div>
           )}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px' }}>
+            <label className="liquid-label" style={{ fontSize: '13px', fontWeight: '700' }}>Observaciones (Opcional)</label>
+            <textarea
+              value={observaciones}
+              onChange={e => setObservaciones(e.target.value)}
+              placeholder="Notas operativas del pedido..."
+              className="liquid-input"
+              style={{ padding: '12px', borderRadius: '8px', outline: 'none', resize: 'vertical', minHeight: '60px' }}
+            />
+          </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '24px' }}>
             <label className="liquid-label" style={{ fontSize: '13px', fontWeight: '700' }}>Entrega Estimada Final (Automática)</label>

@@ -18,7 +18,7 @@ import HistorialDespachos from "./HistorialDespachos";
 import PagosCliente from "./PagosCliente";
 import RutasPlantilla from "./RutasPlantilla";
 import ModulePage from "./ui/ModulePage";
-import CreadorCarga from "./CreadorCarga";
+
 import PageHeader from "./ui/PageHeader";
 import { useAlerts } from "../hooks/useAlerts";
 import { useAlertasConductor } from "../hooks/useAlertasConductor";
@@ -115,13 +115,6 @@ export default function OperatorDashboard({ operator, onSignOut }) {
                   <RutasActivas />
                 </ModulePage>
               )}
-  {
-    activeSection === "panol" && (
-      <ModulePage title="Creador de Carga" subtitle="Categorización y control de carga de 96 slots (100% capacidad)">
-        <CreadorCarga />
-      </ModulePage>
-    )
-  }
 
   {
     activeSection === "clientes" && (

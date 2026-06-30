@@ -160,7 +160,7 @@ const styles = {
   },
 };
 
-/** HU-27 CA-6: estado vac├¡o cuando el cliente no tiene pedidos. */
+/** HU-27 CA-6: estado vacío cuando el cliente no tiene pedidos. */
 function PortalPedidosEmptyState() {
   return (
     <div style={styles.emptyState} role="status" aria-live="polite">
@@ -169,14 +169,14 @@ function PortalPedidosEmptyState() {
       </div>
       <h2 style={styles.emptyTitle}>No tienes pedidos disponibles</h2>
       <p style={styles.emptyMessage}>
-        Los despachos asignados aparecer├ín aqu├¡
+        Los despachos asignados aparecerán aquí
       </p>
     </div>
   );
 }
 
 function formatDate(value) {
-  if (!value) return "ÔÇö";
+  if (!value) return "—";
   try {
     return new Date(value).toLocaleString("es-CL");
   } catch {
@@ -324,9 +324,9 @@ export default function ClientPortalShell({ user, onSignOut }) {
       >
         <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
           <strong>
-            {p.nombre_ruta || `${p.origen || "ÔÇö"} ÔåÆ ${p.destino || "ÔÇö"}`}
+            {p.nombre_ruta || `${p.origen || "—"} → ${p.destino || "—"}`}
           </strong>
-          <span style={styles.badge(p.estado)}>{p.estado || "ÔÇö"}</span>
+          <span style={styles.badge(p.estado)}>{p.estado || "—"}</span>
         </div>
         <p style={{ margin: "8px 0 0", fontSize: "13px", opacity: 0.8 }}>
           Entrega estimada: {formatDate(p.fecha_estimada_entrega)}
@@ -488,7 +488,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
       ) : null}
 
       {loading ? (
-        <p style={{ opacity: 0.7 }}>Cargando pedidosÔÇª</p>
+        <p style={{ opacity: 0.7 }}>Cargando pedidos…</p>
       ) : pedidos.length === 0 ? (
         <PortalPedidosEmptyState />
       ) : (
@@ -528,7 +528,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
               {!selectedId ? (
                 <p style={{ opacity: 0.7 }}>Selecciona un pedido para ver el detalle.</p>
               ) : loadingDetalle ? (
-                <p style={{ opacity: 0.7 }}>Cargando detalleÔÇª</p>
+                <p style={{ opacity: 0.7 }}>Cargando detalle…</p>
               ) : detalle?.ruta ? (
                 <>
                   <h2 style={{ marginTop: 0, fontSize: "18px" }}>Detalle del pedido</h2>
@@ -653,7 +653,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
                   ) : (
                     detalle.entregas.map((e) => (
                       <div key={e.id} style={{ fontSize: "14px", marginBottom: "8px" }}>
-                        {e.estado || "ÔÇö"} ┬À validado: {e.validado ? "s├¡" : "no"}
+                        {e.estado || "—"} ┬À validado: {e.validado ? "sí" : "no"}
                         {e.fecha_entrega_real
                           ? ` ┬À ${formatDate(e.fecha_entrega_real)}`
                           : ""}
@@ -667,7 +667,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
                   ) : (
                     detalle.guias_despacho.map((g) => (
                       <div key={g.id} style={{ fontSize: "14px", marginBottom: "8px" }}>
-                        {g.numero_guia} ┬À {g.estado_recepcion || "ÔÇö"}
+                        {g.numero_guia} ┬À {g.estado_recepcion || "—"}
                         {g.url_pdf ? (
                           <>
                             {" ┬À "}

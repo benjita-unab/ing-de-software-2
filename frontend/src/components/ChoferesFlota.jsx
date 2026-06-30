@@ -31,7 +31,7 @@ function licenciaBadgeFromStatus(licenseStatus) {
     return { texto: dias != null ? `Por vencer (${dias}d)` : "Por vencer", variant: "warning" };
   }
   if (status === "PENDING") {
-    return { texto: "En revisi├│n", variant: "warning" };
+    return { texto: "En revisión", variant: "warning" };
   }
   if (status === "REJECTED") {
     return { texto: "Rechazada", variant: "danger" };
@@ -46,7 +46,7 @@ function licenciaBadgeFromStatus(licenseStatus) {
 }
 function resolveDisponibilidad(conductor) {
   if (conductor.disponibilidad == null || conductor.disponibilidad === "") {
-    return "ÔÇö";
+    return "—";
   }
   return String(conductor.disponibilidad);
 }
@@ -58,8 +58,8 @@ function tieneDisponibilidad(conductores) {
 const OPCIONES_ORDEN = [
   { value: ORDEN_CHOFERES.NOMBRE_ASC, label: "Nombre A-Z" },
   { value: ORDEN_CHOFERES.NOMBRE_DESC, label: "Nombre Z-A" },
-  { value: ORDEN_CHOFERES.VENCIMIENTO_PROXIMO, label: "Vencimiento m├ís pr├│ximo" },
-  { value: ORDEN_CHOFERES.VENCIMIENTO_LEJANO, label: "Vencimiento m├ís lejano" },
+  { value: ORDEN_CHOFERES.VENCIMIENTO_PROXIMO, label: "Vencimiento más próximo" },
+  { value: ORDEN_CHOFERES.VENCIMIENTO_LEJANO, label: "Vencimiento más lejano" },
 ];
 export default function ChoferesFlota({ configPagosVersion = 0 }) {
     const [conductores, setConductores] = useState([]);
@@ -200,7 +200,7 @@ export default function ChoferesFlota({ configPagosVersion = 0 }) {
           ) : (meta?.total_items ?? conductores.length) === 0 ? (
             <EmptyState
               title="Sin resultados"
-              description="No hay choferes que coincidan con la b├║squeda."
+              description="No hay choferes que coincidan con la búsqueda."
             />
           ) : (
             <div className="lt-table-wrap">
@@ -238,17 +238,17 @@ export default function ChoferesFlota({ configPagosVersion = 0 }) {
                       badge = licenciaBadgeFromDias(diasRestantes);
                     }
                     if (!badge) {
-                      badge = { texto: "ÔÇö", variant: "muted" };
+                      badge = { texto: "—", variant: "muted" };
                     }
                     return (
                       <tr key={conductor.id}>
                         <td title={NOMBRE_API_AYUDA}>{displayNombreConductor(conductor)}</td>
-                        <td>{conductor.rut || "ÔÇö"}</td>
-                        <td>{conductor.licencia_numero || "ÔÇö"}</td>
+                        <td>{conductor.rut || "—"}</td>
+                        <td>{conductor.licencia_numero || "—"}</td>
                         <td>
                           {conductor.licencia_vencimiento
                             ? new Date(conductor.licencia_vencimiento).toLocaleDateString("es-CL")
-                            : "ÔÇö"}
+                            : "—"}
                         </td>
                         <td>
                           <Badge variant={badge.variant} showDot={false}>
