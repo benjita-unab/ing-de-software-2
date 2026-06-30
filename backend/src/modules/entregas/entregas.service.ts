@@ -569,7 +569,7 @@ export class EntregasService {
 
       // Subir archivo
       const { error: uploadError } = await supabase.storage
-        .from('entregas')
+        .from('fotos_trazabilidad')
         .upload(filePath, buffer, {
           contentType: 'image/jpeg',
           upsert: false,
@@ -581,7 +581,7 @@ export class EntregasService {
 
       // Obtener URL pública
       const { data: publicUrlData } = supabase.storage
-        .from('entregas')
+        .from('fotos_trazabilidad')
         .getPublicUrl(filePath);
 
       // Actualizar ruta con URL de ficha

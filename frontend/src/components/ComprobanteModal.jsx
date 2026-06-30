@@ -2,27 +2,30 @@ import React, { useEffect, useState } from 'react';
 import { apiFetch } from '../lib/apiClient';
 
 export default function ComprobanteModal({ rutaId, onClose }) {
-  const [comprobante, setComprobante] = useState(null);
+  const [comprobantes, setComprobantes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    async function loadComprobante() {
+    async function loadComprobantes() {
       try {
         const res = await apiFetch(`/api/pagos/comprobante/${rutaId}`);
         if (res.ok) {
-          setComprobante(res.data);
+          // If the API now returns an array, use it directly.
+          // Fallback to array if it's a single object (just in case)
+          const data = Array.isArray(res.data) ? res.data : [res.data];
+          setComprobantes(data);
         } else {
-          setError(res.error || 'Error al obtener el comprobante');
+          setError(res.error || 'Error al obtener los comprobantes');
         }
       } catch (err) {
-        setError(err.message || 'Error al obtener el comprobante');
+        setError(err.message || 'Error al obtener los comprobantes');
       } finally {
         setLoading(false);
       }
     }
     if (rutaId) {
-      loadComprobante();
+      loadComprobantes();
     }
   }, [rutaId]);
 
@@ -40,7 +43,7 @@ export default function ComprobanteModal({ rutaId, onClose }) {
               <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <h2 style={styles.title}>Comprobante de Pago</h2>
+          <h2 style={styles.title}>Comprobantes de Pago</h2>
           <button style={styles.closeBtn} onClick={onClose}>&times;</button>
         </div>
 
@@ -48,45 +51,53 @@ export default function ComprobanteModal({ rutaId, onClose }) {
           {loading ? (
             <div style={styles.loadingContainer}>
               <div style={styles.spinner}></div>
-              <p>Cargando comprobante...</p>
+              <p>Cargando comprobantes...</p>
             </div>
           ) : error ? (
             <div style={styles.errorBanner}>{error}</div>
-          ) : comprobante ? (
+          ) : comprobantes.length > 0 ? (
             <div style={styles.receiptContainer}>
               <div style={styles.receiptHeader}>
                 <div style={styles.checkIcon}>✓</div>
-                <div style={styles.successText}>Pago Exitoso mediante Transbank Webpay</div>
+                <div style={styles.successText}>Pagos Exitosos mediante Transbank Webpay</div>
                 <div style={styles.amountText}>
-                  {new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(comprobante.monto)}
+                  {new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(
+                    comprobantes.reduce((sum, c) => sum + c.monto, 0)
+                  )}
+                  <div style={{ fontSize: '14px', marginTop: '4px', fontWeight: 'normal', opacity: 0.8 }}>Total Pagado</div>
                 </div>
               </div>
 
-              {comprobante.rutas && (
+              {comprobantes[0].rutas && (
                 <div style={styles.routeSection}>
-                  <div style={styles.routeTitle}>{comprobante.rutas.nombre_ruta || 'Ruta LogiTrack'}</div>
+                  <div style={styles.routeTitle}>{comprobantes[0].rutas.nombre_ruta || 'Ruta LogiTrack'}</div>
                   <div style={styles.routePoint}>
-                    <span style={styles.dot}></span> {comprobante.rutas.origen}
+                    <span style={styles.dot}></span> {comprobantes[0].rutas.origen}
                   </div>
                   <div style={styles.routePoint}>
-                    <span style={{...styles.dot, background: '#3b82f6'}}></span> {comprobante.rutas.destino}
+                    <span style={{...styles.dot, background: '#3b82f6'}}></span> {comprobantes[0].rutas.destino}
                   </div>
                 </div>
               )}
 
-              <div style={styles.detailsGrid}>
-                <DetailRow label="ID Transacción" value={comprobante.transaction_id} />
-                <DetailRow label="Fecha y Hora" value={new Date(comprobante.fecha_pago).toLocaleString('es-CL', { dateStyle: 'long', timeStyle: 'short' })} />
-                <DetailRow label="Ruta ID" value={comprobante.ruta_id} />
-                <DetailRow label="Método de Pago" value={comprobante.metodo_pago} capitalize />
-              </div>
+              {comprobantes.map((comp, index) => (
+                <div key={comp.id || index} style={styles.detailsGrid}>
+                  <div style={{ fontWeight: 'bold', color: '#38bdf8', marginBottom: '12px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '8px' }}>
+                    Pago {index + 1} ({new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(comp.monto)})
+                  </div>
+                  <DetailRow label="ID Transacción" value={comp.transaction_id} />
+                  <DetailRow label="Fecha y Hora" value={new Date(comp.fecha_pago).toLocaleString('es-CL', { dateStyle: 'long', timeStyle: 'short' })} />
+                  <DetailRow label="Ruta ID" value={comp.ruta_id} />
+                  <DetailRow label="Método de Pago" value={comp.metodo_pago} capitalize />
+                </div>
+              ))}
 
               <div style={styles.footerInfo}>
-                Este comprobante certifica que el pago ha sido procesado de forma segura.
+                Estos comprobantes certifican que los pagos han sido procesados de forma segura.
               </div>
 
               <button style={styles.actionBtn} onClick={onClose} onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-2px)'} onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
-                Cerrar Comprobante
+                Cerrar
               </button>
             </div>
           ) : null}

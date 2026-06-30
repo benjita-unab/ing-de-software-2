@@ -159,13 +159,14 @@ export class PagosService {
         )
       `)
       .eq('ruta_id', rutaId)
-      .maybeSingle();
+      .order('fecha_pago', { ascending: true });
 
     if (error) {
-      throw new InternalServerErrorException('Error al obtener comprobante');
+      this.logger.error('Error supabase en obtenerComprobante:', error);
+      throw new InternalServerErrorException('Error al obtener comprobantes: ' + error.message);
     }
-    if (!data) {
-      throw new NotFoundException('Comprobante no encontrado para esta ruta');
+    if (!data || data.length === 0) {
+      throw new NotFoundException('Comprobantes no encontrados para esta ruta');
     }
 
     return data;
