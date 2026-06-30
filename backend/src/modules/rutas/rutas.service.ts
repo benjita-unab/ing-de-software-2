@@ -1,4 +1,4 @@
-﻿import {
+import {
   Injectable,
   BadRequestException,
   NotFoundException,
@@ -2608,5 +2608,29 @@ export class RutasService {
     }
 
     return this.getConsolidacionInfo(maestraId);
+  }
+
+  async resetRouteForTesting(rutaId: string) {
+    const supabase = this.supabaseConfig.getClient();
+    const { data, error } = await supabase
+      .from('rutas')
+      .update({
+        estado: 'ASIGNADO',
+        hora_llegada_destino: null,
+        hora_inspeccion_aprobada: null,
+        bultos_despachados: null
+      })
+      .eq('id', rutaId)
+      .select()
+      .single();
+
+    if (error) {
+      throw new BadRequestException('Error reseteando ruta: ' + error.message);
+    }
+    
+    // Opcional: borrar trazabilidad para reiniciar las fotos
+    await supabase.from('trazabilidad').delete().eq('ruta_id', rutaId);
+
+    return data;
   }
 }

@@ -662,20 +662,26 @@ export function BotonCerrarDespacho({
       )}
 
       {estadoFlujo === "inicio" && (
-        <>
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.stepNumber}>5</Text>
+            <Text style={styles.cardTitle}>Cierre de Despacho</Text>
+          </View>
+          <Text style={styles.cardDescription}>Comparta el código QR con el cliente y suba la hoja de despacho firmada.</Text>
+
           <TouchableOpacity
             onPress={manejarEnviarQR}
             disabled={cargando || !String(rutaId).trim()}
             style={[
-              styles.boton,
-              styles.botonQR,
+              styles.actionBtn,
+              { backgroundColor: '#10B981', marginBottom: 12 },
               cargando && styles.botonDeshabilitado,
             ]}
           >
             {cargando ? (
-              <Text style={styles.texto}>{estadoTexto || "Cargando..."}</Text>
+              <Text style={styles.actionBtnText}>{estadoTexto || "Cargando..."}</Text>
             ) : (
-              <Text style={styles.texto}>1. Enviar Código QR a Cliente</Text>
+              <Text style={styles.actionBtnText}>📱 1. Enviar Código QR a Cliente</Text>
             )}
           </TouchableOpacity>
 
@@ -692,14 +698,14 @@ export function BotonCerrarDespacho({
             }}
             disabled={cargando || !String(rutaId).trim()}
             style={[
-              styles.boton,
-              { backgroundColor: '#f59e0b', marginTop: 10 },
+              styles.actionBtn,
+              { backgroundColor: '#F59E0B' },
               cargando && styles.botonDeshabilitado,
             ]}
           >
-            <Text style={styles.texto}>Tomar Foto Hoja de Despacho</Text>
+            <Text style={styles.actionBtnText}>📄 Tomar Foto Hoja de Despacho</Text>
           </TouchableOpacity>
-        </>
+        </View>
       )}
 
       {estadoFlujo === "hecho" && (
@@ -715,22 +721,67 @@ export function BotonCerrarDespacho({
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: 0,
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-    backgroundColor: 'rgba(30, 30, 30, 0.6)',
-    borderRadius: 10,
-    borderColor: '#ffffff20',
+    // Wrapper para que no rompa otros layouts (se deja sin estilos extra)
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
     borderWidth: 1,
-    borderTopLeftRadius: 0,
-    borderTopRightRadius: 0,
-    borderTopWidth: 0,
+    borderColor: '#E2E8F0',
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  stepNumber: {
+    backgroundColor: '#EFF6FF',
+    color: '#3B82F6',
+    fontWeight: '800',
+    fontSize: 16,
+    width: 28,
+    height: 28,
+    textAlign: 'center',
+    lineHeight: 28,
+    borderRadius: 14,
+    overflow: 'hidden',
+    marginRight: 10,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  cardDescription: {
+    fontSize: 14,
+    color: '#64748B',
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  actionBtn: {
+    backgroundColor: '#3B82F6',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  actionBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 15,
   },
   instruccionTexto: {
-    fontSize: 16,
-    fontWeight: "bold",
+    fontSize: 18,
+    fontWeight: "700",
     marginBottom: 8,
     textAlign: "center",
+    color: '#1E293B'
   },
   successContainer: {
     backgroundColor: "#e8f5e9",
@@ -744,22 +795,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   boton: {
-    backgroundColor: "#ff6600",
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
+    backgroundColor: "#3B82F6",
+    paddingVertical: 14,
+    borderRadius: 12,
     alignItems: "center",
     marginVertical: 6,
   },
   botonQR: {
-    backgroundColor: "#1565c0",
+    backgroundColor: "#10B981",
   },
   botonDeshabilitado: {
     opacity: 0.6,
   },
   texto: {
     color: "#ffffff",
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "bold",
   },
   label: {

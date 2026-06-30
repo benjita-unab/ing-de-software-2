@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Param, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Patch, Post, Param, Body, UseGuards } from '@nestjs/common';
 import { IncidenciasService } from './incidencias.service';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtGuard } from '../../common/guards/jwt.guard';
@@ -13,6 +13,13 @@ export class IncidenciasController {
   @Get()
   async listIncidencias() {
     return await this.incidenciasService.listIncidencias();
+  }
+
+  @Post()
+  async createIncidencia(
+    @Body() body: { ruta_id?: string; conductor_id?: string; tipo: string; descripcion: string; estado?: string }
+  ) {
+    return await this.incidenciasService.createIncidencia(body);
   }
 
   @Patch(':id/acknowledge')

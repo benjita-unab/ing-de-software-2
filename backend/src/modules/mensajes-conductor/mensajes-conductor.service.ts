@@ -64,7 +64,7 @@ export class MensajesConductorService {
   private validateTimestamp(value: unknown) {
     const timestamp = String(value ?? '').trim();
     if (!timestamp) {
-      throw new BadRequestException('timestamp_evento es obligatorio');
+      return new Date().toISOString();
     }
     const parsed = Date.parse(timestamp);
     if (Number.isNaN(parsed)) {
@@ -87,16 +87,16 @@ export class MensajesConductorService {
   }
 
   async createOrUpdateMensaje(body: {
-    id: string;
+    id?: string;
     ruta_id: string;
     mensaje: string;
     tipo: string;
     prioridad: string;
     latitud?: number | null;
     longitud?: number | null;
-    timestamp_evento: string;
+    timestamp_evento?: string;
   }) {
-    const id = this.validateString(body.id, 'id');
+    const id = body.id ? this.validateString(body.id, 'id') : crypto.randomUUID();
     const rutaId = this.validateString(body.ruta_id, 'ruta_id');
     const mensaje = this.validateMensaje(body.mensaje);
     const tipo = this.validateTipo(body.tipo);
