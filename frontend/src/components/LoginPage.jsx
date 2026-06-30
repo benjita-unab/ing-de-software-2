@@ -6,33 +6,8 @@ import {
   solicitarRecuperacionPassword,
 } from "../lib/clientesService";
 
-const ROLES = [
-  {
-    id: "operador",
-    label: "Gerente / Operador",
-    description: "Rutas, clientes, mensajes e incidencias",
-    icon: "🚚",
-    available: true,
-  },
-  {
-    id: "cliente",
-    label: "Cliente B2B",
-    description: "Seguimiento de tus despachos",
-    icon: "📦",
-    available: true,
-  },
-  {
-    id: "admin",
-    label: "Administrador",
-    description: "Acceso con usuario rol ADMIN en el sistema",
-    icon: "⚙️",
-    available: true,
-  },
-];
-
 export default function LoginPage({ onLogin, resetToken = null }) {
   const demo = getDemoCredentials();
-  const [selectedRole, setSelectedRole] = useState(resetToken ? "cliente" : "operador");
   const [email, setEmail] = useState(demo.email || "");
   const [password, setPassword] = useState(demo.password || "");
   const [loading, setLoading] = useState(false);
@@ -45,20 +20,12 @@ export default function LoginPage({ onLogin, resetToken = null }) {
 
   useEffect(() => {
     if (resetToken) {
-      setSelectedRole("cliente");
       setModoReset(true);
     }
   }, [resetToken]);
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (
-      selectedRole !== "operador" &&
-      selectedRole !== "admin" &&
-      selectedRole !== "cliente"
-    ) {
-      return;
-    }
 
     setLoading(true);
     setError("");
@@ -73,15 +40,6 @@ export default function LoginPage({ onLogin, resetToken = null }) {
       );
     }
     setLoading(false);
-  }
-
-  function handleRoleSelect(role) {
-    setSelectedRole(role.id);
-    if (!role.available) {
-      setError("Este acceso estará disponible en una próxima versión.");
-      return;
-    }
-    setError("");
   }
 
   async function handleForgotPassword(e) {
@@ -125,11 +83,6 @@ export default function LoginPage({ onLogin, resetToken = null }) {
     }
   }
 
-  const mostrarFormularioLogin =
-    selectedRole === "operador" ||
-    selectedRole === "admin" ||
-    selectedRole === "cliente";
-
   return (
     <div style={styles.wrapper}>
       <style>{`
@@ -155,17 +108,6 @@ export default function LoginPage({ onLogin, resetToken = null }) {
         .login-btn:active:not(:disabled) {
           transform: translateY(0);
         }
-        .role-card:hover {
-          border-color: #2a4a6a !important;
-        }
-        .role-card.active {
-          border-color: #1565c0 !important;
-          background: #1565c014 !important;
-        }
-        .role-card.disabled {
-          opacity: 0.55;
-          cursor: not-allowed;
-        }
       `}</style>
 
       <div style={styles.bg} />
@@ -177,28 +119,9 @@ export default function LoginPage({ onLogin, resetToken = null }) {
           <div style={styles.logoSub}>ACCESO AL PANEL WEB</div>
         </div>
 
-        <div style={styles.roleGrid}>
-          {ROLES.map((role) => (
-            <button
-              key={role.id}
-              type="button"
-              className={`role-card ${selectedRole === role.id ? "active" : ""} ${!role.available ? "disabled" : ""}`}
-              onClick={() => handleRoleSelect(role)}
-              style={styles.roleCard}
-            >
-              <span style={{ fontSize: "22px" }}>{role.icon}</span>
-              <span style={styles.roleLabel}>{role.label}</span>
-              <span style={styles.roleDesc}>{role.description}</span>
-              {!role.available && (
-                <span style={styles.roleBadge}>Próximamente</span>
-              )}
-            </button>
-          ))}
-        </div>
-
         {modoReset && (
           <form onSubmit={handleResetPassword}>
-            <p style={{ ...styles.roleDesc, marginBottom: 16, color: "#94a3b8" }}>
+            <p style={{ ...styles.helperText, marginBottom: 16, color: "#94a3b8" }}>
               Ingrese su nueva contraseña para el portal cliente.
             </p>
             <div style={styles.field}>
@@ -241,9 +164,9 @@ export default function LoginPage({ onLogin, resetToken = null }) {
           </form>
         )}
 
-        {!modoReset && modoRecuperacion && selectedRole === "cliente" && (
+        {!modoReset && modoRecuperacion && (
           <form onSubmit={handleForgotPassword}>
-            <p style={{ ...styles.roleDesc, marginBottom: 16, color: "#94a3b8" }}>
+            <p style={{ ...styles.helperText, marginBottom: 16, color: "#94a3b8" }}>
               Ingrese el correo de su cuenta portal. Le enviaremos un enlace de recuperación.
             </p>
             <div style={styles.field}>
@@ -281,7 +204,7 @@ export default function LoginPage({ onLogin, resetToken = null }) {
           </form>
         )}
 
-        {!modoReset && !modoRecuperacion && mostrarFormularioLogin && (
+        {!modoReset && !modoRecuperacion && (
           <form onSubmit={handleSubmit}>
             <div style={styles.field}>
               <label style={styles.label}>Correo electrónico</label>
@@ -292,11 +215,7 @@ export default function LoginPage({ onLogin, resetToken = null }) {
                 autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder={
-                  selectedRole === "cliente"
-                    ? "portal.cliente@empresa.cl"
-                    : "operador@empresa.cl"
-                }
+                placeholder="usuario@empresa.cl"
                 style={styles.input}
               />
             </div>
@@ -315,27 +234,25 @@ export default function LoginPage({ onLogin, resetToken = null }) {
               />
             </div>
 
-            {selectedRole === "cliente" && (
-              <button
-                type="button"
-                onClick={() => {
-                  setModoRecuperacion(true);
-                  setError("");
-                  setInfo("");
-                }}
-                style={{
-                  background: "none",
-                  border: "none",
-                  color: "#60a5fa",
-                  fontSize: 12,
-                  cursor: "pointer",
-                  marginBottom: 12,
-                  padding: 0,
-                }}
-              >
-                ¿Olvidó su contraseña?
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => {
+                setModoRecuperacion(true);
+                setError("");
+                setInfo("");
+              }}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#60a5fa",
+                fontSize: 12,
+                cursor: "pointer",
+                marginBottom: 12,
+                padding: 0,
+              }}
+            >
+              ¿Olvidó su contraseña?
+            </button>
 
             {error && (
               <div style={styles.errorBox} role="alert">
@@ -361,12 +278,6 @@ export default function LoginPage({ onLogin, resetToken = null }) {
               {loading ? "⏳ Ingresando..." : "Iniciar Sesión →"}
             </button>
           </form>
-        )}
-
-        {!modoReset && !modoRecuperacion && !mostrarFormularioLogin && error && (
-          <div style={{ ...styles.errorBox, marginTop: 0 }} role="alert">
-            ⚠️ {error}
-          </div>
         )}
 
         <p style={styles.footer}>
@@ -426,50 +337,10 @@ const styles = {
     letterSpacing: "0.18em",
     marginTop: "6px",
   },
-  roleGrid: {
-    display: "grid",
-    gridTemplateColumns: "1fr",
-    gap: "10px",
-    marginBottom: "24px",
-  },
-  roleCard: {
-    display: "grid",
-    gridTemplateColumns: "auto 1fr",
-    gridTemplateRows: "auto auto",
-    columnGap: "12px",
-    rowGap: "2px",
-    alignItems: "center",
-    textAlign: "left",
-    width: "100%",
-    background: "#111827",
-    border: "1px solid #1e2a3a",
-    borderRadius: "12px",
-    padding: "12px 14px",
-    cursor: "pointer",
-    transition: "border-color 0.2s, background 0.2s",
-  },
-  roleLabel: {
-    color: "#e2e8f0",
-    fontSize: "13px",
-    fontWeight: 700,
-    gridColumn: 2,
-  },
-  roleDesc: {
+  helperText: {
     color: "#556",
     fontSize: "10px",
     fontFamily: "'DM Mono', monospace",
-    gridColumn: 2,
-  },
-  roleBadge: {
-    gridColumn: "1 / -1",
-    justifySelf: "start",
-    marginTop: "4px",
-    marginLeft: "34px",
-    fontSize: "9px",
-    color: "#78909c",
-    fontFamily: "'DM Mono', monospace",
-    letterSpacing: "0.08em",
-    textTransform: "uppercase",
   },
   field: {
     marginBottom: "18px",
