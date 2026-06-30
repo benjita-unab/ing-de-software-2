@@ -1,16 +1,35 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { createClient } from '@supabase/supabase-js';
 import { apiFetch } from '../lib/apiClient';
-import { estimarFechasEstimadas } from '../lib/rutasService';
+import { crearRuta, estimarFechasEstimadas } from '../lib/rutasService';
 import { getRutaPlantillaById, getRutasPlantilla } from '../lib/rutasPlantillaService';
 import { useGooglePlacesAutocomplete } from '../hooks/useGooglePlacesAutocomplete';
 import '../LiquidGlass.css';
 
-const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || "";
-const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY || "";
-const supabase = createClient(supabaseUrl, supabaseKey);
-
 const CAPACIDAD_MAXIMA_SLOTS = 96;
+
+const ESTADOS_RUTA_ACTIVA = new Set([
+  'PENDIENTE',
+  'ASIGNADO',
+  'EN_TRANSITO',
+  'EN_CAMINO_ORIGEN',
+  'EN_CARGA',
+  'EN_DESTINO',
+]);
+
+function parseListPayload(data) {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.data)) return data.data;
+  return [];
+}
+
+async function fetchRutasActivasDesdeApi() {
+  const res = await apiFetch('/api/rutas?limit=500');
+  if (!res.ok) return [];
+  return parseListPayload(res.data).filter((r) => {
+    if (!r.camion_id) return false;
+    return ESTADOS_RUTA_ACTIVA.has(String(r.estado || '').toUpperCase());
+  });
+}
 
 const SIZES_CONFIG = {
   XS: { label: "XS (1 Slot)", slots: 1, color: "#9CA3AF", textDark: true },
@@ -50,6 +69,7 @@ const CALCULAR_DIAS_ENTREGA = (km) => {
 
 export default function CreadorCarga() {
   const [clientes, setClientes] = useState([]);
+  const [conductores, setConductores] = useState([]);
   const [camiones, setCamiones] = useState([]);
   const [camionesDisponibilidad, setCamionesDisponibilidad] = useState({});
 
@@ -244,14 +264,9 @@ export default function CreadorCarga() {
       }
 
       try {
-        const { data: rutasActivas } = await supabase
-          .from('rutas')
-          .select('camion_id, destino')
-          .in('estado', ['PENDIENTE', 'ASIGNADO', 'EN_TRANSITO', 'EN_CAMINO_ORIGEN', 'EN_CARGA', 'EN_DESTINO'])
-          .not('camion_id', 'is', null)
-          .not('destino', 'is', null);
+        const rutasActivas = (await fetchRutasActivasDesdeApi()).filter((r) => r.destino);
 
-        if (!rutasActivas || rutasActivas.length === 0) return;
+        if (rutasActivas.length === 0) return;
 
         const validCamionIds = new Set();
         const origenBase = origen.split(',')[0].toLowerCase().trim();
@@ -321,46 +336,28 @@ export default function CreadorCarga() {
         const resTarifas = await apiFetch("/api/configuracion-pagos");
         if (resTarifas.ok && resTarifas.data) {
           setTarifasConfig(resTarifas.data);
+          if (resTarifas.data.precioCombustibleLitro != null) {
+            setPrecioDiesel(Number(resTarifas.data.precioCombustibleLitro));
+          }
+        }
+
+        const resCond = await apiFetch("/api/conductores");
+        if (resCond.ok) {
+          setConductores(parseListPayload(resCond.data));
         }
 
         const resCam = await apiFetch("/api/camiones");
         let trucks = [];
         if (resCam.ok) {
-          trucks = Array.isArray(resCam.data) ? resCam.data : resCam.data?.data || [];
+          trucks = parseListPayload(resCam.data);
           setCamiones(trucks);
-        }
-
-        const { data: config } = await supabase
-          .from("sistema_config")
-          .select("precio_diesel_por_litro")
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (config && config.precio_diesel_por_litro) {
-          setPrecioDiesel(Number(config.precio_diesel_por_litro));
-        }
-
-        const { data: rutasActivas } = await supabase
-          .from('rutas')
-          .select('camion_id, bultos(cuadrados_equivalentes)')
-          .in('estado', ['PENDIENTE', 'ASIGNADO', 'EN_TRANSITO', 'EN_CAMINO_ORIGEN', 'EN_CARGA', 'EN_DESTINO'])
-          .not('camion_id', 'is', null);
-
-        const usedSlotsMap = {};
-        if (rutasActivas) {
-          rutasActivas.forEach(ruta => {
-            if (!ruta.camion_id) return;
-            const slotsRuta = ruta.bultos?.reduce((sum, b) => sum + (Number(b.cuadrados_equivalentes) || 0), 0) || 0;
-            usedSlotsMap[ruta.camion_id] = (usedSlotsMap[ruta.camion_id] || 0) + slotsRuta;
-          });
         }
 
         const availability = {};
         if (trucks.length > 0) {
-          trucks.forEach(t => {
+          trucks.forEach((t) => {
             const maxCap = t.slots || CAPACIDAD_MAXIMA_SLOTS;
-            const used = usedSlotsMap[t.id] || 0;
+            const used = Number(t.slots_utilizados) || 0;
             availability[t.id] = Math.max(0, maxCap - used);
           });
         }
@@ -538,63 +535,46 @@ export default function CreadorCarga() {
     const destinoFinal = paradas.map((p, i) => `${i + 1}. ${p.address.split(',')[0]}`).join(' ➔ ');
 
     try {
-      let conductorIdParaInsertar = null;
-      let estadoInicial = 'PENDIENTE';
+      const conductor = conductores.find((c) => c.camion_id === camionId);
+      const entregaDate = fechaEntregaTimestamp
+        ? new Date(fechaEntregaTimestamp).toISOString().slice(0, 10)
+        : null;
 
-      if (camionId) {
-        const { data: conductor } = await supabase
-          .from('conductores')
-          .select('id')
-          .eq('camion_id', camionId)
-          .single();
-        
-        if (conductor) {
-          conductorIdParaInsertar = conductor.id;
-          estadoInicial = 'ASIGNADO';
-        }
+      const payload = {
+        cliente_id: clienteId,
+        origen,
+        destino: destinoFinal,
+        camion_id: camionId,
+        distancia_km: distanciaLogisticaKm,
+        costo_tac_peajes_clp: Number(costoTac || 0),
+        pago_conductor_base_clp: pagoConductorAutomatico,
+        tarifa_base_total: tarifaFinalBase,
+        is_tarifa_manual: isTarifaManual,
+        bultos_despachados: totalSlotsUsed,
+        bultos_detalle: bultos.map((b) => ({ categoria: b.categoria })),
+      };
+
+      if (rutaPlantillaId) payload.ruta_plantilla_id = rutaPlantillaId;
+      if (observaciones?.trim()) payload.observaciones = observaciones.trim();
+      if (nombreRuta?.trim()) payload.nombre_ruta = nombreRuta.trim();
+      if (conductor?.id) payload.conductor_id = conductor.id;
+      if (entregaDate) {
+        payload.fecha_estimada_inicio = entregaDate;
+        payload.fecha_estimada_fin = entregaDate;
+        payload.fecha_estimada_entrega = entregaDate;
+      }
+      if (paradas.length > 0) {
+        payload.paradas = paradas.map((p, i) => ({
+          direccion: p.address,
+          orden: i + 1,
+          es_temporal: true,
+        }));
       }
 
-      const { data: ruta, error: rutaErr } = await supabase
-        .from("rutas")
-        .insert([{
-          cliente_id: clienteId,
-          ruta_plantilla_id: rutaPlantillaId || null,
-          observaciones: observaciones || null,
-          camion_id: camionId || null,
-          conductor_id: conductorIdParaInsertar,
-          nombre_ruta: nombreRuta || null,
-          origen,
-          destino: destinoFinal,
-          distancia_km: distanciaLogisticaKm,
-          costo_tac_peajes_clp: Number(costoTac || 0),
-          pago_conductor_base_clp: pagoConductorAutomatico,
-          tarifa_base_total: tarifaFinalBase,
-          costo_servicio: totalAPagarCliente, // BYPASS: Guardamos el Total c/IVA aquí para el cliente
-          costo_combustible_calculado: modoCarga === 'RETORNO' ? 0 : costoCombustibleCalculado,
-          total_pagar: totalAPagarCliente, 
-          is_tarifa_manual: isTarifaManual,
-          fecha_estimada_entrega: fechaEntregaTimestamp || null,
-          estado: estadoInicial,
-          alerta_sub_financiada: false
-        }])
-        .select("id")
-        .single();
-
-      if (rutaErr || !ruta) throw new Error(rutaErr?.message || "Error al crear ruta.");
-
-      const bultosInserts = bultos.map(b => ({
-        ruta_id: ruta.id,
-        tamaño: b.categoria,
-        cuadrados_equivalentes: b.slots,
-        categoria: b.categoria
-      }));
-
-      const { error: bultosErr } = await supabase.from("bultos").insert(bultosInserts);
-      if (bultosErr) throw new Error(bultosErr.message);
-
-      await supabase.from('historial_estados').insert([
-        { ruta_id: ruta.id, estado: 'PENDIENTE', created_at: new Date().toISOString() }
-      ]);
+      const resultado = await crearRuta(payload);
+      if (!resultado.success) {
+        throw new Error(resultado.error || "Error al crear ruta.");
+      }
 
       setMensaje({ tipo: "ok", texto: "¡Ruta guardada exitosamente! Visita Gestión de Rutas." });
 

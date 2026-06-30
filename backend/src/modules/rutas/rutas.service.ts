@@ -344,13 +344,8 @@ export class RutasService {
       }
     }
 
-    if (!generadoAutomaticamente && (conductor_id || camion_id)) {
-      if (!conductor_id) {
-        throw new BadRequestException('conductor_id es obligatorio');
-      }
-      if (!camion_id) {
-        throw new BadRequestException('camion_id es obligatorio');
-      }
+    if (!generadoAutomaticamente && conductor_id && !camion_id) {
+      throw new BadRequestException('camion_id es obligatorio');
     }
 
     const estadosValidos = [...RutasService.ESTADOS_RUTA];

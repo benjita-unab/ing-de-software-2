@@ -27,12 +27,8 @@ export async function crearRuta(payload) {
     };
   }
 
-  const conductorId = String(payload?.conductor_id ?? "").trim();
   const camionId = String(payload?.camion_id ?? "").trim();
 
-  if (!conductorId) {
-    return { success: false, error: "Debe seleccionar un conductor." };
-  }
   if (!camionId) {
     return { success: false, error: "Debe seleccionar un camión." };
   }
