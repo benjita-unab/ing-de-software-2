@@ -13,7 +13,7 @@ import { UpdateCamionDto } from './dto/update-camion.dto';
 //   proxima_mantencion, created_at.
 
 const CAMION_SELECT =
-  'id, patente, slots, slots_utilizados, talla, estado, activo, ultima_mantencion, proxima_mantencion, created_at';
+  'id, patente, slots, slots_utilizados, talla, estado, activo, km_l, ultima_mantencion, proxima_mantencion, created_at';
 
 @Injectable()
 export class CamionesService {
@@ -33,6 +33,7 @@ export class CamionesService {
       talla: c.talla ?? 'DESCONOCIDO',
       estado: c.estado ?? 'DISPONIBLE',
       activo: c.activo ?? true,
+      km_l: c.km_l != null ? Number(c.km_l) : null,
       ultima_mantencion: c.ultima_mantencion ?? null,
       proxima_mantencion: c.proxima_mantencion ?? null,
       created_at: c.created_at ?? null,
@@ -86,14 +87,56 @@ export class CamionesService {
     }
   }
 
-  async listCamiones() {
+  async listCamiones(params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    estado?: string;
+    orden?: string;
+  }) {
     const supabase = this.supabaseConfig.getClient();
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('camiones')
-      .select(CAMION_SELECT)
-      .eq('activo', true)
-      .order('patente', { ascending: true });
+      .select(CAMION_SELECT, { count: 'exact' })
+      .eq('activo', true);
+
+    if (params?.search) {
+      const term = `%${params.search.trim()}%`;
+      query = query.ilike('patente', term);
+    }
+
+    if (params?.estado && params.estado !== 'TODOS') {
+      query = query.eq('estado', params.estado);
+    }
+
+    if (params?.orden) {
+      switch (params.orden) {
+        case 'patente-desc':
+          query = query.order('patente', { ascending: false });
+          break;
+        case 'revision-proxima':
+          query = query.order('proxima_mantencion', { ascending: true, nullsFirst: false });
+          break;
+        case 'revision-lejana':
+          query = query.order('proxima_mantencion', { ascending: false, nullsFirst: false });
+          break;
+        case 'patente-asc':
+        default:
+          query = query.order('patente', { ascending: true });
+          break;
+      }
+    } else {
+      query = query.order('patente', { ascending: true });
+    }
+
+    if (params?.page && params?.limit) {
+      const from = (params.page - 1) * params.limit;
+      const to = from + params.limit - 1;
+      query = query.range(from, to);
+    }
+
+    const { data, count, error } = await query;
 
     if (error) {
       throw new BadRequestException(
@@ -101,7 +144,21 @@ export class CamionesService {
       );
     }
 
-    return (data || []).map((c) => this.mapCamion(c));
+    const resultData = (data || []).map((c) => this.mapCamion(c));
+
+    if (params?.page && params?.limit) {
+      return {
+        data: resultData,
+        meta: {
+          total_items: count || 0,
+          total_pages: Math.ceil((count || 0) / params.limit),
+          current_page: params.page,
+          limit: params.limit,
+        },
+      };
+    }
+
+    return resultData;
   }
 
   async listCamionesDisponibles() {
@@ -172,6 +229,11 @@ export class CamionesService {
       throw new BadRequestException('La capacidad máxima de un camión es de 96 slots');
     }
 
+    const kmL = Number(payload.km_l);
+    if (!Number.isFinite(kmL) || kmL <= 0) {
+      throw new BadRequestException('km_l (rendimiento Km/L) es obligatorio y debe ser mayor a 0');
+    }
+
     await this.assertPatenteUnica(patente);
 
     const supabase = this.supabaseConfig.getClient();
@@ -185,6 +247,7 @@ export class CamionesService {
       talla,
       estado: payload.estado ?? 'DISPONIBLE',
       activo: true,
+      km_l: kmL,
       ultima_mantencion: this.normalizeDateOnly(payload.ultima_mantencion),
       proxima_mantencion: this.normalizeDateOnly(payload.proxima_mantencion),
     };
@@ -254,6 +317,13 @@ export class CamionesService {
       updateRow.proxima_mantencion = this.normalizeDateOnly(
         payload.proxima_mantencion,
       );
+    }
+    if (payload.km_l != null) {
+      const kmL = Number(payload.km_l);
+      if (!Number.isFinite(kmL) || kmL <= 0) {
+        throw new BadRequestException('km_l debe ser mayor a 0');
+      }
+      updateRow.km_l = kmL;
     }
 
     if (Object.keys(updateRow).length === 0) {

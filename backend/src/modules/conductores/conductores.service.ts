@@ -44,8 +44,17 @@ export class ConductoresService {
       };
     }
 
-    // Validar que tenga licencia registrada
-    if (!conductor.licencia_vencimiento) {
+    // Check latest license in driver_licenses
+    const { data: licenses } = await supabase
+      .from('driver_licenses')
+      .select('status, expiry_date, id')
+      .eq('user_id', conductor.usuario_id)
+      .order('uploaded_at', { ascending: false })
+      .limit(1);
+
+    const latestLicense = licenses?.[0];
+
+    if (!latestLicense) {
       return {
         isValid: false,
         status: 'NO_LICENSE',
@@ -53,8 +62,34 @@ export class ConductoresService {
       };
     }
 
+    if (latestLicense.status === 'pending_review') {
+      return {
+        isValid: false,
+        status: 'PENDING',
+        message: 'La licencia está en revisión por un operador',
+      };
+    }
+
+    if (latestLicense.status === 'rejected') {
+      return {
+        isValid: false,
+        status: 'REJECTED',
+        message: 'La licencia fue rechazada, por favor sube una nueva',
+      };
+    }
+
+    // Validar que tenga fecha de vencimiento (ya aprobada o migrada antigua)
+    const fechaAVerificar = latestLicense.expiry_date || conductor.licencia_vencimiento;
+    if (!fechaAVerificar) {
+      return {
+        isValid: false,
+        status: 'NO_LICENSE',
+        message: 'El conductor no tiene fecha de vencimiento registrada',
+      };
+    }
+
     // Comparar fecha de vencimiento con fecha actual
-    const fechaVencimiento = new Date(conductor.licencia_vencimiento);
+    const fechaVencimiento = new Date(fechaAVerificar);
     const hoy = new Date();
 
     fechaVencimiento.setHours(0, 0, 0, 0);
@@ -65,7 +100,7 @@ export class ConductoresService {
         isValid: false,
         status: 'EXPIRED',
         message: 'La licencia del conductor se encuentra vencida',
-        expiryDate: conductor.licencia_vencimiento,
+        expiryDate: fechaAVerificar,
       };
     }
 
@@ -79,7 +114,7 @@ export class ConductoresService {
         isValid: true,
         status: 'EXPIRING_SOON',
         message: `Licencia vigente pero vence en ${diasParaVencer} días`,
-        expiryDate: conductor.licencia_vencimiento,
+        expiryDate: fechaAVerificar,
         daysUntilExpiry: diasParaVencer,
       };
     }
@@ -88,7 +123,7 @@ export class ConductoresService {
       isValid: true,
       status: 'VALID',
       message: 'Licencia vigente',
-      expiryDate: conductor.licencia_vencimiento,
+      expiryDate: fechaAVerificar,
       daysUntilExpiry: diasParaVencer,
     };
   }
@@ -229,10 +264,15 @@ export class ConductoresService {
   /**
    * Lista conductores activos
    */
-  async listActiveDrivers() {
+  async listActiveDrivers(params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    orden?: string;
+  }) {
     const supabase = this.supabaseConfig.getClient();
 
-    const { data: conductores, error } = await supabase
+    let query = supabase
       .from('conductores')
       .select(
         `
@@ -243,11 +283,46 @@ export class ConductoresService {
         licencia_numero,
         licencia_vencimiento,
         telefono,
-        activo
+        activo,
+        usuarios(nombre)
       `,
+        { count: 'exact' }
       )
-      .eq('activo', true)
-      .order('created_at', { ascending: false });
+      .eq('activo', true);
+
+    if (params?.search) {
+      const term = `%${params.search.trim()}%`;
+      query = query.or(`rut.ilike.${term},telefono.ilike.${term},licencia_numero.ilike.${term}`);
+    }
+
+    if (params?.orden) {
+      switch (params.orden) {
+        case 'nombre-desc':
+        case 'nombre-asc':
+          // Supabase requiere un view o RPC para ordenar bien por relaciones. Fallback a created_at.
+          query = query.order('created_at', { ascending: params.orden === 'nombre-asc' });
+          break;
+        case 'vencimiento-proximo':
+          query = query.order('licencia_vencimiento', { ascending: true, nullsFirst: false });
+          break;
+        case 'vencimiento-lejano':
+          query = query.order('licencia_vencimiento', { ascending: false, nullsFirst: false });
+          break;
+        default:
+          query = query.order('created_at', { ascending: false });
+          break;
+      }
+    } else {
+      query = query.order('created_at', { ascending: false });
+    }
+
+    if (params?.page && params?.limit) {
+      const from = (params.page - 1) * params.limit;
+      const to = from + params.limit - 1;
+      query = query.range(from, to);
+    }
+
+    const { data: conductoresRaw, count, error } = await query;
 
     if (error) {
       throw new BadRequestException(`Error al obtener conductores: ${error.message}`);
@@ -255,13 +330,57 @@ export class ConductoresService {
 
     // Enriquecer con estado de licencia
     const conductoresWithStatus = await Promise.all(
-      (conductores || []).map(async (conductor) => ({
-        ...conductor,
-        licenseStatus: await this.validateDriverLicense(conductor.id),
-      })),
+      (conductoresRaw || []).map(async (conductor: any) => {
+        const nombre = Array.isArray(conductor.usuarios)
+          ? conductor.usuarios[0]?.nombre
+          : conductor.usuarios?.nombre;
+        return {
+          ...conductor,
+          nombre,
+          licenseStatus: await this.validateDriverLicense(conductor.id),
+        };
+      }),
     );
 
+    if (params?.page && params?.limit) {
+      return {
+        data: conductoresWithStatus,
+        meta: {
+          total_items: count || 0,
+          total_pages: Math.ceil((count || 0) / params.limit),
+          current_page: params.page,
+          limit: params.limit,
+        },
+      };
+    }
+
     return conductoresWithStatus;
+  }
+
+
+  async updateLicenseStatus(conductorId: string, licenseId: string, status: 'approved' | 'rejected') {
+    const supabase = this.supabaseConfig.getClient();
+    
+    const { data: license, error } = await supabase
+      .from('driver_licenses')
+      .update({ status })
+      .eq('id', licenseId)
+      .select()
+      .single();
+
+    if (error || !license) {
+      throw new BadRequestException(`Error al actualizar estado de la licencia: ${error?.message || ''}`);
+    }
+
+    if (status === 'approved' && license.expiry_date) {
+      await this.syncLicenciaVencimiento(conductorId, license.expiry_date);
+    }
+
+    return {
+      success: true,
+      message: 'Licencia actualizada exitosamente',
+      data: license,
+    };
   }
 
   // ========== HELPERS PRIVADOS ==========

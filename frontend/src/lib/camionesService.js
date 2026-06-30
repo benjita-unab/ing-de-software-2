@@ -17,10 +17,21 @@ function unwrapData(payload) {
 
 /**
  * Lista camiones activos desde GET /api/camiones.
- * @returns {Promise<{ data: array, error?: string }>}
+ * @param {object} [params]
+ * @returns {Promise<{ data: array, meta?: object, error?: string }>}
  */
-export async function obtenerCamiones() {
-  const res = await apiFetch("/api/camiones");
+export async function obtenerCamiones(params = {}) {
+  const qs = new URLSearchParams();
+  if (params.page) qs.set("page", params.page);
+  if (params.limit) qs.set("limit", params.limit);
+  if (params.search) qs.set("search", params.search);
+  if (params.estado) qs.set("estado", params.estado);
+  if (params.orden) qs.set("orden", params.orden);
+
+  const qString = qs.toString();
+  const url = qString ? `/api/camiones?${qString}` : "/api/camiones";
+
+  const res = await apiFetch(url);
 
   if (!res.ok) {
     return { data: [], error: extractApiError(res, "Error al obtener camiones") };
@@ -28,7 +39,9 @@ export async function obtenerCamiones() {
 
   const payload = res.data;
   const data = Array.isArray(payload) ? payload : payload?.data ?? [];
-  return { data };
+  const meta = payload?.meta;
+
+  return meta ? { data, meta } : { data };
 }
 
 /**

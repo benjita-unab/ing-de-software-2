@@ -3,9 +3,11 @@ import {
   ForbiddenException,
   Get,
   Param,
-  UseGuards,
+  Patch,
   Post,
   Body,
+  Query,
+  UseGuards,
 } from '@nestjs/common';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/user.decorator';
@@ -17,13 +19,18 @@ import type {
   PortalPedidoListResponseDto,
 } from './dto/portal-pedido.dto';
 import { PortalService } from './portal.service';
-import { CreateRutaDto } from '../rutas/rutas.service';
+import type { CreateRutaDto } from '../rutas/dto/create-ruta.dto';
+import { RecurrenciasService } from '../recurrencias/recurrencias.service';
+import { CreateRecurrenciaDto } from '../recurrencias/dto/create-recurrencia.dto';
 
 @Controller('api/portal')
 @UseGuards(JwtGuard, RolesGuard)
 @Roles('CLIENTE')
 export class PortalController {
-  constructor(private readonly portalService: PortalService) {}
+  constructor(
+    private readonly portalService: PortalService,
+    private readonly recurrenciasService: RecurrenciasService,
+  ) {}
 
   /**
    * GET /api/portal/pedidos
@@ -96,6 +103,68 @@ export class PortalController {
   ) {
     const clienteId = this.requireClienteId(user);
     return this.portalService.pagarRetraso(id, clienteId);
+  }
+
+  /** HU-47: listar recurrencias del cliente autenticado */
+  @Get('recurrencias')
+  listRecurrencias(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('estado') estado?: string,
+  ) {
+    return this.recurrenciasService.list(
+      { estado, incluirProximas: true },
+      user,
+    );
+  }
+
+  /** HU-47: próximos pedidos programados */
+  @Get('recurrencias/proximos')
+  listRecurrenciasProximas(@CurrentUser() user: AuthenticatedUser) {
+    return this.recurrenciasService.listProximos(user);
+  }
+
+  @Post('recurrencias')
+  createRecurrencia(
+    @Body() body: CreateRecurrenciaDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const clienteId = this.requireClienteId(user);
+    return this.recurrenciasService.create(
+      { ...body, cliente_id: clienteId },
+      user,
+    );
+  }
+
+  @Patch('recurrencias/:id/pausar')
+  pausarRecurrencia(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.recurrenciasService.pausar(id, user);
+  }
+
+  @Patch('recurrencias/:id/reanudar')
+  reanudarRecurrencia(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.recurrenciasService.reanudar(id, user);
+  }
+
+  @Patch('recurrencias/:id/cancelar')
+  cancelarRecurrencia(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.recurrenciasService.cancelar(id, user);
+  }
+
+  @Get('recurrencias/:id/ejecuciones')
+  listEjecucionesRecurrencia(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.recurrenciasService.listEjecuciones(id, user);
   }
 
   private requireClienteId(user: AuthenticatedUser): string {

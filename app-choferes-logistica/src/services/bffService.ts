@@ -10,6 +10,16 @@ function requiredApiUrl(): string {
 
 function buildAuthHeaders(init: RequestInit, token: string | null): Headers {
   const headers = new Headers(init.headers ?? {});
+  const isFormDataBody =
+    typeof FormData !== 'undefined' && init.body instanceof FormData;
+
+  if (isFormDataBody) {
+    // RN must set multipart boundaries automatically for FormData.
+    headers.delete('Content-Type');
+  } else if (!headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
   }

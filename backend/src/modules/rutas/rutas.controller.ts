@@ -20,10 +20,11 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/user.decorator';
 import { JwtGuard } from '../../common/guards/jwt.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { LicenseGuard } from '../../common/guards/license.guard';
 import type { AuthenticatedUser } from '../../common/strategies/jwt.strategy';
 
 @Controller('api/rutas')
-@UseGuards(JwtGuard, RolesGuard)
+@UseGuards(JwtGuard, RolesGuard, LicenseGuard)
 @Roles('ADMIN', 'OPERADOR', 'CONDUCTOR')
 export class RutasController {
   constructor(private rutasService: RutasService) {}
@@ -106,6 +107,33 @@ export class RutasController {
   @Get(':id/evidencias')
   async getEvidencias(@Param('id') rutaId: string) {
     return await this.rutasService.getEvidencias(rutaId);
+  }
+
+  /**
+   * GET /api/rutas/:id/consolidacion
+   * HU-59: estado de consolidación, capacidad, advertencias y paradas para mapa.
+   */
+  @Get(':id/consolidacion')
+  async getConsolidacion(@Param('id') rutaId: string) {
+    return await this.rutasService.getConsolidacionInfo(rutaId);
+  }
+
+  /**
+   * POST /api/rutas/:id/consolidar
+   * HU-59: asigna un pedido a la ruta maestra indicada.
+   */
+  @Post(':id/consolidar')
+  @Roles('ADMIN', 'OPERADOR')
+  async consolidarPedido(
+    @Param('id') rutaId: string,
+    @Body()
+    body: {
+      pedido_id: string;
+      ignorar_advertencias_ocupacion?: boolean;
+      ignorar_advertencias_distancia?: boolean;
+    },
+  ) {
+    return await this.rutasService.consolidarPedido(rutaId, body);
   }
 
   /**
@@ -213,6 +241,7 @@ export class RutasController {
     @Query('search') search?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('generadoAutomaticamente') generadoAutomaticamente?: string,
   ) {
     let effectiveConductorId = conductorId;
 
@@ -233,6 +262,12 @@ export class RutasController {
       search,
       page: page ? parseInt(page, 10) : 1,
       limit: limit ? parseInt(limit, 10) : 10,
+      generadoAutomaticamente:
+        generadoAutomaticamente === 'true'
+          ? true
+          : generadoAutomaticamente === 'false'
+            ? false
+            : undefined,
     };
 
     return await this.rutasService.listRoutes(filters);

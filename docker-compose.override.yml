@@ -1,0 +1,56 @@
+# Desarrollo: hot-reload para backend y frontend.
+# Se aplica automáticamente junto con docker-compose.yml (docker compose up).
+
+services:
+  backend:
+    build:
+      target: development
+    environment:
+      NODE_ENV: development
+    volumes:
+      - ./backend/src:/app/src
+      - ./backend/tsconfig.json:/app/tsconfig.json
+      - ./backend/nest-cli.json:/app/nest-cli.json
+      - backend_node_modules:/app/node_modules
+    healthcheck:
+      start_period: 60s
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  frontend:
+    build:
+      target: development
+    ports: !override
+      - "${FRONTEND_PORT:-3001}:3001"
+    environment:
+      REACT_APP_API_URL: ${REACT_APP_API_URL:-http://localhost:3000}
+      REACT_APP_GOOGLE_MAPS_API_KEY: ${REACT_APP_GOOGLE_MAPS_API_KEY:-}
+      REACT_APP_MQTT_BROKER_URL: ${REACT_APP_MQTT_BROKER_URL:-ws://localhost:9001}
+      REACT_APP_DEMO_EMAIL: ${REACT_APP_DEMO_EMAIL:-}
+      REACT_APP_DEMO_PASSWORD: ${REACT_APP_DEMO_PASSWORD:-}
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - frontend_node_modules:/app/node_modules
+    depends_on:
+      backend:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:3001', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
+
+volumes:
+  backend_node_modules:
+  frontend_node_modules:

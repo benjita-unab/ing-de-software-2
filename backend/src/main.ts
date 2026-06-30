@@ -7,11 +7,12 @@ import { json, urlencoded } from 'express';
 import type { NextFunction, Request, Response } from 'express';
 
 async function bootstrap() {
-  console.log('BACKEND ENV CHECK:', {
+  // Environment validation - secrets presence only logged
+  const envCheck = {
     JWT_SECRET_defined: !!process.env.JWT_SECRET,
     SUPABASE_URL_defined: !!process.env.SUPABASE_URL,
     SUPABASE_SERVICE_ROLE_KEY_defined: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-  });
+  };
 
   // Desactivamos el bodyParser default de Nest para poder definir nuestros
   // propios límites (las fichas de despacho llegan como base64 ~5–15 MB).
@@ -29,6 +30,7 @@ async function bootstrap() {
     'http://localhost:5173',
     'https://ing-de-software-2.vercel.app',
     process.env.FRONTEND_URL,
+    process.env.APP_URL,
   ].filter(Boolean) as string[];
 
   app.enableCors({

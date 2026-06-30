@@ -62,6 +62,15 @@ export class RutasPlantillaController {
     return this.rutasPlantillaService.update(id, body);
   }
 
+  /** POST /api/rutas-plantilla/:id/asignar-cliente — HU-47 adjudicación en UI */
+  @Post(':id/asignar-cliente')
+  asignarCliente(
+    @Param('id') id: string,
+    @Body() body: { clienteId: string },
+  ) {
+    return this.rutasPlantillaService.asignarCliente(id, body.clienteId);
+  }
+
   /** POST /api/rutas-plantilla/:id/duplicar */
   @Post(':id/duplicar')
   duplicar(@Param('id') id: string) {

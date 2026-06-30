@@ -125,16 +125,38 @@ El backend ya incluye CORS para `https://*.trycloudflare.com`.
 
 ---
 
-## Docker (backend + Nginx)
+## Docker (stack completo)
 
-Desde la raíz del repo, con variables de entorno definidas (según `backend/.env.example`):
+### Requisitos previos
+
+1. Copia `.env.example` a `.env` en la **raíz** del repositorio.
+2. Copia `backend/.env.example` a `backend/.env` y `frontend/.env.example` a `frontend/.env`.
+3. Completa al menos `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` y `JWT_SECRET`.
+
+### Producción (build estático + API)
 
 ```bash
-docker compose up --build -d
+docker compose -f docker-compose.yml up --build -d
 ```
 
-- Backend: puerto `3000`.
-- Nginx: puerto `8080` → proxy al contenedor `backend`.
+| Servicio   | URL / puerto host        |
+|------------|--------------------------|
+| Backend    | http://localhost:3000    |
+| Frontend   | http://localhost:3001    |
+| Nginx API  | http://localhost:8080    |
+| Mosquitto  | `1883` (TCP), `9001` (WS)|
+
+### Desarrollo (hot-reload; usa `docker-compose.override.yml` automáticamente)
+
+```bash
+docker compose up --build
+```
+
+Detener: `docker compose down`  
+Reconstruir imágenes: `docker compose build --no-cache`  
+Solo backend (aislado): `cd backend && docker compose up --build`
+
+La base de datos es **Supabase Cloud** (no hay contenedor PostgreSQL). MQTT local corre en Mosquitto.
 
 ---
 

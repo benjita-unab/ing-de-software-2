@@ -3,8 +3,10 @@ import { EntregasService } from './entregas.service';
 import { EntregasController } from './entregas.controller';
 import { SupabaseConfigService } from '../../config/supabase.config';
 import { ResendConfigService } from '../../config/resend.config';
+import { ConductoresModule } from '../conductores/conductores.module';
 
 @Module({
+  imports: [ConductoresModule],
   providers: [EntregasService, SupabaseConfigService, ResendConfigService],
   controllers: [EntregasController],
   exports: [EntregasService],

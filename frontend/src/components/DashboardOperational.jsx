@@ -93,7 +93,62 @@ function formatHeaderDate() {
 function fmtEta(iso) {
   if (!iso) return "—";
   try {
-    return new Date(iso).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" });
+    return new Date(iso).toLocaleString("es-CL", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return "—";
+  }
+}
+
+function fmtEtaDate(iso) {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleDateString("es-CL", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  } catch {
+    return "—";
+  }
+}
+
+function fmtEtaTime(iso) {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleTimeString("es-CL", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return "—";
+  }
+}
+
+function buildEtaRange(etaIso) {
+  if (!etaIso) return { inicio: null, fin: null };
+  const etaDate = new Date(etaIso);
+  if (Number.isNaN(etaDate.getTime())) return { inicio: null, fin: null };
+  const inicio = new Date(etaDate);
+  inicio.setDate(inicio.getDate() - 1);
+  const fin = new Date(etaDate);
+  fin.setDate(fin.getDate() + 1);
+  return { inicio: inicio.toISOString(), fin: fin.toISOString() };
+}
+
+function fmtDate(iso) {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleDateString("es-CL", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
   } catch {
     return "—";
   }
@@ -280,6 +335,11 @@ export default function DashboardOperational({
   const selectedRoute = useMemo(
     () => mapRoutes.find((r) => r.id === selectedRouteId) ?? null,
     [mapRoutes, selectedRouteId],
+  );
+
+  const selectedRouteEtaRange = useMemo(
+    () => buildEtaRange(selectedRoute?.eta),
+    [selectedRoute?.eta],
   );
 
   const selectedRuta = useMemo(
@@ -510,6 +570,18 @@ export default function DashboardOperational({
                 {fmtEta(selectedRoute.eta)}
               </div>
             </div>
+            <div>
+              <div className="lt-map-route-panel__label">Inicio rango estimado</div>
+              <div className="lt-map-route-panel__value">
+                {fmtDate(selectedRouteEtaRange.inicio)}
+              </div>
+            </div>
+            <div>
+              <div className="lt-map-route-panel__label">Fin rango estimado</div>
+              <div className="lt-map-route-panel__value">
+                {fmtDate(selectedRouteEtaRange.fin)}
+              </div>
+            </div>
           </div>
           <div className="lt-map-route-panel__progress">
             <div className="lt-map-route-panel__progress-header">
@@ -715,7 +787,10 @@ export default function DashboardOperational({
                           </span>
                         </div>
                       </div>
-                      <div className="lt-list-item__eta">{fmtEta(ruta.eta)}</div>
+                      <div className="lt-list-item__eta">
+                        <div>{fmtEtaDate(ruta.eta)}</div>
+                        <div>{fmtEtaTime(ruta.eta)}</div>
+                      </div>
                     </div>
                     <ProgressBar value={progress} color={hasAlert ? "var(--lt-danger)" : "var(--lt-accent)"} />
                   </div>
