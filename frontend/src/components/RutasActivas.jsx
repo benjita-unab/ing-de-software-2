@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 import { apiFetch } from "../lib/apiClient";
@@ -26,6 +26,9 @@ import ModalRecurrencia from "./ModalRecurrencia";
 import CreadorCarga from "./CreadorCarga";
 import Badge from "./ui/Badge";
 import Spinner from "./ui/Spinner";
+import Pagination from "./ui/Pagination";
+
+const COLS_TABLA_RUTAS = 6;
 
 const MODO_PLANTILLA = "plantilla";
 const MODO_MANUAL = "manual";
@@ -203,6 +206,56 @@ function estadoLabel(estado) {
   return String(estado).replace(/_/g, " ");
 }
 
+function truncarTexto(texto, max = 40) {
+  if (!texto) return "—";
+  const s = String(texto);
+  return s.length > max ? `${s.slice(0, max)}…` : s;
+}
+
+function estadoPagoBadgeVariant(estado) {
+  const e = String(estado || "pendiente").toLowerCase();
+  if (e === "pagado") return "success";
+  if (e === "procesando") return "warning";
+  if (e === "fallido") return "danger";
+  return "muted";
+}
+
+function montoRutaDesdeListado(ruta) {
+  const raw = ruta?.total_pagar ?? ruta?.costo_servicio ?? ruta?.tarifa_base_total;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function computeRentabilidadRuta(ruta) {
+  const totalCobradoBruto = Math.round(
+    Number(ruta.costo_servicio) > 0
+      ? Number(ruta.costo_servicio)
+      : Number(ruta.total_pagar || ruta.tarifa_base_total || 0),
+  );
+  const totalCobradoNeto = Math.round(
+    Number(ruta.tarifa_base_total || 0) > 0
+      ? Number(ruta.tarifa_base_total)
+      : totalCobradoBruto / 1.19,
+  );
+  let pagoConductor = Number(ruta.pago_conductor_base_clp || 0);
+  if (pagoConductor === 0) {
+    const totalSlots =
+      ruta.bultos?.reduce(
+        (acc, b) => acc + (Number(b.cuadrados_equivalentes) || 0),
+        0,
+      ) || 1;
+    const distKm = Number(ruta.distancia_km || 0);
+    pagoConductor = 5000 + 3000 + totalSlots * 500 + distKm * 2 * 150;
+  }
+  const gastos = Math.round(
+    Number(ruta.costo_combustible_calculado || 0) +
+      Number(ruta.costo_tac_peajes_clp || 0) +
+      pagoConductor,
+  );
+  const ganancia = Math.round(totalCobradoNeto - gastos);
+  return { totalCobradoBruto, totalCobradoNeto, gastos, ganancia, pagoConductor };
+}
+
 export default function RutasActivas() {
   const [rutas, setRutas] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -241,6 +294,8 @@ export default function RutasActivas() {
   const [rutaDetalleSeleccionada, setRutaDetalleSeleccionada] = useState(null);
   const [costosDetalle, setCostosDetalle] = useState(null);
   const [loadingCostosDetalle, setLoadingCostosDetalle] = useState(false);
+  const [listaPage, setListaPage] = useState(1);
+  const [listaLimit, setListaLimit] = useState(10);
 
   const [form, setForm] = useState({
     nombreRuta: "",
@@ -284,7 +339,7 @@ export default function RutasActivas() {
 
   const cargarRutas = useCallback(async () => {
     setLoading(true);
-    const res = await apiFetch("/api/rutas");
+    const res = await apiFetch("/api/rutas?limit=500");
     if (!res.ok) {
       setRutas([]);
       setAnomaliasPorRuta({});
@@ -295,6 +350,7 @@ export default function RutasActivas() {
     const payload = res.data;
     const lista = Array.isArray(payload) ? payload : payload?.data ?? [];
     setRutas(lista);
+    setListaPage(1);
     const fechasMap = {};
     lista.forEach((r) => {
       fechasMap[r.id] = fechasFromRuta(r);
@@ -1086,6 +1142,13 @@ export default function RutasActivas() {
     };
   }, [rutaDetalleSeleccionada?.id]);
 
+  const rutasPaginadas = useMemo(() => {
+    const start = (listaPage - 1) * listaLimit;
+    return rutas.slice(start, start + listaLimit);
+  }, [rutas, listaPage, listaLimit]);
+
+  const totalPagesLista = Math.max(1, Math.ceil(rutas.length / listaLimit) || 1);
+
   const formatCurrencyClp = (value) => {
     const n = Number(value);
     if (!Number.isFinite(n)) return "—";
@@ -1215,252 +1278,65 @@ export default function RutasActivas() {
             <table className="lt-table">
               <thead>
                 <tr>
-                  <th>Nombre Ruta</th>
-                  <th>Origen</th>
-                  <th>Destino</th>
+                  <th>Ruta</th>
                   <th>Cliente</th>
+                  <th>Trayecto</th>
                   <th>Estado</th>
-                  <th>Pago (CLP)</th>
-                  <th>Estado de Pago</th>
-                  <th>Conductor / Camión</th>
-                  <th>ETA</th>
-                  <th>Fechas estimadas</th>
-                  <th>Consolidación</th>
-                  <th>Costos</th>
+                  <th>Pago</th>
                   <th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                {rutas.map((ruta) => (
+                {rutasPaginadas.map((ruta) => {
+                  const monto = montoRutaDesdeListado(ruta);
+                  return (
                   <React.Fragment key={ruta.id}>
                   <tr>
                     <td>
                       <strong>{getNombreRuta(ruta)}</strong>
                     </td>
-                    <td>{ruta.origen || "—"}</td>
-                    <td>{ruta.destino || "—"}</td>
-                    <td>{ruta.clientes?.nombre || "—"}</td>
+                    <td>{truncarTexto(ruta.clientes?.nombre, 28)}</td>
+                    <td>
+                      <div style={{ fontSize: 13, lineHeight: 1.4 }}>
+                        <div>{truncarTexto(ruta.origen, 32)}</div>
+                        <div className="lt-list-item__sub" style={{ marginTop: 2 }}>
+                          → {truncarTexto(ruta.destino, 32)}
+                        </div>
+                      </div>
+                    </td>
                     <td>
                       <Badge variant={estadoBadgeVariant(ruta.estado)}>
                         {estadoLabel(ruta.estado)}
                       </Badge>
                     </td>
                     <td>
-                      {ruta.total_pagar != null || ruta.tarifa_base_total != null ? (
-                        <div style={{ fontSize: "12px", lineHeight: "1.4" }}>
-                          {(() => {
-                            const totalCobradoBruto = Math.round(
-                              Number(ruta.costo_servicio) > 0
-                                ? Number(ruta.costo_servicio)
-                                : Number(ruta.total_pagar || ruta.tarifa_base_total || 0),
-                            );
-                            const totalCobradoNeto = Math.round(
-                              Number(ruta.tarifa_base_total || 0) > 0
-                                ? Number(ruta.tarifa_base_total)
-                                : totalCobradoBruto / 1.19,
-                            );
-                            let pagoConductor = Number(ruta.pago_conductor_base_clp || 0);
-                            if (pagoConductor === 0) {
-                              const totalSlots =
-                                ruta.bultos?.reduce(
-                                  (acc, b) => acc + (Number(b.cuadrados_equivalentes) || 0),
-                                  0,
-                                ) || 1;
-                              const distKm = Number(ruta.distancia_km || 0);
-                              pagoConductor =
-                                5000 + 3000 + totalSlots * 500 + distKm * 2 * 150;
-                            }
-                            const gastos = Math.round(
-                              Number(ruta.costo_combustible_calculado || 0) +
-                                Number(ruta.costo_tac_peajes_clp || 0) +
-                                pagoConductor,
-                            );
-                            const ganancia = Math.round(totalCobradoNeto - gastos);
-                            return (
-                              <>
-                                <div>
-                                  Cobrado:{" "}
-                                  <strong>
-                                    {new Intl.NumberFormat("es-CL", {
-                                      style: "currency",
-                                      currency: "CLP",
-                                      maximumFractionDigits: 0,
-                                    }).format(totalCobradoBruto)}
-                                  </strong>
-                                </div>
-                                <div>
-                                  Ganancia neta:{" "}
-                                  <strong style={{ color: "#10b981" }}>
-                                    {new Intl.NumberFormat("es-CL", {
-                                      style: "currency",
-                                      currency: "CLP",
-                                      maximumFractionDigits: 0,
-                                    }).format(ganancia)}
-                                  </strong>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setRutaRentabilidad({
-                                      ...ruta,
-                                      totalCobradoBruto,
-                                      totalCobradoNeto,
-                                      gastos,
-                                      ganancia,
-                                      pagoConductor,
-                                    });
-                                    setShowRentabilidadModal(true);
-                                  }}
-                                  className="lt-btn lt-btn--secondary"
-                                  style={{
-                                    padding: "4px 8px",
-                                    fontSize: "11px",
-                                    marginTop: "8px",
-                                    width: "100%",
-                                  }}
-                                >
-                                  Ver detalle
-                                </button>
-                              </>
-                            );
-                          })()}
+                      <Badge variant={estadoPagoBadgeVariant(ruta.estado_pago)}>
+                        {estadoLabel(ruta.estado_pago || "PENDIENTE")}
+                      </Badge>
+                      {monto != null && (
+                        <div className="lt-list-item__sub" style={{ marginTop: 6, fontSize: 12 }}>
+                          {formatCurrencyClp(monto)}
                         </div>
-                      ) : (
-                        <span className="lt-list-item__sub" style={{ opacity: 0.6 }}>
-                          No calculado
-                        </span>
                       )}
-                    </td>
-                    <td>
-                      <span
-                        style={{
-                          display: "inline-block",
-                          padding: "4px 8px",
-                          borderRadius: "4px",
-                          fontSize: "11px",
-                          fontWeight: "bold",
-                          textTransform: "uppercase",
-                          backgroundColor:
-                            ruta.estado_pago === "pagado"
-                              ? "#10b981"
-                              : ruta.estado_pago === "procesando"
-                                ? "#f59e0b"
-                                : ruta.estado_pago === "fallido"
-                                  ? "#ef4444"
-                                  : "#64748b",
-                          color: "#fff",
-                        }}
-                      >
-                        {ruta.estado_pago || "PENDIENTE"}
-                      </span>
                       {ruta.estado_pago === "pagado" && (
                         <button
                           type="button"
                           onClick={() => setComprobanteRutaId(ruta.id)}
-                          className="lt-btn lt-btn--secondary"
-                          style={{
-                            padding: "4px 8px",
-                            fontSize: "11px",
-                            marginTop: "8px",
-                            width: "100%",
-                            borderColor: "#3B82F6",
-                            color: "#3B82F6",
-                          }}
+                          className="lt-btn lt-btn--secondary lt-btn--sm"
+                          style={{ marginTop: 6, width: "100%" }}
                         >
-                          Ver comprobante
+                          Comprobante
                         </button>
                       )}
                     </td>
                     <td>
-                      <div>{ruta.conductores?.rut || "—"}</div>
-                      <div className="lt-list-item__sub" style={{ marginTop: 4 }}>
-                        {ruta.camiones?.patente || "—"}
-                      </div>
-                    </td>
-                    <td>{fmtDate(ruta.eta)}</td>
-                    <td>
                       <button
                         type="button"
-                        className="lt-btn lt-btn--secondary lt-btn--sm lt-btn--full"
-                        style={{ marginBottom: 8 }}
-                        disabled={calculandoEstimacionRutaId === ruta.id}
-                        onClick={() => calcularDistanciaYFechasRuta(ruta)}
-                      >
-                        {calculandoEstimacionRutaId === ruta.id
-                          ? "Calculando…"
-                          : "Calcular fechas"}
-                      </button>
-                      <MensajeFilaRuta mensaje={mensajesRuta[ruta.id]?.estimacion} />
-                      <div className="lt-field-group">
-                        <label className="lt-label" htmlFor={`fecha-entrega-${ruta.id}`}>
-                          Día estimado
-                        </label>
-                        <input
-                          id={`fecha-entrega-${ruta.id}`}
-                          type="date"
-                          className="lt-input"
-                          value={(fechasEdit[ruta.id] || fechasFromRuta(ruta)).entrega}
-                          onChange={(e) =>
-                            actualizarFechaRuta(ruta.id, "entrega", e.target.value)
-                          }
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        className="lt-btn lt-btn--secondary lt-btn--sm lt-btn--full"
-                        disabled={savingFechasId === ruta.id}
-                        onClick={() => guardarFechasRuta(ruta.id)}
-                      >
-                        {savingFechasId === ruta.id ? "Guardando…" : "Guardar fechas"}
-                      </button>
-                      <MensajeFilaRuta mensaje={mensajesRuta[ruta.id]?.fechas} />
-                    </td>
-                    <td>
-                      <button
-                        type="button"
-                        className={`lt-btn lt-btn--sm ${consolidacionAbiertaId === ruta.id ? "lt-btn--primary" : "lt-btn--secondary"}`}
-                        onClick={() =>
-                          setConsolidacionAbiertaId((prev) =>
-                            prev === ruta.id ? null : ruta.id,
-                          )
-                        }
-                        disabled={!ruta.camion_id}
-                        title={
-                          ruta.camion_id
-                            ? "Gestionar consolidación de pedidos"
-                            : "Asigne un camión para consolidar pedidos"
-                        }
-                      >
-                        {consolidacionAbiertaId === ruta.id ? "Cerrar" : "Consolidar"}
-                      </button>
-                      {!ruta.camion_id && (
-                        <p className="lt-list-item__sub" style={{ marginTop: 4 }}>
-                          Requiere camión
-                        </p>
-                      )}
-                    </td>
-                    <td>
-                      <button
-                        type="button"
-                        className={`lt-btn lt-btn--sm ${costosAbiertoId === ruta.id ? "lt-btn--primary" : "lt-btn--secondary"}`}
-                        onClick={() =>
-                          setCostosAbiertoId((prev) =>
-                            prev === ruta.id ? null : ruta.id,
-                          )
-                        }
-                        title="Ver resumen financiero y costos operativos"
-                      >
-                        {costosAbiertoId === ruta.id ? "Cerrar" : "Ver costos"}
-                      </button>
-                    </td>
-                    <td>
-                      <button
-                        type="button"
-                        className="lt-btn lt-btn--primary lt-btn--full"
-                        style={{ marginBottom: 8 }}
+                        className="lt-btn lt-btn--primary lt-btn--sm lt-btn--full"
+                        style={{ marginBottom: 6 }}
                         onClick={() =>
                           setRutaDetalleSeleccionada({
-                            ...ruta,
+                            ...(rutas.find((r) => r.id === ruta.id) || ruta),
                             anomalias:
                               Array.isArray(ruta?.anomalias) && ruta.anomalias.length > 0
                                 ? ruta.anomalias
@@ -1474,8 +1350,38 @@ export default function RutasActivas() {
                       </button>
                       <button
                         type="button"
-                        className="lt-btn lt-btn--secondary lt-btn--full"
-                        style={{ marginBottom: 8 }}
+                        className={`lt-btn lt-btn--sm lt-btn--full ${consolidacionAbiertaId === ruta.id ? "lt-btn--primary" : "lt-btn--secondary"}`}
+                        style={{ marginBottom: 6 }}
+                        onClick={() =>
+                          setConsolidacionAbiertaId((prev) =>
+                            prev === ruta.id ? null : ruta.id,
+                          )
+                        }
+                        disabled={!ruta.camion_id}
+                        title={
+                          ruta.camion_id
+                            ? "Gestionar consolidación de pedidos"
+                            : "Asigne un camión para consolidar pedidos"
+                        }
+                      >
+                        {consolidacionAbiertaId === ruta.id ? "Cerrar consolidación" : "Consolidar"}
+                      </button>
+                      <button
+                        type="button"
+                        className={`lt-btn lt-btn--sm lt-btn--full ${costosAbiertoId === ruta.id ? "lt-btn--primary" : "lt-btn--secondary"}`}
+                        style={{ marginBottom: 6 }}
+                        onClick={() =>
+                          setCostosAbiertoId((prev) =>
+                            prev === ruta.id ? null : ruta.id,
+                          )
+                        }
+                      >
+                        {costosAbiertoId === ruta.id ? "Cerrar costos" : "Ver costos"}
+                      </button>
+                      <button
+                        type="button"
+                        className="lt-btn lt-btn--secondary lt-btn--sm lt-btn--full"
+                        style={{ marginBottom: 6 }}
                         onClick={() => {
                           setRutaRecurrenciaCtx({
                             clienteId: ruta.cliente_id,
@@ -1489,20 +1395,8 @@ export default function RutasActivas() {
                       </button>
                       <button
                         type="button"
-                        className="lt-btn lt-btn--success lt-btn--full"
-                        disabled={notifyingId === ruta.id}
-                        onClick={() => enviarNotificacionRuta(ruta.id)}
-                      >
-                        {notifyingId === ruta.id
-                          ? "Enviando…"
-                          : "Notificar fecha estimada"}
-                      </button>
-                      <MensajeFilaRuta mensaje={mensajesRuta[ruta.id]?.notificar} />
-                      <button
-                        type="button"
                         className="lt-btn lt-btn--full"
                         style={{
-                          marginTop: 8,
                           backgroundColor: "transparent",
                           border: "1px solid #ef4444",
                           color: "#ef4444",
@@ -1515,7 +1409,7 @@ export default function RutasActivas() {
                   </tr>
                   {consolidacionAbiertaId === ruta.id && (
                     <tr key={`${ruta.id}-consolidacion`}>
-                      <td colSpan={13} className="lt-consolidacion-row">
+                      <td colSpan={COLS_TABLA_RUTAS} className="lt-consolidacion-row">
                         <ConsolidacionRutaPanel
                           rutaId={ruta.id}
                           onConsolidado={cargarRutas}
@@ -1525,7 +1419,7 @@ export default function RutasActivas() {
                   )}
                   {costosAbiertoId === ruta.id && (
                     <tr key={`${ruta.id}-costos`}>
-                      <td colSpan={13} className="lt-consolidacion-row">
+                      <td colSpan={COLS_TABLA_RUTAS} className="lt-consolidacion-row">
                         <CostosOperativosPanel
                           rutaId={ruta.id}
                           rutaEstado={ruta.estado}
@@ -1534,9 +1428,21 @@ export default function RutasActivas() {
                     </tr>
                   )}
                   </React.Fragment>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
+            <Pagination
+              currentPage={listaPage}
+              totalPages={totalPagesLista}
+              totalItems={rutas.length}
+              limit={listaLimit}
+              onPageChange={setListaPage}
+              onLimitChange={(newLimit) => {
+                setListaLimit(newLimit);
+                setListaPage(1);
+              }}
+            />
           </div>
         )}
       </div>
@@ -1589,7 +1495,7 @@ export default function RutasActivas() {
                 aria-label="Cerrar"
                 onClick={() => setRutaDetalleSeleccionada(null)}
               >
-                Ô£ò
+                ×
               </button>
             </div>
 
@@ -1668,7 +1574,7 @@ export default function RutasActivas() {
                       <div style={valueStyle}>{fmtDate(rutaDetalleSeleccionada.eta)}</div>
                     </div>
                   </div>
-                  <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginBottom: 12 }}>
                     <div style={{ minWidth: 160, flex: "1 1 200px" }}>
                       <div style={labelStyle}>Inicio rango</div>
                       <div style={valueStyle}>{toInputDate(rutaDetalleSeleccionada.fecha_estimada_inicio) || "—"}</div>
@@ -1682,6 +1588,65 @@ export default function RutasActivas() {
                       <div style={valueStyle}>{toInputDate(rutaDetalleSeleccionada.fecha_estimada_entrega) || "—"}</div>
                     </div>
                   </div>
+                  {(() => {
+                    const rutaId = rutaDetalleSeleccionada.id;
+                    const rutaRef = rutas.find((r) => r.id === rutaId) || rutaDetalleSeleccionada;
+                    return (
+                      <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 12 }}>
+                        <div className="lt-list-item__title" style={{ marginBottom: 8, fontSize: 13 }}>
+                          Gestionar fechas estimadas
+                        </div>
+                        <button
+                          type="button"
+                          className="lt-btn lt-btn--secondary lt-btn--sm"
+                          style={{ marginBottom: 8, width: "100%" }}
+                          disabled={calculandoEstimacionRutaId === rutaId}
+                          onClick={() => calcularDistanciaYFechasRuta(rutaRef)}
+                        >
+                          {calculandoEstimacionRutaId === rutaId
+                            ? "Calculando…"
+                            : "Calcular fechas"}
+                        </button>
+                        <MensajeFilaRuta mensaje={mensajesRuta[rutaId]?.estimacion} />
+                        <div className="lt-field-group">
+                          <label className="lt-label" htmlFor={`fecha-entrega-detalle-${rutaId}`}>
+                            Día estimado de entrega
+                          </label>
+                          <input
+                            id={`fecha-entrega-detalle-${rutaId}`}
+                            type="date"
+                            className="lt-input"
+                            value={(fechasEdit[rutaId] || fechasFromRuta(rutaRef)).entrega}
+                            onChange={(e) =>
+                              actualizarFechaRuta(rutaId, "entrega", e.target.value)
+                            }
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          className="lt-btn lt-btn--secondary lt-btn--sm"
+                          style={{ marginTop: 8, width: "100%" }}
+                          disabled={savingFechasId === rutaId}
+                          onClick={() => guardarFechasRuta(rutaId)}
+                        >
+                          {savingFechasId === rutaId ? "Guardando…" : "Guardar fechas"}
+                        </button>
+                        <MensajeFilaRuta mensaje={mensajesRuta[rutaId]?.fechas} />
+                        <button
+                          type="button"
+                          className="lt-btn lt-btn--success lt-btn--sm"
+                          style={{ marginTop: 8, width: "100%" }}
+                          disabled={notifyingId === rutaId}
+                          onClick={() => enviarNotificacionRuta(rutaId)}
+                        >
+                          {notifyingId === rutaId
+                            ? "Enviando…"
+                            : "Notificar fecha estimada"}
+                        </button>
+                        <MensajeFilaRuta mensaje={mensajesRuta[rutaId]?.notificar} />
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <div className="lt-card" style={{ padding: 16 }}>
@@ -1781,9 +1746,47 @@ export default function RutasActivas() {
                   <div className="lt-list-item__title" style={{ marginBottom: 8, color: "var(--lt-success)" }}>
                     Información de pago
                   </div>
-                  <p className="lt-list-item__sub" style={{ color: "#6b7280", margin: 0 }}>
-                    Datos pendientes de integración
-                  </p>
+                  <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginBottom: 12 }}>
+                    <div style={{ minWidth: 160, flex: "1 1 180px" }}>
+                      <div style={labelStyle}>Estado</div>
+                      <Badge variant={estadoPagoBadgeVariant(rutaDetalleSeleccionada.estado_pago)}>
+                        {estadoLabel(rutaDetalleSeleccionada.estado_pago || "PENDIENTE")}
+                      </Badge>
+                    </div>
+                    <div style={{ minWidth: 160, flex: "1 1 180px" }}>
+                      <div style={labelStyle}>Monto</div>
+                      <div style={valueStyle}>
+                        {montoRutaDesdeListado(rutaDetalleSeleccionada) != null
+                          ? formatCurrencyClp(montoRutaDesdeListado(rutaDetalleSeleccionada))
+                          : "—"}
+                      </div>
+                    </div>
+                  </div>
+                  {montoRutaDesdeListado(rutaDetalleSeleccionada) != null && (
+                    <button
+                      type="button"
+                      className="lt-btn lt-btn--secondary lt-btn--sm"
+                      onClick={() => {
+                        setRutaRentabilidad({
+                          ...rutaDetalleSeleccionada,
+                          ...computeRentabilidadRuta(rutaDetalleSeleccionada),
+                        });
+                        setShowRentabilidadModal(true);
+                      }}
+                    >
+                      Ver resumen de rentabilidad
+                    </button>
+                  )}
+                  {rutaDetalleSeleccionada.estado_pago === "pagado" && (
+                    <button
+                      type="button"
+                      className="lt-btn lt-btn--secondary lt-btn--sm"
+                      style={{ marginLeft: 8 }}
+                      onClick={() => setComprobanteRutaId(rutaDetalleSeleccionada.id)}
+                    >
+                      Ver comprobante
+                    </button>
+                  )}
                 </div>
 
                 <div className="lt-card" style={{ padding: 16 }}>

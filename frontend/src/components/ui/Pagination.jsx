@@ -45,7 +45,7 @@ export default function Pagination({
           Mostrando {(currentPage - 1) * limit + 1} - {Math.min(currentPage * limit, totalItems)} de {totalItems} resultados
         </span>
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <span>Por página:</span>
+          <span>Por p?gina:</span>
           <select
             className="lt-select lt-select--sm"
             style={{
@@ -59,7 +59,7 @@ export default function Pagination({
             onChange={(e) => {
               if (onLimitChange) onLimitChange(Number(e.target.value));
             }}
-            aria-label="Items por página"
+            aria-label="Items por p?gina"
           >
             <option value={10}>10</option>
             <option value={20}>20</option>
@@ -74,8 +74,8 @@ export default function Pagination({
           className="lt-btn lt-btn--ghost lt-btn--icon"
           onClick={() => onPageChange(1)}
           disabled={isFirstPage}
-          aria-label="Primera página"
-          title="Primera página"
+          aria-label="Primera p?gina"
+          title="Primera p?gina"
         >
           <ChevronsLeft size={18} />
         </button>
@@ -84,8 +84,8 @@ export default function Pagination({
           className="lt-btn lt-btn--ghost lt-btn--icon"
           onClick={() => onPageChange(currentPage - 1)}
           disabled={isFirstPage}
-          aria-label="Página anterior"
-          title="Página anterior"
+          aria-label="P?gina anterior"
+          title="P?gina anterior"
         >
           <ChevronLeft size={18} />
         </button>
@@ -94,7 +94,7 @@ export default function Pagination({
           className="lt-pagination__current"
           style={{ fontSize: "14px", fontWeight: "500", padding: "0 8px", color: "#334155" }}
         >
-          Página {currentPage} de {Math.max(1, totalPages)}
+          P?gina {currentPage} de {Math.max(1, totalPages)}
         </span>
 
         <button
@@ -102,8 +102,8 @@ export default function Pagination({
           className="lt-btn lt-btn--ghost lt-btn--icon"
           onClick={() => onPageChange(currentPage + 1)}
           disabled={isLastPage}
-          aria-label="Página siguiente"
-          title="Página siguiente"
+          aria-label="P?gina siguiente"
+          title="P?gina siguiente"
         >
           <ChevronRight size={18} />
         </button>
@@ -112,8 +112,8 @@ export default function Pagination({
           className="lt-btn lt-btn--ghost lt-btn--icon"
           onClick={() => onPageChange(totalPages)}
           disabled={isLastPage}
-          aria-label="Última página"
-          title="Última página"
+          aria-label="?ltima p?gina"
+          title="?ltima p?gina"
         >
           <ChevronsRight size={18} />
         </button>
