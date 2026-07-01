@@ -52,19 +52,6 @@ function latestGpsForRoute(rutaId, eventosConductor) {
   return { lat: Number(latest.latitud), lng: Number(latest.longitud) };
 }
 
-function gpsFromAlert(patente, alerts) {
-  if (!patente) return null;
-  const match = alerts.find(
-    (a) =>
-      a.vehicle_plate === patente &&
-      a.lat != null &&
-      a.lng != null &&
-      a.status !== "RESUELTA",
-  );
-  if (!match) return null;
-  return { lat: Number(match.lat), lng: Number(match.lng) };
-}
-
 function hasConductorUrgentForRoute(rutaId, eventosConductor = []) {
   return eventosConductor.some(
     (evento) => evento.ruta_id === rutaId && isUrgentAlerta(evento),
@@ -72,18 +59,16 @@ function hasConductorUrgentForRoute(rutaId, eventosConductor = []) {
 }
 
 /**
- * Construye entidades de mapa a partir de rutas reales + geocodificación + GPS real.
- * @param {object[]} alerts - Incidencias legacy (tabla incidencias).
+ * Construye entidades de mapa a partir de rutas reales + geocodificación + GPS (mensajes_conductor).
  * @param {object[]} eventosConductor - Eventos mensajes_conductor (GPS + urgencias HU-40).
  */
-export function buildMapRoutes(rutas, geocodeMap, alerts = [], eventosConductor = []) {
+export function buildMapRoutes(rutas, geocodeMap, eventosConductor = []) {
   return rutas.filter(isActiveRoute).map((ruta) => {
     const origenCoords = geocodeMap[ruta.origen?.trim()] ?? null;
     const destinoCoords = geocodeMap[ruta.destino?.trim()] ?? null;
     const patente = ruta.camiones?.patente ?? null;
 
-    const vehicleGps =
-      gpsFromAlert(patente, alerts) ?? latestGpsForRoute(ruta.id, eventosConductor);
+    const vehicleGps = latestGpsForRoute(ruta.id, eventosConductor);
 
     const hasPolyline = Boolean(origenCoords && destinoCoords);
     let markerCoords = null;
@@ -103,9 +88,7 @@ export function buildMapRoutes(rutas, geocodeMap, alerts = [], eventosConductor 
       markerType = "destination";
     }
 
-    const hasAlert =
-      alerts.some((a) => a.vehicle_plate === patente && a.status !== "RESUELTA") ||
-      hasConductorUrgentForRoute(ruta.id, eventosConductor);
+    const hasAlert = hasConductorUrgentForRoute(ruta.id, eventosConductor);
 
     return {
       id: ruta.id,
@@ -154,16 +137,13 @@ export function buildVehicleMarkers(_camiones, mapRoutes) {
 export function countMapStats(
   mapRoutes,
   camiones,
-  alerts,
   vehicleMarkers = [],
   eventosConductor = [],
 ) {
   const gpsVehicles = vehicleMarkers.length;
   const routesOnMap = mapRoutes.filter((r) => r.markerCoords || r.hasPolyline).length;
   const inTransit = mapRoutes.filter((r) => r.inTransit).length;
-  const openIncidencias = alerts.filter((a) => a.status !== "RESUELTA").length;
-  const openConductorUrgent = eventosConductor.filter(isUrgentAlerta).length;
-  const openAlerts = openIncidencias + openConductorUrgent;
+  const openAlerts = eventosConductor.filter(isUrgentAlerta).length;
   const activeVehicles = camiones.filter((c) =>
     String(c.estado || "").includes("RUTA"),
   ).length;

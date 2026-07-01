@@ -8,10 +8,8 @@
  *
  * Polling: delega en useMensajesConductor (única instancia en OperatorDashboard).
  *
- * Convive con useAlerts (incidencias legacy):
- * - useAlerts → tabla incidencias, dashboard KPIs/ticker/mapa legacy.
- * - useAlertasConductor → mensajes_conductor, pestaña Alertas, badge sidebar, alarma.
- * Ambos hooks son necesarios hasta unificar incidencias con mensajes_conductor.
+ * Fuente operativa de alertas (HU-40): mensajes_conductor.
+ * La tabla incidencias (legacy) no alimenta el Dashboard operacional.
  */
 import { useEffect, useRef } from 'react';
 import { useMensajesConductor } from './useMensajesConductor';

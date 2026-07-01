@@ -358,14 +358,16 @@ export class DashboardService {
     return count ?? 0;
   }
 
+  /** Rutas con emergencia activa (mensajes_conductor: ALTA sin confirmar). */
   private async countRutasConAlertas(
     supabase: ReturnType<SupabaseConfigService['getClient']>,
     filters: DashboardResumenFilters,
   ): Promise<number> {
     let query = supabase
-      .from('incidencias')
+      .from('mensajes_conductor')
       .select('ruta_id, rutas!inner(id, cliente_id, estado, created_at)')
-      .in('tipo', ['ALERTA', 'EMERGENCIA'])
+      .eq('prioridad', 'ALTA')
+      .eq('acknowledged', false)
       .not('ruta_id', 'is', null);
 
     query = this.applyRutaJoinFilters(query, filters);

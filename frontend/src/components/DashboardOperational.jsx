@@ -31,6 +31,7 @@ import {
   isActiveRoute,
   routeProgress,
 } from "../lib/mapRouteData";
+import { isUrgentAlerta } from "../lib/alertasConductorUtils";
 
 const DASHBOARD_ESTADO_OPTIONS = [
   { value: "", label: "Todos los estados" },
@@ -54,12 +55,21 @@ const KPI_CONFIG = [
   { key: "sla", label: "SLA entregas", icon: Package, iconClass: "lt-kpi-icon--purple", isPercent: true, trend: "up" },
 ];
 
-const PRIORITY_VARIANT = {
-  CRITICA: "danger",
-  ALTA: "warning",
-  NORMAL: "info",
-  BAJA: "muted",
-};
+function mensajeConductorToMapAlert(mensaje, rutasById = {}) {
+  const ruta = rutasById[mensaje.ruta_id];
+  const lat = mensaje.latitud != null ? Number(mensaje.latitud) : null;
+  const lng = mensaje.longitud != null ? Number(mensaje.longitud) : null;
+  return {
+    id: mensaje.id,
+    lat: Number.isFinite(lat) ? lat : null,
+    lng: Number.isFinite(lng) ? lng : null,
+    priority: "ALTA",
+    vehicle_plate: ruta?.camiones?.patente ?? "—",
+    driver_name: ruta?.conductores?.rut ?? "—",
+    alert_type: mensaje.mensaje === "Emergencia" ? "BOTON_PANICO" : mensaje.mensaje,
+    status: "ACTIVA",
+  };
+}
 
 function buildResumenUrl(filters) {
   const params = new URLSearchParams();
@@ -181,16 +191,12 @@ function OperationalKpiSkeleton({ label }) {
 
 /**
  * Dashboard operacional con mapa en vivo.
- *
- * Dependencias HU-40:
- * - alerts / alertsLoading → incidencias legacy (useAlerts, tabla incidencias).
- * - eventosConductor → mensajes_conductor vía useAlertasConductor: GPS en mapa y urgencias en rutas.
+ * Alertas operativas: única fuente mensajes_conductor (isUrgentAlerta), alineado con Centro de Alertas.
  */
 export default function DashboardOperational({
-  alerts = [],
-  alertsLoading = false,
   eventosConductor = [],
   mensajes,
+  urgentCount = 0,
   operator,
   onNavigate,
   isDark = false,
@@ -315,20 +321,30 @@ export default function DashboardOperational({
     return () => { cancelled = true; };
   }, [activeRoutesRaw]);
 
+  const rutasById = useMemo(
+    () =>
+      rutas.reduce((acc, ruta) => {
+        if (ruta?.id) acc[ruta.id] = ruta;
+        return acc;
+      }, {}),
+    [rutas],
+  );
+
+  const urgentAlertas = useMemo(
+    () => conductorEventos.filter(isUrgentAlerta),
+    [conductorEventos],
+  );
+
   const mapAlerts = useMemo(() => {
-    const withCoords = alerts.filter((a) => a.lat && a.lng && a.status !== "RESUELTA");
-    if (mapFilter === "alertas") {
-      return withCoords.filter((a) => ["CRITICA", "ALTA"].includes(a.priority));
-    }
-    if (mapFilter === "completados") {
-      return alerts.filter((a) => a.lat && a.lng && a.status === "RESUELTA");
-    }
-    return withCoords;
-  }, [alerts, mapFilter]);
+    if (mapFilter === "completados") return [];
+    return urgentAlertas
+      .map((m) => mensajeConductorToMapAlert(m, rutasById))
+      .filter((a) => a.lat != null && a.lng != null);
+  }, [urgentAlertas, rutasById, mapFilter]);
 
   const mapRoutes = useMemo(
-    () => buildMapRoutes(activeRoutesRaw, geocodeMap, alerts, conductorEventos),
-    [activeRoutesRaw, geocodeMap, alerts, conductorEventos],
+    () => buildMapRoutes(activeRoutesRaw, geocodeMap, conductorEventos),
+    [activeRoutesRaw, geocodeMap, conductorEventos],
   );
 
   const vehicleMarkers = useMemo(
@@ -337,8 +353,8 @@ export default function DashboardOperational({
   );
 
   const mapStats = useMemo(
-    () => countMapStats(mapRoutes, camiones, alerts, vehicleMarkers, conductorEventos),
-    [mapRoutes, camiones, alerts, vehicleMarkers, conductorEventos],
+    () => countMapStats(mapRoutes, camiones, vehicleMarkers, conductorEventos),
+    [mapRoutes, camiones, vehicleMarkers, conductorEventos],
   );
 
   const selectedRoute = useMemo(
@@ -528,7 +544,7 @@ export default function DashboardOperational({
         <div className="lt-map-stat-card">
           <div className="lt-map-stat-card__label">Alertas abiertas</div>
           <div className="lt-map-stat-card__value" style={{ color: "var(--lt-danger)" }}>
-            {mapStats.openAlerts}
+            {urgentCount}
           </div>
         </div>
       </div>
@@ -828,11 +844,13 @@ export default function DashboardOperational({
             )}
           </div>
           <div className="lt-dashboard__side-footer">
-            <button type="button" className="lt-btn lt-btn--secondary lt-btn--full"
-              onClick={() => onNavigate?.("alertas")}>
-              <AlertTriangle size={13} />
-              Alertas ({mapStats.openAlerts})
-            </button>
+            {urgentCount > 0 && (
+              <button type="button" className="lt-btn lt-btn--secondary lt-btn--full"
+                onClick={() => onNavigate?.("alertas")}>
+                <AlertTriangle size={13} />
+                Alertas ({urgentCount})
+              </button>
+            )}
             <button type="button" className="lt-btn lt-btn--ghost lt-btn--full"
               onClick={() => onNavigate?.("rutas")}>
               Ver todas <ChevronRight size={13} />
@@ -841,20 +859,21 @@ export default function DashboardOperational({
         </aside>
       </div>
 
-      {!alertsLoading && alerts.length > 0 && (
+      {urgentCount > 0 && (
         <div className="lt-dashboard__alert-ticker">
-          {alerts.filter((a) => a.status !== "RESUELTA").slice(0, 3).map((alert) => {
-            const variant = PRIORITY_VARIANT[alert.priority] || "muted";
+          {urgentAlertas.slice(0, 3).map((mensaje) => {
+            const ruta = rutasById[mensaje.ruta_id];
+            const patente = ruta?.camiones?.patente ?? "—";
             return (
               <button
-                key={alert.id}
+                key={mensaje.id}
                 type="button"
                 className="lt-dashboard__alert-chip"
                 onClick={() => onNavigate?.("alertas")}
               >
                 <Zap size={11} />
-                <span>{alert.vehicle_plate}</span>
-                <Badge variant={variant} showDot={false}>{alert.priority}</Badge>
+                <span>{patente}</span>
+                <Badge variant="danger" showDot={false}>ALTA</Badge>
               </button>
             );
           })}

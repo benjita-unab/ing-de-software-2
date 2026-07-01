@@ -26,12 +26,10 @@ import RutasPlantilla from "./RutasPlantilla";
 import ModulePage from "./ui/ModulePage";
 
 import PageHeader from "./ui/PageHeader";
-import { useAlerts } from "../hooks/useAlerts";
 import { useAlertasConductor } from "../hooks/useAlertasConductor";
 import { useTheme } from "../hooks/useTheme";
 
 export default function OperatorDashboard({ operator, onSignOut }) {
-  const { alerts, loading } = useAlerts();
   const {
     alertas,
     rutasMap,
@@ -92,9 +90,8 @@ export default function OperatorDashboard({ operator, onSignOut }) {
         {activeSection === "dashboard" && (
           <div className="lt-main-scroll lt-main-scroll--dashboard">
             <DashboardOperational
-              alerts={alerts}
-              alertsLoading={loading}
               eventosConductor={alertas}
+              urgentCount={urgentCount}
               operator={operator}
               onNavigate={setActiveSection}
               isDark={isDark}
