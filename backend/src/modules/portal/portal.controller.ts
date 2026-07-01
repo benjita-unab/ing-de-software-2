@@ -79,32 +79,6 @@ export class PortalController {
     return this.portalService.createPedido(clienteId, body);
   }
 
-  /**
-   * POST /api/portal/pedidos/:id/pagar_base
-   * Simula el pago de la tarifa base y mueve el pedido a En Curso.
-   */
-  @Post('pedidos/:id/pagar_base')
-  async pagarBase(
-    @Param('id') id: string,
-    @CurrentUser() user: AuthenticatedUser,
-  ) {
-    const clienteId = this.requireClienteId(user);
-    return this.portalService.pagarBase(id, clienteId);
-  }
-
-  /**
-   * POST /api/portal/pedidos/:id/pagar_retraso
-   * Simula el pago del costo de espera en destino para finalizar el pedido.
-   */
-  @Post('pedidos/:id/pagar_retraso')
-  async pagarRetraso(
-    @Param('id') id: string,
-    @CurrentUser() user: AuthenticatedUser,
-  ) {
-    const clienteId = this.requireClienteId(user);
-    return this.portalService.pagarRetraso(id, clienteId);
-  }
-
   /** HU-47: listar recurrencias del cliente autenticado */
   @Get('recurrencias')
   listRecurrencias(

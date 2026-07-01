@@ -115,16 +115,43 @@ export class PagosService {
       const supabase = this.supabaseConfig.getClient();
 
       const isAtraso = response.buy_order && response.buy_order.startsWith('LOGI-A-');
-      const fechaPago = new Date().toISOString();
+      const tipoCobro: 'base' | 'atraso' = isAtraso ? 'atraso' : 'base';
 
-      // Transaccion manual simulada: Actualizar Ruta e Insertar Comprobante
-      // Verificar si la ruta tiene un conductor asignado (auto-resuelto en la creacion)
-      const { data: ruta } = await supabase
+      const { data: ruta, error: rutaError } = await supabase
         .from('rutas')
-        .select('conductor_id, estado')
+        .select('conductor_id, estado, total_pagar, costo_espera_total')
         .eq('id', rutaId)
         .single();
 
+      if (rutaError || !ruta) {
+        this.logger.error(
+          `No se encontró la ruta para confirmar pago — ruta=${rutaId} transaction_id=${response.buy_order}`,
+        );
+        return {
+          success: false,
+          message: 'No se encontró la ruta asociada al pago',
+          rutaId,
+          status: 'RUTA_NOT_FOUND',
+        };
+      }
+
+      const montoEsperado = this.resolverMontoEsperado(ruta, tipoCobro);
+      const montoRecibido = Math.round(Number(response.amount ?? 0));
+      if (montoEsperado !== montoRecibido) {
+        this.logger.error(
+          `Discrepancia de monto Transbank — ruta=${rutaId} transaction_id=${response.buy_order} monto_esperado=${montoEsperado} monto_recibido=${montoRecibido}`,
+        );
+        return {
+          success: false,
+          message: 'El monto autorizado no coincide con el monto esperado',
+          rutaId,
+          status: 'AMOUNT_MISMATCH',
+        };
+      }
+
+      const fechaPago = new Date().toISOString();
+
+      // Transaccion manual simulada: Actualizar Ruta e Insertar Comprobante
       if (isAtraso) {
         // Pago de deuda de atraso
         const { error: updateError } = await supabase
@@ -260,13 +287,20 @@ export class PagosService {
     }
   }
 
-  private resolverMontoCobro(
+  private resolverMontoEsperado(
     ruta: { total_pagar?: unknown; costo_espera_total?: unknown },
     tipo: 'base' | 'atraso',
   ): number {
     const raw =
       tipo === 'atraso' ? ruta.costo_espera_total : ruta.total_pagar;
-    const monto = Math.round(Number(raw ?? 0));
+    return Math.round(Number(raw ?? 0));
+  }
+
+  private resolverMontoCobro(
+    ruta: { total_pagar?: unknown; costo_espera_total?: unknown },
+    tipo: 'base' | 'atraso',
+  ): number {
+    const monto = this.resolverMontoEsperado(ruta, tipo);
 
     if (!Number.isFinite(monto) || monto <= 0) {
       const campo = tipo === 'atraso' ? 'costo_espera_total' : 'total_pagar';

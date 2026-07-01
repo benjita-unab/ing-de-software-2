@@ -3,7 +3,6 @@ import {
   Injectable,
   InternalServerErrorException,
   NotFoundException,
-  BadRequestException,
 } from '@nestjs/common';
 import { RutasService, CreateRutaDto } from '../rutas/rutas.service';
 import { SupabaseConfigService } from '../../config/supabase.config';
@@ -304,68 +303,6 @@ export class PortalService {
       cliente_id: clienteId,
       estado: 'PENDIENTE',
     });
-  }
-
-  async pagarBase(rutaId: string, clienteId: string) {
-    this.assertClienteId(clienteId);
-    await this.assertPedidoOwned(rutaId, clienteId);
-
-    const supabase = this.supabaseConfig.getClient();
-
-    // Actualizamos el estado a PAGADO. Si la BD es restrictiva, esto fallará
-    // y ajustaremos a un estado válido como ASIGNADO si es necesario.
-    const { error } = await supabase
-      .from('rutas')
-      .update({ estado: 'PAGADO' })
-      .eq('id', rutaId.trim())
-      .eq('cliente_id', clienteId);
-
-    if (error) {
-      // Intentamos con ASIGNADO como fallback si el enum no acepta PAGADO
-      const fallbackError = await supabase
-        .from('rutas')
-        .update({ estado: 'ASIGNADO' })
-        .eq('id', rutaId.trim())
-        .eq('cliente_id', clienteId);
-        
-      if (fallbackError.error) {
-        throw new BadRequestException(`No se pudo actualizar el estado: ${fallbackError.error.message}`);
-      }
-      
-      await supabase.from('historial_estados').insert([
-        { ruta_id: rutaId.trim(), estado: 'PAGADO_CLIENTE' }
-      ]);
-    } else {
-      await supabase.from('historial_estados').insert([
-        { ruta_id: rutaId.trim(), estado: 'PAGADO' }
-      ]);
-    }
-
-    return { ok: true, message: 'Pago base procesado correctamente' };
-  }
-
-  async pagarRetraso(rutaId: string, clienteId: string) {
-    this.assertClienteId(clienteId);
-    await this.assertPedidoOwned(rutaId, clienteId);
-
-    const supabase = this.supabaseConfig.getClient();
-
-    // Simulamos el pago y ponemos el costo de espera en 0 (ya está pagado)
-    const { error } = await supabase
-      .from('rutas')
-      .update({ costo_espera_total: 0 })
-      .eq('id', rutaId.trim())
-      .eq('cliente_id', clienteId);
-
-    if (error) {
-      throw new BadRequestException(`Error al procesar el pago por retraso: ${error.message}`);
-    }
-
-    await supabase.from('historial_estados').insert([
-      { ruta_id: rutaId.trim(), estado: 'RETRASO_PAGADO' }
-    ]);
-
-    return { ok: true, message: 'Pago por retraso procesado correctamente' };
   }
 
   private mapIncidencia(row: Record<string, unknown>): PortalIncidenciaDto {

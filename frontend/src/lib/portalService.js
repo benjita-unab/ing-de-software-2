@@ -24,15 +24,3 @@ export async function createPortalPedido(data) {
     body: JSON.stringify(data),
   });
 }
-
-export async function pagarPortalPedidoBase(pedidoId) {
-  return apiFetch(`/api/portal/pedidos/${encodeURIComponent(pedidoId)}/pagar_base`, {
-    method: "POST"
-  });
-}
-
-export async function pagarPortalPedidoRetraso(pedidoId) {
-  return apiFetch(`/api/portal/pedidos/${encodeURIComponent(pedidoId)}/pagar_retraso`, {
-    method: "POST"
-  });
-}
