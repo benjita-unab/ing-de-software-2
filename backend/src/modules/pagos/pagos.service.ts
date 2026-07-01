@@ -99,7 +99,7 @@ export class PagosService {
 
   async confirmarTransaccion(tokenWs: string) {
     try {
-      const response = await this.tx.commit(tokenWs);
+      const response = await this.obtenerRespuestaTransbank(tokenWs);
 
       if (response.status !== 'AUTHORIZED') {
         this.logger.log(`El pago no fue autorizado. Estado actual: ${response.status}`);
@@ -155,6 +155,18 @@ export class PagosService {
         };
       }
 
+      const transactionId = String(response.buy_order ?? '').trim();
+      if (transactionId) {
+        const comprobanteExistente =
+          await this.buscarComprobantePorTransactionId(supabase, transactionId);
+        if (comprobanteExistente) {
+          this.logger.log(
+            `Callback idempotente — transaction_id=${transactionId} ruta=${comprobanteExistente.ruta_id}`,
+          );
+          return this.respuestaPagoYaProcesado(comprobanteExistente.ruta_id);
+        }
+      }
+
       const fechaPago = new Date().toISOString();
 
       // Transaccion manual simulada: Actualizar Ruta e Insertar Comprobante
@@ -180,6 +192,12 @@ export class PagosService {
           });
 
         if (insertError) {
+          if (this.esViolacionUnique(insertError)) {
+            this.logger.log(
+              `INSERT idempotente — transaction_id=${response.buy_order} ruta=${rutaId}`,
+            );
+            return this.respuestaPagoYaProcesado(rutaId);
+          }
           this.logger.error('Error insertando comprobante_pago', insertError);
           throw new InternalServerErrorException(
             'Pago recibido pero fallo el registro del comprobante',
@@ -225,6 +243,12 @@ export class PagosService {
           });
 
         if (insertError) {
+          if (this.esViolacionUnique(insertError)) {
+            this.logger.log(
+              `INSERT idempotente — transaction_id=${response.buy_order} ruta=${rutaId}`,
+            );
+            return this.respuestaPagoYaProcesado(rutaId);
+          }
           this.logger.error('Error insertando comprobante_pago', insertError);
           throw new InternalServerErrorException('Pago recibido pero fallo el registro del comprobante');
         }
@@ -232,6 +256,12 @@ export class PagosService {
 
       return { success: true, message: 'Pago procesado exitosamente', rutaId };
     } catch (error: any) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof InternalServerErrorException
+      ) {
+        throw error;
+      }
       this.logger.error('Error al procesar commit de Transbank', error.message);
       // Podría ser un token ya procesado o inválido
       throw new InternalServerErrorException('Error al procesar el retorno de Transbank');
@@ -325,5 +355,68 @@ export class PagosService {
     }
 
     return monto;
+  }
+
+  private async obtenerRespuestaTransbank(tokenWs: string): Promise<any> {
+    try {
+      return await this.tx.commit(tokenWs);
+    } catch (commitError: any) {
+      if (typeof this.tx.status === 'function') {
+        try {
+          const statusResponse = await this.tx.status(tokenWs);
+          if (statusResponse?.status === 'AUTHORIZED') {
+            this.logger.log(
+              'commit falló pero status confirma pago autorizado (callback idempotente)',
+            );
+            return statusResponse;
+          }
+        } catch {
+          // Sin respuesta de status; propagar error original del commit.
+        }
+      }
+      throw commitError;
+    }
+  }
+
+  private async buscarComprobantePorTransactionId(
+    supabase: ReturnType<SupabaseConfigService['getClient']>,
+    transactionId: string,
+  ): Promise<{ ruta_id: string } | null> {
+    const { data, error } = await supabase
+      .from('comprobantes_pago')
+      .select('ruta_id')
+      .eq('transaction_id', transactionId)
+      .maybeSingle();
+
+    if (error) {
+      this.logger.warn(
+        `No se pudo verificar idempotencia para transaction_id=${transactionId}: ${error.message}`,
+      );
+      return null;
+    }
+
+    if (!data?.ruta_id) {
+      return null;
+    }
+
+    return { ruta_id: String(data.ruta_id) };
+  }
+
+  private respuestaPagoYaProcesado(rutaId: string): {
+    success: true;
+    message: string;
+    rutaId: string;
+    status: 'ALREADY_PROCESSED';
+  } {
+    return {
+      success: true,
+      message: 'Pago ya procesado anteriormente',
+      rutaId,
+      status: 'ALREADY_PROCESSED',
+    };
+  }
+
+  private esViolacionUnique(error: { code?: string } | null): boolean {
+    return error?.code === '23505';
   }
 }
