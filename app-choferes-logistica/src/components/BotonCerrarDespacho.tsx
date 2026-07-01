@@ -245,8 +245,8 @@ export function BotonCerrarDespacho({
         return;
       }
 
-      const rutaActual = String(rutaId).trim();
-      if (payload.rutaId !== rutaActual) {
+      const rutaActual = String(rutaId).trim().toLowerCase();
+      if (payload.rutaId?.trim().toLowerCase() !== rutaActual) {
         mostrarAlerta(
           "QR no corresponde",
           "Este código no pertenece a esta entrega.",

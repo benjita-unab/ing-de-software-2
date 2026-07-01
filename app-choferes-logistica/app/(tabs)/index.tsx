@@ -72,7 +72,7 @@ export default function HomeScreen() {
     if (!silent) setCargandoRutas(true);
     setErrorRutas(null);
     try {
-      const res = await bffFetch('/api/rutas');
+      const res = await bffFetch('/api/rutas?limit=100');
       const raw = await res.json().catch(() => null);
       
       console.log("RESPUESTA RUTAS:", raw);
@@ -329,29 +329,31 @@ export default function HomeScreen() {
           <Text style={styles.selectorSingleText}>
             Ruta Activa: {rutaActiva ? etiquetaRutaDesdeApi(rutaActiva) : '—'}
           </Text>
-          <TouchableOpacity 
-            style={{ backgroundColor: '#EF4444', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 }}
-            onPress={async () => {
-              if (rutaActivaId) {
-                try {
-                  setTodoSincronizado(false);
-                  const res = await bffFetch(`/api/rutas/${rutaActivaId}/reset`, { method: 'POST' });
-                  if (!res.ok) {
-                    const raw = await res.json().catch(() => ({}));
-                    throw new Error(raw.message || `Error HTTP ${res.status}`);
+          {__DEV__ ? (
+            <TouchableOpacity
+              style={{ backgroundColor: '#EF4444', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 }}
+              onPress={async () => {
+                if (rutaActivaId) {
+                  try {
+                    setTodoSincronizado(false);
+                    const res = await bffFetch(`/api/rutas/${rutaActivaId}/reset`, { method: 'POST' });
+                    if (!res.ok) {
+                      const raw = await res.json().catch(() => ({}));
+                      throw new Error(raw.message || `Error HTTP ${res.status}`);
+                    }
+                    await cargarRutas();
+                    setResetKey(prev => prev + 1);
+                    Alert.alert('Éxito', 'Ruta reseteada correctamente para pruebas.');
+                  } catch (e: any) {
+                    Alert.alert('Error', e.message || 'No se pudo resetear la ruta.');
+                    console.error("Error al resetear la ruta", e);
                   }
-                  await cargarRutas();
-                  setResetKey(prev => prev + 1);
-                  Alert.alert('Éxito', 'Ruta reseteada correctamente para pruebas.');
-                } catch (e: any) {
-                  Alert.alert('Error', e.message || 'No se pudo resetear la ruta.');
-                  console.error("Error al resetear la ruta", e);
                 }
-              }
-            }}
-          >
-            <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>Reset (Dev)</Text>
-          </TouchableOpacity>
+              }}
+            >
+              <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>Reset (Dev)</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
       </View>
 

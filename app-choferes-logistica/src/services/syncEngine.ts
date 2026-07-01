@@ -59,7 +59,7 @@ function logicalEtapaForApi(r: TraceabilityRecord): string {
   const upper = sinTildesUpper(raw);
 
   if (upper === "RECEPCION") return "RECEPCION";
-  if (upper === "ENTREGADO") return "ENTREGADO";
+  if (upper === "ENTREGADO" || upper === "ENTREGA") return "ENTREGADO";
   if (upper === "HOJA_DESPACHO") return "HOJA_DESPACHO";
   if (upper === "EVIDENCIA_ADICIONAL") return "EVIDENCIA_ADICIONAL";
 

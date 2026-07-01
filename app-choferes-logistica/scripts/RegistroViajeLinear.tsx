@@ -25,10 +25,17 @@ export default function RegistroViajeLinear({ onSyncComplete, rutaId, destino, e
   const [llegadaConfirmada, setLlegadaConfirmada] = useState(estadoRuta === 'EN_DESTINO' || estadoRuta === 'FINALIZADO' || !!horaLlegadaDestino);
 
   useEffect(() => {
-    if (llegadaConfirmada) {
-      onSyncComplete(true);
-    }
-  }, [llegadaConfirmada, onSyncComplete]);
+    const evidenciasRequeridasSincronizadas =
+      llegadaConfirmada &&
+      fotosRecepcion.length > 0 &&
+      fotosEntrega.length > 0;
+    onSyncComplete(evidenciasRequeridasSincronizadas);
+  }, [
+    llegadaConfirmada,
+    fotosRecepcion.length,
+    fotosEntrega.length,
+    onSyncComplete,
+  ]);
 
   // Forzar reseteo si la ruta vuelve a estado ASIGNADO desde el backend
   useEffect(() => {
