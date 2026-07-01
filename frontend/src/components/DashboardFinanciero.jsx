@@ -89,7 +89,7 @@ function formatKpiValue(item, data) {
 
 function KpiSkeleton({ label }) {
   return (
-    <div className="lt-kpi-card" style={{ opacity: 0.5 }} aria-hidden="true">
+    <div className="lt-kpi-card lt-kpi-card--skeleton" aria-hidden="true">
       <div className="lt-kpi-card__icon lt-kpi-icon--blue" />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div className="lt-kpi-card__label">{label || "···"}</div>
@@ -101,12 +101,7 @@ function KpiSkeleton({ label }) {
 
 function KpiRow({ items, data, loading }) {
   return (
-    <div
-      className="lt-kpi-strip"
-      style={{
-        gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))`,
-      }}
-    >
+    <div className="lt-kpi-strip lt-kpi-strip--dashboard">
       {items.map((item) =>
         loading ? (
           <KpiSkeleton key={item.key} label={item.label} />
@@ -155,8 +150,22 @@ export default function DashboardFinanciero() {
     <div className="lt-module-inner">
       <div
         className="lt-toolbar"
-        style={{ marginBottom: "var(--lt-space-4)", justifyContent: "flex-end" }}
+        style={{
+          marginBottom: "var(--lt-space-4)",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "var(--lt-space-3)",
+        }}
       >
+        {margenSub && !error ? (
+          <p className="lt-dashboard-period-note">
+            <CircleDollarSign size={14} aria-hidden="true" />
+            {margenSub}
+          </p>
+        ) : (
+          <span />
+        )}
         <button
           type="button"
           className="lt-btn lt-btn--ghost"
@@ -187,58 +196,14 @@ export default function DashboardFinanciero() {
       ) : null}
 
       <section aria-label="Indicadores de ingresos y cartera">
-        <h2
-          className="lt-text-muted"
-          style={{
-            fontSize: "12px",
-            fontWeight: 600,
-            textTransform: "uppercase",
-            letterSpacing: "0.06em",
-            margin: "0 0 var(--lt-space-3)",
-          }}
-        >
-          Ingresos y cartera
-        </h2>
+        <h2 className="lt-section-label">Ingresos y cartera</h2>
         <KpiRow items={ROW_INGRESOS} data={data} loading={loading} />
       </section>
 
       <section aria-label="Estado de pagos" style={{ marginTop: "var(--lt-space-5)" }}>
-        <h2
-          className="lt-text-muted"
-          style={{
-            fontSize: "12px",
-            fontWeight: 600,
-            textTransform: "uppercase",
-            letterSpacing: "0.06em",
-            margin: "0 0 var(--lt-space-3)",
-          }}
-        >
-          Estado de pagos
-        </h2>
+        <h2 className="lt-section-label">Estado de pagos</h2>
         <KpiRow items={ROW_PAGOS} data={data} loading={loading} />
       </section>
-
-      {margenSub && !error ? (
-        <p
-          className="lt-text-muted"
-          style={{ marginTop: "var(--lt-space-4)", fontSize: "13px" }}
-        >
-          <CircleDollarSign
-            size={14}
-            style={{ verticalAlign: "middle", marginRight: 6 }}
-          />
-          {margenSub}
-        </p>
-      ) : null}
-
-      {loading && !data ? (
-        <p
-          className="lt-text-muted"
-          style={{ marginTop: "var(--lt-space-4)", fontSize: "13px", textAlign: "center" }}
-        >
-          Cargando indicadores financieros…
-        </p>
-      ) : null}
     </div>
   );
 }

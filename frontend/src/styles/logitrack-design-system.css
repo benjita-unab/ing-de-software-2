@@ -459,6 +459,46 @@ body {
   }
 }
 
+.lt-kpi-strip--dashboard {
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  margin-bottom: var(--lt-space-4);
+}
+
+.lt-section-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0 0 var(--lt-space-3);
+  color: var(--lt-text-muted);
+}
+
+.lt-dashboard-period-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--lt-text-muted);
+  margin: 0;
+}
+
+.lt-dashboard-rutas-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--lt-space-4);
+  margin-bottom: 0;
+}
+
+@media (max-width: 768px) {
+  .lt-dashboard-rutas-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.lt-kpi-card--skeleton {
+  opacity: 0.5;
+}
+
 .lt-kpi-card {
   background: var(--lt-bg-surface);
   border: 1px solid var(--lt-border);
@@ -1235,6 +1275,7 @@ body {
 .lt-kpi-strip--compact {
   gap: var(--lt-space-2);
   margin-bottom: 0;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
 }
 
 .lt-kpi-strip--compact .lt-kpi-card {

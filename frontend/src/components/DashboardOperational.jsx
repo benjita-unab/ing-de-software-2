@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import mqtt from "mqtt";
 import {
   Truck,
@@ -20,7 +20,6 @@ import PageHeader from "./ui/PageHeader";
 import KpiCard from "./ui/KpiCard";
 import Badge from "./ui/Badge";
 import ProgressBar from "./ui/ProgressBar";
-import Spinner from "./ui/Spinner";
 import Card from "./ui/Card";
 import { apiFetch } from "../lib/apiClient";
 import { getClientes } from "../lib/clientesService";
@@ -168,6 +167,18 @@ function routeStatusLabel(estado) {
   return String(estado).replace(/_/g, " ");
 }
 
+function OperationalKpiSkeleton({ label }) {
+  return (
+    <div className="lt-kpi-card lt-kpi-card--skeleton" aria-hidden="true">
+      <div className="lt-kpi-card__icon lt-kpi-icon--blue" />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="lt-kpi-card__label">{label || "···"}</div>
+        <div className="lt-kpi-card__value">—</div>
+      </div>
+    </div>
+  );
+}
+
 /**
  * Dashboard operacional con mapa en vivo.
  *
@@ -220,28 +231,26 @@ export default function DashboardOperational({
     return () => { cancelled = true; };
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function fetchResumen() {
-      setDashboardLoading(true);
-      setDashboardError(null);
-      try {
-        const result = await apiFetch(buildResumenUrl(filters));
-        if (cancelled) return;
-        if (!result.ok) throw new Error(result.error || result.data?.message || `HTTP ${result.status}`);
-        setDashboardData(result.data ?? null);
-      } catch (err) {
-        if (!cancelled) {
-          setDashboardData(null);
-          setDashboardError(err?.message || "Error al cargar el resumen.");
-        }
-      } finally {
-        if (!cancelled) setDashboardLoading(false);
+  const loadDashboardResumen = useCallback(async () => {
+    setDashboardLoading(true);
+    setDashboardError(null);
+    try {
+      const result = await apiFetch(buildResumenUrl(filters));
+      if (!result.ok) {
+        throw new Error(result.error || result.data?.message || `HTTP ${result.status}`);
       }
+      setDashboardData(result.data ?? null);
+    } catch (err) {
+      setDashboardData(null);
+      setDashboardError(err?.message || "Error al cargar el resumen.");
+    } finally {
+      setDashboardLoading(false);
     }
-    fetchResumen();
-    return () => { cancelled = true; };
   }, [filters]);
+
+  useEffect(() => {
+    loadDashboardResumen();
+  }, [loadDashboardResumen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -685,18 +694,38 @@ export default function DashboardOperational({
         )}
 
         {dashboardError && (
-          <div className="lt-error-banner lt-error-banner--compact" role="alert">{dashboardError}</div>
-        )}
-
-        {!dashboardLoading && dashboardData && (
-          <div className="lt-kpi-strip lt-kpi-strip--compact">
-            {kpiValues.map((kpi) => (
-              <KpiCard key={kpi.key} icon={kpi.icon} label={kpi.label} value={kpi.value}
-                sub={kpi.sub} iconClass={kpi.iconClass} trend={kpi.trend} />
-            ))}
+          <div className="lt-error-banner lt-error-banner--compact" role="alert">
+            <span>{dashboardError}</span>
+            <button
+              type="button"
+              className="lt-btn lt-btn--secondary"
+              style={{ marginLeft: "12px" }}
+              onClick={loadDashboardResumen}
+            >
+              Reintentar
+            </button>
           </div>
         )}
-        {dashboardLoading && <Spinner message="Cargando indicadores..." />}
+
+        <div className="lt-kpi-strip lt-kpi-strip--compact" aria-busy={dashboardLoading}>
+          {dashboardLoading
+            ? KPI_CONFIG.map((kpi) => (
+                <OperationalKpiSkeleton key={kpi.key} label={kpi.label} />
+              ))
+            : dashboardData
+              ? kpiValues.map((kpi) => (
+                  <KpiCard
+                    key={kpi.key}
+                    icon={kpi.icon}
+                    label={kpi.label}
+                    value={kpi.value}
+                    sub={kpi.sub}
+                    iconClass={kpi.iconClass}
+                    trend={kpi.trend}
+                  />
+                ))
+              : null}
+        </div>
       </div>
 
       <div className="lt-dashboard__map-hero">
