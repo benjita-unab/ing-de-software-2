@@ -115,6 +115,7 @@ export class PagosService {
       const supabase = this.supabaseConfig.getClient();
 
       const isAtraso = response.buy_order && response.buy_order.startsWith('LOGI-A-');
+      const fechaPago = new Date().toISOString();
 
       // Transaccion manual simulada: Actualizar Ruta e Insertar Comprobante
       // Verificar si la ruta tiene un conductor asignado (auto-resuelto en la creacion)
@@ -137,6 +138,7 @@ export class PagosService {
         await supabase.from('comprobantes_pago').insert({
           ruta_id: rutaId,
           monto: response.amount,
+          fecha_pago: fechaPago,
           metodo_pago: 'transbank_atraso',
           transaction_id: response.buy_order,
           metadata: response,
@@ -174,6 +176,7 @@ export class PagosService {
           .insert({
             ruta_id: rutaId,
             monto: response.amount,
+            fecha_pago: fechaPago,
             metodo_pago: 'transbank',
             transaction_id: response.buy_order,
             metadata: response,

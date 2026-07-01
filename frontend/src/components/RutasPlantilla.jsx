@@ -9,6 +9,7 @@ import {
   getRutasPlantilla,
 } from "../lib/rutasPlantillaService";
 import { getClientes } from "../lib/clientesService";
+import { puedeAdministrarPlantillas } from "../lib/rolePermissions";
 import FormularioRutaPlantilla from "./FormularioRutaPlantilla";
 import Badge from "./ui/Badge";
 import EmptyState from "./ui/EmptyState";
@@ -28,7 +29,7 @@ function formatTiempo(min) {
   return `${Number(min).toLocaleString("es-CL")} min`;
 }
 
-export default function RutasPlantilla() {
+export default function RutasPlantilla({ operator }) {
   const [rutas, setRutas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -36,8 +37,10 @@ export default function RutasPlantilla() {
   const [filtroActiva, setFiltroActiva] = useState(FILTRO_ACTIVAS);
   const [modoFormulario, setModoFormulario] = useState(false);
   const [editando, setEditando] = useState(null);
+  const [soloLectura, setSoloLectura] = useState(false);
   const [accionId, setAccionId] = useState(null);
   const [clientesMap, setClientesMap] = useState({});
+  const esAdminPlantillas = puedeAdministrarPlantillas(operator?.role);
 
   useEffect(() => {
     async function cargarClientes() {
@@ -85,6 +88,7 @@ export default function RutasPlantilla() {
     }
     setModoFormulario(false);
     setEditando(null);
+    setSoloLectura(false);
     await loadRutas();
   }
 
@@ -123,6 +127,21 @@ export default function RutasPlantilla() {
       return;
     }
     setEditando(res.data);
+    setSoloLectura(false);
+    setModoFormulario(true);
+  }
+
+  async function handleVer(ruta) {
+    setAccionId(ruta.id);
+    setError("");
+    const res = await getRutaPlantillaById(ruta.id);
+    setAccionId(null);
+    if (res.error) {
+      setError(res.error);
+      return;
+    }
+    setEditando(res.data);
+    setSoloLectura(true);
     setModoFormulario(true);
   }
 
@@ -131,10 +150,12 @@ export default function RutasPlantilla() {
       <div className="lt-module-inner">
         <FormularioRutaPlantilla
           plantillaInicial={editando}
+          soloLectura={soloLectura}
           onGuardado={handleGuardado}
           onCancel={() => {
             setModoFormulario(false);
             setEditando(null);
+            setSoloLectura(false);
           }}
         />
       </div>
@@ -176,17 +197,20 @@ export default function RutasPlantilla() {
           <RefreshCw size={16} />
           Actualizar
         </button>
-        <button
-          type="button"
-          className="lt-btn lt-btn--primary"
-          onClick={() => {
-            setEditando(null);
-            setModoFormulario(true);
-          }}
-        >
-          <Plus size={16} />
-          Nueva plantilla
-        </button>
+        {esAdminPlantillas ? (
+          <button
+            type="button"
+            className="lt-btn lt-btn--primary"
+            onClick={() => {
+              setEditando(null);
+              setSoloLectura(false);
+              setModoFormulario(true);
+            }}
+          >
+            <Plus size={16} />
+            Nueva plantilla
+          </button>
+        ) : null}
       </div>
 
       {error ? (
@@ -237,31 +261,43 @@ export default function RutasPlantilla() {
                       </td>
                       <td>
                         <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                          <button
-                            type="button"
-                            className="lt-btn lt-btn--ghost lt-btn--sm"
-                            onClick={() => handleEditar(r)}
-                          >
-                            Editar
-                          </button>
-                          <button
-                            type="button"
-                            className="lt-btn lt-btn--ghost lt-btn--sm"
-                            disabled={accionId === r.id}
-                            onClick={() => handleDuplicar(r.id)}
-                          >
-                            <Copy size={14} /> Duplicar
-                          </button>
-                          {r.activa ? (
+                          {esAdminPlantillas ? (
+                            <>
+                              <button
+                                type="button"
+                                className="lt-btn lt-btn--ghost lt-btn--sm"
+                                onClick={() => handleEditar(r)}
+                              >
+                                Editar
+                              </button>
+                              <button
+                                type="button"
+                                className="lt-btn lt-btn--ghost lt-btn--sm"
+                                disabled={accionId === r.id}
+                                onClick={() => handleDuplicar(r.id)}
+                              >
+                                <Copy size={14} /> Duplicar
+                              </button>
+                              {r.activa ? (
+                                <button
+                                  type="button"
+                                  className="lt-btn lt-btn--ghost lt-btn--sm"
+                                  disabled={accionId === r.id}
+                                  onClick={() => handleDesactivar(r)}
+                                >
+                                  Desactivar
+                                </button>
+                              ) : null}
+                            </>
+                          ) : (
                             <button
                               type="button"
                               className="lt-btn lt-btn--ghost lt-btn--sm"
-                              disabled={accionId === r.id}
-                              onClick={() => handleDesactivar(r)}
+                              onClick={() => handleVer(r)}
                             >
-                              Desactivar
+                              Ver / calcular
                             </button>
-                          ) : null}
+                          )}
                         </div>
                       </td>
                     </tr>

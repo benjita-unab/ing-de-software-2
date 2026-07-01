@@ -18,7 +18,6 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 
 @Controller('api/clientes')
 @UseGuards(JwtGuard, RolesGuard)
-@Roles('ADMIN', 'OPERADOR', 'CONDUCTOR')
 export class ClientesController {
   constructor(private clientesService: ClientesService) {}
 
@@ -27,6 +26,7 @@ export class ClientesController {
    * Crea un nuevo cliente.
    */
   @Post()
+  @Roles('ADMIN')
   async createCliente(@Body() body: CreateClienteDto) {
     return await this.clientesService.createCliente(body);
   }
@@ -36,6 +36,7 @@ export class ClientesController {
    * Lista todos los clientes, opcionalmente filtrados por búsqueda.
    */
   @Get()
+  @Roles('ADMIN', 'OPERADOR')
   async listClientes(@Query('q') query?: string) {
     return await this.clientesService.listClientes(query);
   }
@@ -45,6 +46,7 @@ export class ClientesController {
    * HU-60: plantillas adjudicadas al cliente.
    */
   @Get(':id/rutas-plantilla')
+  @Roles('ADMIN', 'OPERADOR')
   async getRutasPlantillaPorCliente(@Param('id') id: string) {
     return await this.clientesService.getRutasPlantillaPorCliente(id);
   }
@@ -54,6 +56,7 @@ export class ClientesController {
    * Obtiene el historial de despachos de un cliente.
    */
   @Get(':id/despachos')
+  @Roles('ADMIN', 'OPERADOR')
   async getHistorialDespachos(@Param('id') id: string) {
     return await this.clientesService.getHistorialDespachos(id);
   }
@@ -63,6 +66,7 @@ export class ClientesController {
    * Obtiene el detalle de un cliente.
    */
   @Get(':id')
+  @Roles('ADMIN', 'OPERADOR')
   async getCliente(@Param('id') id: string) {
     return await this.clientesService.getCliente(id);
   }
@@ -72,6 +76,7 @@ export class ClientesController {
    * Edita un cliente existente.
    */
   @Put(':id')
+  @Roles('ADMIN', 'OPERADOR')
   async updateCliente(@Param('id') id: string, @Body() body: CreateClienteDto) {
     return await this.clientesService.updateCliente(id, body);
   }

@@ -17,10 +17,13 @@ import {
   PagoConductoresService,
   PeriodoPago,
 } from './pago-conductores.service';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtGuard } from '../../common/guards/jwt.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
 import { CurrentUser } from '../../common/decorators/user.decorator';
 
 @Controller('api/conductores')
+@UseGuards(JwtGuard, RolesGuard)
 export class ConductoresController {
   constructor(
     private conductoresService: ConductoresService,
@@ -32,7 +35,7 @@ export class ConductoresController {
    * Sube la licencia de un conductor
    */
   @Post('upload-license')
-  @UseGuards(JwtGuard)
+  @Roles('ADMIN', 'OPERADOR', 'CONDUCTOR')
   @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
   async uploadLicense(
     @CurrentUser('id') userId: string,
@@ -60,7 +63,7 @@ export class ConductoresController {
    * Asigna un camión a un conductor (1 a 1)
    */
   @Post('asignar-camion')
-  @UseGuards(JwtGuard)
+  @Roles('ADMIN', 'OPERADOR')
   async asignarCamion(
     @Body() body: { conductorId: string; camionId: string },
   ) {
@@ -75,7 +78,7 @@ export class ConductoresController {
    * Libera el camión de un conductor
    */
   @Post('liberar-camion')
-  @UseGuards(JwtGuard)
+  @Roles('ADMIN', 'OPERADOR')
   async liberarCamion(@Body() body: { conductorId: string }) {
     return await this.conductoresService.liberarCamion(body.conductorId);
   }
@@ -85,7 +88,7 @@ export class ConductoresController {
    * HU-37 CA-08: comparativa de rendimiento entre conductores activos.
    */
   @Get('metricas-pago/comparativa')
-  @UseGuards(JwtGuard)
+  @Roles('ADMIN', 'OPERADOR')
   async getComparativaMetricasPago(
     @Query('periodo') periodo?: string,
     @Query('fechaInicio') fechaInicio?: string,
@@ -103,7 +106,7 @@ export class ConductoresController {
    * HU-37: métricas operacionales y cálculo de pago por período.
    */
   @Get(':id/metricas-pago')
-  @UseGuards(JwtGuard)
+  @Roles('ADMIN', 'OPERADOR')
   async getMetricasPagoConductor(
     @Param('id') conductorId: string,
     @Query('periodo') periodo?: string,
@@ -123,7 +126,7 @@ export class ConductoresController {
    * Endpoint optimizado para la App Móvil
    */
   @Get('mi-flota/asignacion')
-  @UseGuards(JwtGuard)
+  @Roles('CONDUCTOR')
   async getMiFlotaAsignacion(@CurrentUser('id') userId: string) {
     return await this.conductoresService.getMiFlotaAsignacion(userId);
   }
@@ -133,7 +136,7 @@ export class ConductoresController {
    * Obtiene el estado de la licencia de un conductor
    */
   @Get(':id/license-status')
-  @UseGuards(JwtGuard)
+  @Roles('ADMIN', 'OPERADOR', 'CONDUCTOR')
   async getLicenseStatus(@Param('id') conductorId: string) {
     return await this.conductoresService.validateDriverLicense(conductorId);
   }
@@ -143,7 +146,7 @@ export class ConductoresController {
    * Obtiene información detallada de un conductor
    */
   @Get(':id')
-  @UseGuards(JwtGuard)
+  @Roles('ADMIN', 'OPERADOR', 'CONDUCTOR')
   async getDriverInfo(@Param('id') conductorId: string) {
     return await this.conductoresService.getDriverInfo(conductorId);
   }
@@ -153,7 +156,7 @@ export class ConductoresController {
    * Lista todos los conductores activos
    */
   @Get()
-  @UseGuards(JwtGuard)
+  @Roles('ADMIN', 'OPERADOR', 'CONDUCTOR')
   async listActiveDrivers(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
@@ -170,13 +173,12 @@ export class ConductoresController {
     });
   }
 
-
   /**
    * POST /api/conductores/:id/licencias/:licenseId/approve
    * Aprobar o rechazar la licencia de un conductor
    */
   @Post(':id/licencias/:licenseId/status')
-  @UseGuards(JwtGuard)
+  @Roles('ADMIN', 'OPERADOR')
   async updateLicenseStatus(
     @Param('id') conductorId: string,
     @Param('licenseId') licenseId: string,
@@ -193,7 +195,7 @@ export class ConductoresController {
    * Crea un nuevo conductor (y su usuario de auth)
    */
   @Post()
-  @UseGuards(JwtGuard)
+  @Roles('ADMIN', 'OPERADOR')
   async createConductor(@Body() body: any) {
     return await this.conductoresService.createConductor(body);
   }

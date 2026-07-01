@@ -18,20 +18,20 @@ export class ConfiguracionPagosController {
 
   /**
    * GET /api/configuracion-pagos
-   * Lectura de tarifas vigentes (operador / admin).
+   * Lectura de tarifas vigentes (solo administrador).
    */
   @Get()
-  @Roles('OPERADOR', 'ADMIN')
+  @Roles('ADMIN')
   async getConfiguracion() {
     return await this.configuracionPagosService.getConfiguracion();
   }
 
   /**
    * PUT /api/configuracion-pagos
-   * Actualiza las 4 tarifas unitarias (solo operador / admin).
+   * Actualiza las 4 tarifas unitarias (solo administrador).
    */
   @Put()
-  @Roles('OPERADOR', 'ADMIN')
+  @Roles('ADMIN')
   async updateConfiguracion(
     @CurrentUser() user: AuthenticatedUser,
     @Body() body: UpdateConfiguracionPagosDto,

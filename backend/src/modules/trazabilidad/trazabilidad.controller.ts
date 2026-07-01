@@ -3,14 +3,20 @@ import {
   Body,
   Controller,
   Post,
+  UseGuards,
 } from '@nestjs/common';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { JwtGuard } from '../../common/guards/jwt.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
 import { TrazabilidadService } from './trazabilidad.service';
 
 @Controller('api/trazabilidad')
+@UseGuards(JwtGuard, RolesGuard)
 export class TrazabilidadController {
   constructor(private readonly trazabilidadService: TrazabilidadService) {}
 
   @Post()
+  @Roles('CONDUCTOR')
   async createEvent(
     @Body()
     body: {

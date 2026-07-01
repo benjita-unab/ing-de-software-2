@@ -1,13 +1,5 @@
 import { apiFetch } from "./apiClient";
-
-/**
- * Indica si el usuario puede gestionar tarifas de pago (HU-37).
- * @param {string} [role]
- */
-export function puedeConfigurarPagos(role) {
-  const r = String(role || "").toUpperCase();
-  return r === "OPERADOR" || r === "ADMIN";
-}
+export { puedeConfigurarPagos } from "./rolePermissions";
 
 /**
  * @returns {Promise<{data: object|null, error?: string}>}

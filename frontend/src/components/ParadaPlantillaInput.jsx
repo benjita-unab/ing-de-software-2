@@ -17,6 +17,7 @@ export default function ParadaPlantillaInput({
   onChange,
   onPlaceSelected,
   onRemove,
+  soloLectura = false,
 }) {
   const inputRef = useRef(null);
 
@@ -39,6 +40,7 @@ export default function ParadaPlantillaInput({
         aria-label={`Orden parada ${index + 1}`}
         value={parada.orden}
         onChange={(e) => onChange(index, "orden", e.target.value)}
+        readOnly={soloLectura}
       />
       <input
         ref={inputRef}
@@ -47,15 +49,18 @@ export default function ParadaPlantillaInput({
         value={parada.direccion}
         onChange={(e) => onChange(index, "direccion", e.target.value)}
         autoComplete="off"
+        readOnly={soloLectura}
       />
-      <button
-        type="button"
-        className="lt-btn lt-btn--ghost lt-btn--sm"
-        onClick={() => onRemove(index)}
-        aria-label="Eliminar parada"
-      >
-        <Trash2 size={14} />
-      </button>
+      {onRemove ? (
+        <button
+          type="button"
+          className="lt-btn lt-btn--ghost lt-btn--sm"
+          onClick={() => onRemove(index)}
+          aria-label="Eliminar parada"
+        >
+          <Trash2 size={14} />
+        </button>
+      ) : null}
     </div>
   );
 }

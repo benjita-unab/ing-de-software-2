@@ -1,7 +1,11 @@
 // src/components/OperatorDashboard.jsx
 // Layout principal del Operador — shell operacional con sidebar + dashboard
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import {
+  puedeVerDashboardFinanciero,
+  puedeVerDashboardRentabilidad,
+} from "../lib/rolePermissions";
 import ChatOperador from "./ChatOperador";
 import Sidebar from "./Sidebar";
 import DashboardOperational from "./DashboardOperational";
@@ -41,6 +45,18 @@ export default function OperatorDashboard({ operator, onSignOut }) {
   const [activeSection, setActiveSection] = useState("dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [pagosView, setPagosView] = useState("gestion");
+
+  const mostrarFinanciero = puedeVerDashboardFinanciero(operator?.role);
+  const mostrarRentabilidad = puedeVerDashboardRentabilidad(operator?.role);
+
+  useEffect(() => {
+    if (!mostrarFinanciero && pagosView === "financiero") {
+      setPagosView("gestion");
+    }
+    if (!mostrarRentabilidad && pagosView === "rentabilidad") {
+      setPagosView("gestion");
+    }
+  }, [mostrarFinanciero, mostrarRentabilidad, pagosView]);
 
   const pagosPageMeta =
     pagosView === "financiero"
@@ -126,7 +142,7 @@ export default function OperatorDashboard({ operator, onSignOut }) {
                   title="Rutas plantilla"
                   subtitle="Plantillas reutilizables para originar pedidos (HU-57)"
                 >
-                  <RutasPlantilla />
+                  <RutasPlantilla operator={operator} />
                 </ModulePage>
               )}
               {activeSection === "rutas" && (
@@ -138,7 +154,7 @@ export default function OperatorDashboard({ operator, onSignOut }) {
   {
     activeSection === "clientes" && (
       <ModulePage title="Clientes" subtitle="Directorio de clientes y historial de despachos">
-        <Clientes />
+        <Clientes operator={operator} />
       </ModulePage>
     )
   }
@@ -156,20 +172,24 @@ export default function OperatorDashboard({ operator, onSignOut }) {
             >
               Gestión de cobros
             </button>
-            <button
-              type="button"
-              className={`lt-btn--filter ${pagosView === "financiero" ? "lt-btn--filter-active" : ""}`}
-              onClick={() => setPagosView("financiero")}
-            >
-              Resumen financiero
-            </button>
-            <button
-              type="button"
-              className={`lt-btn--filter ${pagosView === "rentabilidad" ? "lt-btn--filter-active" : ""}`}
-              onClick={() => setPagosView("rentabilidad")}
-            >
-              Resumen rentabilidad
-            </button>
+            {mostrarFinanciero ? (
+              <button
+                type="button"
+                className={`lt-btn--filter ${pagosView === "financiero" ? "lt-btn--filter-active" : ""}`}
+                onClick={() => setPagosView("financiero")}
+              >
+                Resumen financiero
+              </button>
+            ) : null}
+            {mostrarRentabilidad ? (
+              <button
+                type="button"
+                className={`lt-btn--filter ${pagosView === "rentabilidad" ? "lt-btn--filter-active" : ""}`}
+                onClick={() => setPagosView("rentabilidad")}
+              >
+                Resumen rentabilidad
+              </button>
+            ) : null}
           </div>
         }
       >

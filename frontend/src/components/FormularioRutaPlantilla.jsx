@@ -47,6 +47,7 @@ function formatTiempoDisplay(value) {
 
 export default function FormularioRutaPlantilla({
   plantillaInicial = null,
+  soloLectura = false,
   onGuardado,
   onCancel,
 }) {
@@ -281,6 +282,7 @@ export default function FormularioRutaPlantilla({
 
   async function handleSubmit(e) {
     e.preventDefault();
+    if (soloLectura) return;
     setError("");
 
     if (!form.nombre.trim() || !form.origen.trim() || !form.destino.trim()) {
@@ -309,7 +311,11 @@ export default function FormularioRutaPlantilla({
   return (
     <Card className="lt-module-card">
       <h3 className="lt-module-card__title">
-        {plantillaInicial ? "Editar ruta plantilla" : "Nueva ruta plantilla"}
+        {soloLectura
+          ? "Consultar ruta plantilla"
+          : plantillaInicial
+            ? "Editar ruta plantilla"
+            : "Nueva ruta plantilla"}
       </h3>
 
       {error ? (
@@ -338,6 +344,7 @@ export default function FormularioRutaPlantilla({
               onChange={(e) => updateField("nombre", e.target.value)}
               maxLength={150}
               required
+              readOnly={soloLectura}
             />
           </div>
 
@@ -350,7 +357,7 @@ export default function FormularioRutaPlantilla({
               className="lt-input"
               value={form.clienteId}
               onChange={(e) => updateField("clienteId", e.target.value)}
-              disabled={cargandoClientes}
+              disabled={cargandoClientes || soloLectura}
             >
               <option value="">Sin cliente (plantilla global)</option>
               {clientes.map((c) => (
@@ -447,6 +454,7 @@ export default function FormularioRutaPlantilla({
               type="checkbox"
               checked={form.activa}
               onChange={(e) => updateField("activa", e.target.checked)}
+              disabled={soloLectura}
             />
             <label className="lt-label" htmlFor="rp-activa">
               Activa
@@ -470,13 +478,15 @@ export default function FormularioRutaPlantilla({
         <div className="lt-form-subsection">
           <div className="lt-form-subsection__header">
             <h4 className="lt-form-subsection__title">Paradas intermedias</h4>
-            <button
-              type="button"
-              className="lt-btn lt-btn--ghost lt-btn--sm"
-              onClick={agregarParada}
-            >
-              <Plus size={14} /> Agregar parada
-            </button>
+            {!soloLectura ? (
+              <button
+                type="button"
+                className="lt-btn lt-btn--ghost lt-btn--sm"
+                onClick={agregarParada}
+              >
+                <Plus size={14} /> Agregar parada
+              </button>
+            ) : null}
           </div>
 
           {form.paradas.length === 0 ? (
@@ -489,22 +499,25 @@ export default function FormularioRutaPlantilla({
                 parada={p}
                 onChange={actualizarParada}
                 onPlaceSelected={actualizarParadaDesdePlaces}
-                onRemove={eliminarParada}
+                onRemove={soloLectura ? undefined : eliminarParada}
+                soloLectura={soloLectura}
               />
             ))
           )}
         </div>
 
         <div className="lt-form-actions">
-          <button
-            type="submit"
-            className="lt-btn lt-btn--primary"
-            disabled={saving || calculandoRuta}
-          >
-            {saving ? "Guardando…" : "Guardar"}
-          </button>
+          {!soloLectura ? (
+            <button
+              type="submit"
+              className="lt-btn lt-btn--primary"
+              disabled={saving || calculandoRuta}
+            >
+              {saving ? "Guardando…" : "Guardar"}
+            </button>
+          ) : null}
           <button type="button" className="lt-btn lt-btn--ghost" onClick={onCancel}>
-            Cancelar
+            {soloLectura ? "Volver" : "Cancelar"}
           </button>
         </div>
       </form>

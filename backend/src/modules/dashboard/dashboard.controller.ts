@@ -52,6 +52,7 @@ export class DashboardController {
    * Query opcionales: clienteId, desde (YYYY-MM-DD), hasta (YYYY-MM-DD).
    */
   @Get('financiero/resumen')
+  @Roles('ADMIN')
   async getFinancieroResumen(
     @Query('clienteId') clienteId?: string,
     @Query('desde') desde?: string,
@@ -70,6 +71,7 @@ export class DashboardController {
    * Query opcionales: clienteId, desde (YYYY-MM-DD), hasta (YYYY-MM-DD).
    */
   @Get('rentabilidad/resumen')
+  @Roles('ADMIN')
   async getRentabilidadResumen(
     @Query('clienteId') clienteId?: string,
     @Query('desde') desde?: string,

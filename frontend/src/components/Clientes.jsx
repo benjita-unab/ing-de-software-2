@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Search, User, Mail, Phone, MapPin, Pencil, Building2 } from "lucide-react";
 import { getClientes, getHistorialDespachos } from "../lib/clientesService";
+import { puedeCrearCliente } from "../lib/rolePermissions";
 import FormularioCliente from "./FormularioCliente";
 import Badge from "./ui/Badge";
 import Card from "./ui/Card";
@@ -15,7 +16,7 @@ function historialBadgeVariant(estado) {
   return "muted";
 }
 
-export default function Clientes() {
+export default function Clientes({ operator }) {
   const [clientes, setClientes] = useState([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -100,6 +101,7 @@ export default function Clientes() {
   }
 
   const historial = selectedId ? historialData[selectedId] : null;
+  const puedeCrear = puedeCrearCliente(operator?.role);
 
   return (
     <div className="lt-module-inner">
@@ -114,9 +116,11 @@ export default function Clientes() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <button type="button" className="lt-btn lt-btn--primary" onClick={handleNuevoCliente}>
-          + Nuevo cliente
-        </button>
+        {puedeCrear ? (
+          <button type="button" className="lt-btn lt-btn--primary" onClick={handleNuevoCliente}>
+            + Nuevo cliente
+          </button>
+        ) : null}
       </div>
 
       {loading ? (
