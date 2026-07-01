@@ -18,39 +18,41 @@ function formatFecha(value) {
 const styles = {
   card: {
     padding: "16px",
-    borderRadius: "12px",
-    border: "1px solid rgba(255,255,255,0.12)",
-    background: "rgba(15,23,42,0.85)",
+    borderRadius: "var(--lt-radius-lg)",
+    border: "1px solid var(--lt-border)",
+    background: "var(--lt-bg-surface)",
     marginBottom: "12px",
+    boxShadow: "var(--lt-shadow-sm)",
   },
   badge: (estado) => ({
     display: "inline-block",
     padding: "4px 10px",
-    borderRadius: "999px",
+    borderRadius: "var(--lt-radius-full)",
     fontSize: "12px",
     fontWeight: 600,
     background:
       estado === "activa"
-        ? "rgba(34,197,94,0.2)"
+        ? "var(--lt-success-bg)"
         : estado === "pausada"
-          ? "rgba(234,179,8,0.2)"
-          : "rgba(248,113,113,0.2)",
+          ? "var(--lt-warning-bg)"
+          : "var(--lt-danger-bg)",
     color:
       estado === "activa"
-        ? "#86efac"
+        ? "var(--lt-success-text)"
         : estado === "pausada"
-          ? "#fde047"
-          : "#fca5a5",
+          ? "var(--lt-warning-text)"
+          : "var(--lt-danger-text)",
   }),
   btn: {
     padding: "8px 12px",
-    borderRadius: "8px",
-    border: "1px solid rgba(255,255,255,0.2)",
-    background: "transparent",
-    color: "#fff",
+    borderRadius: "var(--lt-radius-md)",
+    border: "1px solid var(--lt-border-strong)",
+    background: "var(--lt-bg-surface)",
+    color: "var(--lt-text-primary)",
     cursor: "pointer",
     fontSize: "13px",
     marginRight: "8px",
+    fontFamily: "inherit",
   },
 };
 
@@ -118,21 +120,21 @@ export default function PortalRecurrencias() {
       <div style={{ marginBottom: 16 }}>
         <p style={{ margin: 0, opacity: 0.8, fontSize: 14 }}>
           Administra pedidos recurrentes y consulta las próximas fechas programadas.
-          Para crear una nueva recurrencia, usa &quot;Repetir pedido&quot; en el detalle de un pedido.
+          Para crear una nueva recurrencia, use &quot;Usar pedido anterior&quot; en el detalle de un pedido.
         </p>
       </div>
 
       {error ? (
-        <p style={{ color: "#f87171", marginBottom: 16 }} role="alert">
+        <div className="lt-alert-banner lt-alert-banner--error" style={{ marginBottom: 16 }} role="alert">
           {error}
-        </p>
+        </div>
       ) : null}
 
       {loading ? (
-        <p style={{ opacity: 0.7 }}>Cargando recurrencias…</p>
+        <p className="lt-text-muted">Cargando recurrencias…</p>
       ) : recurrencias.length === 0 ? (
         <div style={styles.card}>
-          <p style={{ margin: 0, opacity: 0.75 }}>
+          <p className="lt-text-muted" style={{ margin: 0 }}>
             No tienes recurrencias configuradas. Puedes crear una desde un pedido existente
             o solicitar al operador que configure una plantilla recurrente.
           </p>
@@ -147,7 +149,7 @@ export default function PortalRecurrencias() {
                     r.configuracionLogistica?.nombre_ruta ||
                     `${r.configuracionLogistica?.origen || "—"} → ${r.configuracionLogistica?.destino || "—"}`}
                 </strong>
-                <div style={{ marginTop: 6, fontSize: 13, opacity: 0.8 }}>
+                <div className="lt-text-muted" style={{ marginTop: 6, fontSize: 13 }}>
                   {labelFrecuencia(r)} · Próxima: {formatFecha(r.proximaEjecucion)}
                 </div>
               </div>

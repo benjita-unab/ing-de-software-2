@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Upload, UserCircle } from "lucide-react";
+import { Upload } from "lucide-react";
 import { getAuthToken, getApiBaseUrl } from "../lib/apiClient";
 import { obtenerConductoresActivos } from "../lib/rutasService";
 import Card from "./ui/Card";
@@ -55,7 +55,7 @@ export default function MonitoreoLicencias() {
     setErrorText("");
 
     if (!driverId) {
-      setErrorText("Selecciona un chofer antes de continuar.");
+      setErrorText("Seleccione un conductor.");
       return;
     }
     if (!file) {
@@ -91,9 +91,7 @@ export default function MonitoreoLicencias() {
       }
 
       await response.json().catch(() => null);
-      setSuccessText(
-        "Licencia cargada correctamente. La vigencia quedó sincronizada en el panel de asignación.",
-      );
+      setSuccessText("Licencia cargada.");
       resetForm();
     } catch (err) {
       console.error("MonitoreoLicencias error:", err);
@@ -105,81 +103,88 @@ export default function MonitoreoLicencias() {
 
   return (
     <div className="lt-module-inner">
-      <Card className="lt-module-card" style={{ maxWidth: 680, margin: "0 auto", width: "100%" }}>
-        <div className="lt-module-card__title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <UserCircle size={18} color="var(--lt-accent)" />
-          Monitoreo de licencias
-        </div>
-        <p className="lt-module-card__subtitle">
-          Sube y actualiza la documentación de licencias de conductores activos.
-        </p>
+      <Card className="lt-module-card lt-module-card--narrow">
+        <div className="lt-card__body">
+          <h3 className="lt-module-card__title">Carga de licencia</h3>
+          <p className="lt-module-card__subtitle">
+            Asocie el documento y la fecha de vencimiento al conductor correspondiente.
+          </p>
 
-        {errorText && <div className="lt-alert-banner lt-alert-banner--error">{errorText}</div>}
-        {successText && <div className="lt-alert-banner lt-alert-banner--success">{successText}</div>}
-
-        <form onSubmit={handleSubmit}>
-          <div className="lt-field-group">
-            <label htmlFor="driverSelect" className="lt-label">Selector de chofer</label>
-            <select
-              id="driverSelect"
-              className="lt-select"
-              value={driverId}
-              onChange={(e) => setDriverId(e.target.value)}
-              disabled={isLoading || loadingConductores}
-            >
-              <option value="">
-                {loadingConductores ? "Cargando conductores..." : "-- Selecciona un chofer --"}
-              </option>
-              {conductores.map((conductor) => (
-                <option key={conductor.id} value={conductor.id}>
-                  {formatConductorLabel(conductor)}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {!loadingConductores && conductores.length === 0 && (
-            <div className="lt-alert-banner lt-alert-banner--warning">
-              No hay conductores activos en el sistema.
+          {errorText ? (
+            <div className="lt-alert-banner lt-alert-banner--error" role="alert">
+              {errorText}
             </div>
+          ) : null}
+          {successText ? (
+            <div className="lt-alert-banner lt-alert-banner--success" role="status">
+              {successText}
+            </div>
+          ) : null}
+
+          {loadingConductores ? (
+            <Spinner message="Cargando conductores..." />
+          ) : (
+            <form onSubmit={handleSubmit}>
+              <div className="lt-field-group">
+                <label htmlFor="driverSelect" className="lt-label">Conductor</label>
+                <select
+                  id="driverSelect"
+                  className="lt-select"
+                  value={driverId}
+                  onChange={(e) => setDriverId(e.target.value)}
+                  disabled={isLoading}
+                >
+                  <option value="">Seleccione...</option>
+                  {conductores.map((conductor) => (
+                    <option key={conductor.id} value={conductor.id}>
+                      {formatConductorLabel(conductor)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {conductores.length === 0 && (
+                <div className="lt-alert-banner lt-alert-banner--warning">
+                  No hay conductores activos en el sistema.
+                </div>
+              )}
+
+              <div className="lt-field-group">
+                <label htmlFor="licenseFile" className="lt-label">Carga de documento</label>
+                <input
+                  ref={fileInputRef}
+                  id="licenseFile"
+                  type="file"
+                  accept="image/*,application/pdf"
+                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                  className="lt-input"
+                  disabled={isLoading}
+                />
+              </div>
+
+              <div className="lt-field-group">
+                <label htmlFor="expiryDate" className="lt-label">Fecha de vencimiento</label>
+                <input
+                  id="expiryDate"
+                  type="date"
+                  className="lt-input"
+                  value={expiryDate}
+                  onChange={(e) => setExpiryDate(e.target.value)}
+                  disabled={isLoading}
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="lt-btn lt-btn--primary lt-btn--full"
+                disabled={isLoading || conductores.length === 0}
+              >
+                <Upload size={14} />
+                {isLoading ? "Subiendo..." : "Subir licencia"}
+              </button>
+            </form>
           )}
-
-          <div className="lt-field-group">
-            <label htmlFor="licenseFile" className="lt-label">Carga de documento</label>
-            <input
-              ref={fileInputRef}
-              id="licenseFile"
-              type="file"
-              accept="image/*,application/pdf"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              className="lt-input"
-              disabled={isLoading}
-            />
-          </div>
-
-          <div className="lt-field-group">
-            <label htmlFor="expiryDate" className="lt-label">Fecha de vencimiento</label>
-            <input
-              id="expiryDate"
-              type="date"
-              className="lt-input"
-              value={expiryDate}
-              onChange={(e) => setExpiryDate(e.target.value)}
-              disabled={isLoading}
-            />
-          </div>
-
-          <button
-            type="submit"
-            className="lt-btn lt-btn--primary lt-btn--full"
-            disabled={isLoading}
-          >
-            <Upload size={14} />
-            {isLoading ? "Subiendo..." : "Subir licencia"}
-          </button>
-        </form>
-
-        {loadingConductores && <Spinner message="Cargando conductores..." />}
+        </div>
       </Card>
     </div>
   );

@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Info, X, Upload } from "lucide-react";
+import { X, Upload } from "lucide-react";
 import { getAuthToken, getApiBaseUrl } from "../lib/apiClient";
-import { EDICION_CONDUCTOR_INFO } from "../lib/conductorUtils";
 import Spinner from "./ui/Spinner";
 
 const API_BASE_URL = getApiBaseUrl();
@@ -135,46 +134,6 @@ export default function FormularioConductor({
 
         <form onSubmit={handleSubmit}>
           <div className="lt-modal-body">
-            <div
-              className="lt-card"
-              style={{
-                padding: "12px 14px",
-                marginBottom: 16,
-                background: "var(--lt-bg-subtle)",
-                border: "1px solid var(--lt-border)",
-              }}
-              role="note"
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  marginBottom: 8,
-                  fontWeight: 600,
-                  fontSize: 13,
-                }}
-              >
-                <Info size={16} aria-hidden />
-                {EDICION_CONDUCTOR_INFO.titulo}
-              </div>
-              <p className="lt-module-card__subtitle" style={{ marginBottom: 10 }}>
-                {EDICION_CONDUCTOR_INFO.nota}
-              </p>
-              <p className="lt-label" style={{ marginBottom: 4 }}>Puedes editar</p>
-              <ul style={{ margin: "0 0 10px 1.1rem", fontSize: 13, padding: 0 }}>
-                {EDICION_CONDUCTOR_INFO.editable.map((item) => (
-                  <li key={item} style={{ marginBottom: 4 }}>{item}</li>
-                ))}
-              </ul>
-              <p className="lt-label" style={{ marginBottom: 4 }}>Solo lectura (depende del backend)</p>
-              <ul style={{ margin: 0, fontSize: 13, padding: "0 0 0 1.1rem" }}>
-                {EDICION_CONDUCTOR_INFO.soloLectura.map((item) => (
-                  <li key={item} style={{ marginBottom: 4 }}>{item}</li>
-                ))}
-              </ul>
-            </div>
-
             {error && (
               <div className="lt-alert-banner lt-alert-banner--error" role="alert">
                 {error}
@@ -240,15 +199,10 @@ export default function FormularioConductor({
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                 disabled={loading}
               />
-              {documentoExistenteUrl && !file && (
-                <p className="lt-module-card__subtitle" style={{ marginTop: 6 }}>
-                  Si solo cambias la fecha, se reutilizará el documento ya cargado.
-                </p>
-              )}
             </div>
           </div>
 
-          <div className="lt-form-actions" style={{ padding: "0 20px 20px" }}>
+          <div className="lt-modal-footer">
             <button
               type="button"
               className="lt-btn lt-btn--secondary"

@@ -5,8 +5,11 @@ import {
   restablecerPassword,
   solicitarRecuperacionPassword,
 } from "../lib/clientesService";
+import { useTheme } from "../hooks/useTheme";
+import ThemeToggle from "./ui/ThemeToggle";
 
 export default function LoginPage({ onLogin, resetToken = null }) {
+  const { isDark, toggleTheme } = useTheme();
   const demo = getDemoCredentials();
   const [email, setEmail] = useState(demo.email || "");
   const [password, setPassword] = useState(demo.password || "");
@@ -98,8 +101,8 @@ export default function LoginPage({ onLogin, resetToken = null }) {
         }
         .login-input:focus {
           outline: none;
-          border-color: #1565c0 !important;
-          box-shadow: 0 0 0 3px #1565c022;
+          border-color: var(--lt-accent) !important;
+          box-shadow: 0 0 0 3px var(--lt-accent-muted);
         }
         .login-btn:hover:not(:disabled) {
           filter: brightness(1.15);
@@ -112,6 +115,14 @@ export default function LoginPage({ onLogin, resetToken = null }) {
 
       <div style={styles.bg} />
 
+      <div style={styles.themeBar}>
+        <ThemeToggle
+          isDark={isDark}
+          onToggle={toggleTheme}
+          className="lt-btn lt-btn--secondary"
+        />
+      </div>
+
       <div style={styles.card}>
         <div style={{ textAlign: "center", marginBottom: "28px" }}>
           <div style={styles.logoIcon}>🚚</div>
@@ -121,7 +132,7 @@ export default function LoginPage({ onLogin, resetToken = null }) {
 
         {modoReset && (
           <form onSubmit={handleResetPassword}>
-            <p style={{ ...styles.helperText, marginBottom: 16, color: "#94a3b8" }}>
+            <p style={{ ...styles.helperText, marginBottom: 16 }}>
               Ingrese su nueva contraseña para el portal cliente.
             </p>
             <div style={styles.field}>
@@ -166,7 +177,7 @@ export default function LoginPage({ onLogin, resetToken = null }) {
 
         {!modoReset && modoRecuperacion && (
           <form onSubmit={handleForgotPassword}>
-            <p style={{ ...styles.helperText, marginBottom: 16, color: "#94a3b8" }}>
+            <p style={{ ...styles.helperText, marginBottom: 16 }}>
               Ingrese el correo de su cuenta portal. Le enviaremos un enlace de recuperación.
             </p>
             <div style={styles.field}>
@@ -195,9 +206,13 @@ export default function LoginPage({ onLogin, resetToken = null }) {
             </button>
             <button
               type="button"
-              className="login-btn"
-              onClick={() => setModoRecuperacion(false)}
-              style={{ ...styles.button, background: "transparent", border: "1px solid #1e2a3a", marginTop: 8 }}
+              className="lt-btn lt-btn--secondary login-btn"
+              onClick={() => {
+                setModoRecuperacion(false);
+                setError("");
+                setInfo("");
+              }}
+              style={styles.secondaryButton}
             >
               Volver al login
             </button>
@@ -244,7 +259,7 @@ export default function LoginPage({ onLogin, resetToken = null }) {
               style={{
                 background: "none",
                 border: "none",
-                color: "#60a5fa",
+                color: "var(--lt-accent)",
                 fontSize: 12,
                 cursor: "pointer",
                 marginBottom: 12,
@@ -291,11 +306,11 @@ export default function LoginPage({ onLogin, resetToken = null }) {
 const styles = {
   wrapper: {
     minHeight: "100vh",
-    background: "#0a0e1a",
+    background: "var(--lt-bg-page)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontFamily: "'Syne', sans-serif",
+    fontFamily: "var(--lt-font)",
     padding: "20px",
     position: "relative",
     overflow: "hidden",
@@ -304,20 +319,26 @@ const styles = {
     position: "absolute",
     inset: 0,
     background:
-      "radial-gradient(ellipse 60% 50% at 50% 0%, #1565c018 0%, transparent 70%)," +
-      "radial-gradient(ellipse 40% 40% at 80% 80%, #0d47a112 0%, transparent 60%)",
+      "radial-gradient(ellipse 60% 50% at 50% 0%, var(--lt-accent-muted) 0%, transparent 70%)," +
+      "radial-gradient(ellipse 40% 40% at 80% 80%, var(--lt-info-bg) 0%, transparent 60%)",
     pointerEvents: "none",
+  },
+  themeBar: {
+    position: "absolute",
+    top: 16,
+    right: 16,
+    zIndex: 2,
   },
   card: {
     position: "relative",
-    background: "#0d1221",
-    border: "1px solid #1e2a3a",
-    borderRadius: "20px",
+    background: "var(--lt-bg-surface)",
+    border: "1px solid var(--lt-border-strong)",
+    borderRadius: "var(--lt-radius-xl)",
     padding: "44px 40px",
     width: "100%",
     maxWidth: "480px",
-    animation: "fadeIn 0.5s ease, glow 4s infinite",
-    boxShadow: "0 24px 80px #00000088",
+    animation: "fadeIn 0.5s ease",
+    boxShadow: "var(--lt-shadow-md)",
   },
   logoIcon: {
     fontSize: "40px",
@@ -325,20 +346,20 @@ const styles = {
     display: "block",
   },
   logoTitle: {
-    color: "#fff",
+    color: "var(--lt-text-primary)",
     fontWeight: 800,
     fontSize: "26px",
     letterSpacing: "-0.02em",
   },
   logoSub: {
-    color: "#334",
+    color: "var(--lt-text-secondary)",
     fontSize: "10px",
     fontFamily: "'DM Mono', monospace",
     letterSpacing: "0.18em",
     marginTop: "6px",
   },
   helperText: {
-    color: "#556",
+    color: "var(--lt-text-secondary)",
     fontSize: "10px",
     fontFamily: "'DM Mono', monospace",
   },
@@ -347,7 +368,7 @@ const styles = {
   },
   label: {
     display: "block",
-    color: "#556",
+    color: "var(--lt-text-secondary)",
     fontSize: "11px",
     fontFamily: "'DM Mono', monospace",
     marginBottom: "8px",
@@ -356,43 +377,51 @@ const styles = {
   },
   input: {
     width: "100%",
-    background: "#111827",
-    border: "1px solid #1e2a3a",
-    borderRadius: "10px",
+    background: "var(--lt-bg-surface)",
+    border: "1px solid var(--lt-border-strong)",
+    borderRadius: "var(--lt-radius-md)",
     padding: "12px 16px",
-    color: "#fff",
+    color: "var(--lt-text-primary)",
     fontSize: "14px",
     transition: "border-color 0.2s, box-shadow 0.2s",
-    fontFamily: "'Syne', sans-serif",
+    fontFamily: "var(--lt-font)",
   },
   errorBox: {
     marginBottom: "16px",
     padding: "11px 16px",
-    borderRadius: "10px",
-    background: "#ff174412",
-    border: "1px solid #ff174444",
-    color: "#ff6b6b",
+    borderRadius: "var(--lt-radius-md)",
+    background: "var(--lt-danger-bg)",
+    border: "1px solid color-mix(in srgb, var(--lt-danger) 30%, transparent)",
+    color: "var(--lt-danger-text)",
     fontSize: "13px",
     fontFamily: "'DM Mono', monospace",
   },
   button: {
     width: "100%",
-    background: "linear-gradient(135deg, #1565c0 0%, #1976d2 100%)",
+    background: "var(--lt-accent)",
     color: "#fff",
     border: "none",
-    borderRadius: "12px",
+    borderRadius: "var(--lt-radius-lg)",
     padding: "14px",
     fontSize: "15px",
     fontWeight: 700,
-    fontFamily: "'Syne', sans-serif",
+    fontFamily: "var(--lt-font)",
     transition: "filter 0.2s, transform 0.15s",
     letterSpacing: "0.02em",
     marginTop: "4px",
   },
+  secondaryButton: {
+    width: "100%",
+    marginTop: 8,
+    padding: "12px 16px",
+    fontSize: "14px",
+    fontWeight: 600,
+    justifyContent: "center",
+  },
   footer: {
     marginTop: "24px",
     textAlign: "center",
-    color: "#2a3444",
+    color: "var(--lt-text-muted)",
     fontSize: "11px",
     fontFamily: "'DM Mono', monospace",
     lineHeight: 1.5,

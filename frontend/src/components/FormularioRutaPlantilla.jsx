@@ -312,10 +312,10 @@ export default function FormularioRutaPlantilla({
     <Card className="lt-module-card">
       <h3 className="lt-module-card__title">
         {soloLectura
-          ? "Consultar ruta plantilla"
+          ? "Consultar ruta"
           : plantillaInicial
-            ? "Editar ruta plantilla"
-            : "Nueva ruta plantilla"}
+            ? "Editar ruta"
+            : "Nueva ruta"}
       </h3>
 
       {error ? (

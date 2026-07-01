@@ -11,6 +11,7 @@ import DetalleConductorModal from "./DetalleConductorModal";
 import CrearChoferModal from "./CrearChoferModal";
 import EmptyState from "./ui/EmptyState";
 import Pagination from "./ui/Pagination";
+import Spinner from "./ui/Spinner";
 function licenciaBadgeFromDias(diasRestantes) {
   if (diasRestantes < 0) {
     return { texto: "Vencida", variant: "danger" };
@@ -135,8 +136,7 @@ export default function ChoferesFlota({ configPagosVersion = 0 }) {
         <div className="lt-card__body">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <h3 className="lt-module-card__title" style={{ margin: 0 }}>
-              Choferes activos ({meta?.total_items ?? conductores.length}
-              {busqueda.trim() ? ` de ${conductores.length}` : ""})
+              Conductores activos ({meta?.total_items ?? conductores.length})
             </h3>
             <button
               type="button"
@@ -145,7 +145,7 @@ export default function ChoferesFlota({ configPagosVersion = 0 }) {
               style={{ display: "flex", alignItems: "center", gap: 6 }}
             >
               <UserPlus size={16} />
-              Nuevo Chofer
+              Nuevo conductor
             </button>
           </div>
           <div className="lt-toolbar" style={{ marginBottom: 16 }}>
@@ -163,7 +163,7 @@ export default function ChoferesFlota({ configPagosVersion = 0 }) {
               className="lt-select"
               value={orden}
               onChange={(e) => setOrden(e.target.value)}
-              aria-label="Ordenar choferes"
+              aria-label="Ordenar conductores"
               style={{ minWidth: 220 }}
             >
               {OPCIONES_ORDEN.map((op) => (
@@ -174,16 +174,8 @@ export default function ChoferesFlota({ configPagosVersion = 0 }) {
             </select>
           </div>
           {nombreDependeDeApi && !cargando && (
-            <p
-              className="lt-module-card__subtitle"
-              style={{ display: "flex", alignItems: "flex-start", gap: 6, marginBottom: 12 }}
-              title={NOMBRE_API_AYUDA}
-            >
-              <CircleHelp size={14} style={{ flexShrink: 0, marginTop: 2 }} aria-hidden />
-              <span>
-                La columna Nombre muestra &quot;No disponible (API)&quot; porque el backend no expone
-                usuarios.nombre en GET /api/conductores.
-              </span>
+            <p className="lt-text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
+              Algunos conductores no muestran nombre en el listado.
             </p>
           )}
           {mensaje.texto && (
@@ -192,15 +184,16 @@ export default function ChoferesFlota({ configPagosVersion = 0 }) {
             </div>
           )}
           {cargando ? (
-            <p className="lt-empty">Cargando conductores...</p>
+            <Spinner message="Cargando conductores…" />
           ) : conductores.length === 0 ? (
-            <div className="lt-alert-banner lt-alert-banner--warning">
-              No hay conductores activos
-            </div>
+            <EmptyState
+              title="Sin conductores"
+              description="No hay conductores activos o no hay resultados para la búsqueda."
+            />
           ) : (meta?.total_items ?? conductores.length) === 0 ? (
             <EmptyState
               title="Sin resultados"
-              description="No hay choferes que coincidan con la búsqueda."
+              description="Sin resultados para la búsqueda."
             />
           ) : (
             <div className="lt-table-wrap">
@@ -259,14 +252,16 @@ export default function ChoferesFlota({ configPagosVersion = 0 }) {
                           <td>{resolveDisponibilidad(conductor)}</td>
                         )}
                         <td>
-                          <button
-                            type="button"
-                            className="lt-btn lt-btn--ghost"
-                            onClick={() => setConductorDetalle(conductor)}
-                          >
-                            <Eye size={14} />
-                            Ver detalle
-                          </button>
+                          <div className="lt-table__actions">
+                            <button
+                              type="button"
+                              className="lt-btn lt-btn--secondary lt-btn--sm"
+                              onClick={() => setConductorDetalle(conductor)}
+                            >
+                              <Eye size={14} />
+                              Ver detalle
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -300,7 +295,7 @@ export default function ChoferesFlota({ configPagosVersion = 0 }) {
         <CrearChoferModal
           onClose={() => setMostrarCrearModal(false)}
           onCreated={() => {
-            setMensaje({ tipo: "success", texto: "Chofer creado con éxito." });
+            setMensaje({ tipo: "success", texto: "Conductor registrado." });
             handleConductorActualizado();
           }}
         />

@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Plus } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 import { apiFetch } from "../lib/apiClient";
 import ComprobanteModal from "./ComprobanteModal";
@@ -19,12 +18,13 @@ import {
 import { useGooglePlacesAutocomplete } from "../hooks/useGooglePlacesAutocomplete";
 import { getNombreRuta } from "../lib/rutasUtils";
 import { obtenerCostosOperativos } from "../lib/costosOperativosService";
-import ParadaPlantillaInput from "./ParadaPlantillaInput";
 import ConsolidacionRutaPanel from "./ConsolidacionRutaPanel";
 import CostosOperativosPanel from "./CostosOperativosPanel";
 import ModalRecurrencia from "./ModalRecurrencia";
 import CreadorCarga from "./CreadorCarga";
+import { UI_FEATURES } from "../lib/featureVisibility";
 import Badge from "./ui/Badge";
+import EmptyState from "./ui/EmptyState";
 import Spinner from "./ui/Spinner";
 import Pagination from "./ui/Pagination";
 
@@ -54,11 +54,8 @@ function MensajeFilaRuta({ mensaje }) {
 
 const FECHAS_VACIAS = { inicio: "", fin: "", entrega: "" };
 
-const AYUDA_DISTANCIA_VIAL =
-  "La distancia se calcula por carretera usando origen y destino. Puede ajustarse manualmente por criterio operativo.";
-
 const ADVERTENCIA_DISTANCIA_VIAL =
-  "No se pudo calcular la distancia vial automáticamente. Ingrese la distancia manualmente o revise origen/destino.";
+  "No fue posible calcular la distancia. Ingrese el valor manualmente.";
 
 /** datetime-local → ISO (UTC) para el backend */
 function localDatetimeToIso(localVal) {
@@ -264,6 +261,8 @@ export default function RutasActivas() {
   const [camiones, setCamiones] = useState([]);
   const [listsLoading, setListsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("crear");
+  /** Sprint UX 5: flujo visual — lógica de «usar pedido anterior» en sprint posterior */
+  const [origenPedido, setOrigenPedido] = useState("nuevo");
   const [saving, setSaving] = useState(false);
   const [mensaje, setMensaje] = useState(null);
   const [erroresFormulario, setErroresFormulario] = useState({});
@@ -343,7 +342,7 @@ export default function RutasActivas() {
     if (!res.ok) {
       setRutas([]);
       setAnomaliasPorRuta({});
-      setMensaje({ tipo: "error", texto: res.error || "No se pudieron cargar las rutas." });
+      setMensaje({ tipo: "error", texto: res.error || "No se pudieron cargar los pedidos." });
       setLoading(false);
       return;
     }
@@ -412,7 +411,7 @@ export default function RutasActivas() {
   const handleDelete = async (id) => {
     if (
       !window.confirm(
-        "¿Estás seguro de que deseas eliminar esta ruta? Esta acción no se puede deshacer.",
+        "¿Está seguro de que desea eliminar este pedido? Esta acción no se puede deshacer.",
       )
     ) {
       return;
@@ -423,7 +422,7 @@ export default function RutasActivas() {
       await supabase.from("cargas").delete().eq("ruta_id", id);
       const { error } = await supabase.from("rutas").delete().eq("id", id);
       if (error) {
-        alert(`Error al eliminar ruta: ${error.message}`);
+        alert(`Error al eliminar pedido: ${error.message}`);
       } else {
         setRutas((prev) => prev.filter((r) => r.id !== id));
       }
@@ -495,7 +494,7 @@ export default function RutasActivas() {
 
     const res = await getRutaPlantillaById(plantillaId);
     if (res.error || !res.data) {
-      setMensaje({ tipo: "error", texto: res.error || "No se pudo cargar la ruta." });
+      setMensaje({ tipo: "error", texto: res.error || "No fue posible cargar la plantilla." });
       return;
     }
 
@@ -522,7 +521,7 @@ export default function RutasActivas() {
     }));
     setMensaje({
       tipo: "ok",
-      texto: `Ruta "${plantilla.nombre}" cargada. Origen y destino autocompletados.`,
+      texto: `Ruta «${plantilla.nombre}» cargada. Origen y destino autocompletados.`,
     });
   };
 
@@ -905,7 +904,7 @@ export default function RutasActivas() {
       String(form.bultosDespachos ?? "").trim() &&
       (Number.isNaN(bultosDespachosValue) || !Number.isInteger(bultosDespachosValue) || bultosDespachosValue < 1)
     ) {
-      nuevosErrores.bultosDespachos = "Cantidad de bultos inválida";
+      nuevosErrores.bultosDespachos = "Cantidad de slots inválida";
     }
 
     const distanciaOriginal = String(form.distanciaKm ?? "").trim();
@@ -920,7 +919,7 @@ export default function RutasActivas() {
     }
 
     if (guardarComoPlantilla && modoCreacion === MODO_MANUAL && !nombrePlantilla.trim() && !form.nombreRuta.trim()) {
-      nuevosErrores.nombrePlantilla = "Indique un nombre para la nueva ruta reutilizable";
+      nuevosErrores.nombrePlantilla = "Indique un nombre para la plantilla de ruta";
     }
 
     if (Object.keys(nuevosErrores).length > 0) {
@@ -978,15 +977,13 @@ export default function RutasActivas() {
     if (!resultado.success) {
       setMensaje({
         tipo: "error",
-        texto: resultado.error || "No se pudo crear la ruta. Revise los datos o intente nuevamente.",
+        texto: resultado.error || "No fue posible crear el pedido.",
       });
       return;
     }
 
     const pagoInfo = resultado.data?.pago;
-    const textoOk = pagoInfo
-      ? `Pedido creado correctamente (ID: ${resultado.data?.id?.slice(0, 8) || "—"}…). Pago pendiente generado.`
-      : "Pedido creado correctamente.";
+    const textoOk = pagoInfo ? "Pedido creado. Pago pendiente." : "Pedido creado.";
     setMensaje({ tipo: "ok", texto: textoOk });
 
     const nuevaRutaId = resultado.data?.id;
@@ -1105,8 +1102,7 @@ export default function RutasActivas() {
     setMensajeRuta(rutaId, "notificar", {
       tipo: "ok",
       texto:
-        (res.data?.message ||
-          "Notificación de fecha estimada enviada correctamente.") + refResend,
+        (res.data?.message || "Notificación enviada.") + refResend,
     });
     await cargarRutas();
   };
@@ -1159,58 +1155,9 @@ export default function RutasActivas() {
     });
   };
 
-  const getCosto = (obj, keys) => {
-    if (!obj || typeof obj !== "object") return undefined;
-    const foundKey = keys.find((key) => obj[key] != null && String(obj[key]).trim() !== "");
-    return foundKey ? obj[foundKey] : undefined;
-  };
-
-  const buildCostosDetalle = (ruta) => {
-    if (!ruta) return [];
-
-    const sources = [
-      ruta,
-      ruta.costos,
-      ruta.costo,
-      ruta.costos_operativos,
-      ruta.costosOperativos,
-      ruta.finanzas,
-      ruta.resumen_costos,
-    ].filter((source) => source && typeof source === "object");
-
-    const find = (keys) => {
-      for (const source of sources) {
-        const val = getCosto(source, keys);
-        if (val != null && String(val).trim() !== "") return val;
-      }
-      return undefined;
-    };
-
-    const items = [
-      { label: "Total", value: find(["costo_total", "total", "total_costos", "monto_total"]) },
-      { label: "Combustible", value: find(["costo_combustible", "combustible", "monto_combustible"]) },
-      { label: "Peajes", value: find(["costo_peajes", "peajes", "monto_peajes"]) },
-      { label: "Espera", value: find(["costo_espera", "espera", "monto_espera"]) },
-      { label: "Viáticos", value: find(["viaticos", "costo_viaticos", "monto_viaticos"]) },
-      { label: "Mantenimiento", value: find(["mantenimiento", "costo_mantenimiento", "monto_mantenimiento"]) },
-      { label: "Otros", value: find(["otros", "costo_otros", "monto_otros"]) },
-    ];
-
-    return items.filter((item) => item.value != null && String(item.value).trim() !== "");
-  };
-
-  const buildEventosDetalle = (ruta) => {
-    if (!ruta) return [];
-
-    if (Array.isArray(ruta.anomalias)) return ruta.anomalias;
-    if (Array.isArray(ruta.eventos)) return ruta.eventos;
-    if (Array.isArray(ruta.timeline)) return ruta.timeline;
-    return [];
-  };
-
   const labelStyle = {
     fontSize: 12,
-    color: "var(--lt-text-muted, #6b7280)",
+    color: "var(--lt-text-muted)",
     marginBottom: 4,
   };
 
@@ -1223,11 +1170,7 @@ export default function RutasActivas() {
   return (
     <div className="lt-module-inner">
       <div className="lt-card lt-module-card">
-        <h3 className="lt-module-card__title">Gestión de rutas</h3>
-        <p className="lt-module-card__subtitle">
-          Creá y consultá rutas operativas. El seguimiento y las evidencias siguen siendo responsabilidad de LogiTrack (app móvil y trazabilidad).
-        </p>
-
+        <div className="lt-card__body">
         {mensaje?.tipo === "ok" && (
           <div className="lt-alert-banner lt-alert-banner--success" role="status">
             {mensaje.texto}
@@ -1239,46 +1182,77 @@ export default function RutasActivas() {
           </div>
         )}
 
-                <div className="lt-tabs" style={{ display: 'flex', gap: '16px', marginBottom: '24px', borderBottom: '2px solid rgba(128,128,128,0.2)' }}>
+        <div className="lt-tabs lt-tabs--module">
           <button
             type="button"
-            className={`lt-tab ${activeTab === 'crear' ? 'active' : ''}`}
-            style={{ padding: '12px 24px', background: 'transparent', border: 'none', borderBottom: activeTab === 'crear' ? '2px solid #3B82F6' : '2px solid transparent', color: activeTab === 'crear' ? '#3B82F6' : 'inherit', fontWeight: activeTab === 'crear' ? 'bold' : 'normal', cursor: 'pointer', fontSize: '16px', transition: 'all 0.2s' }}
+            className={`lt-tab ${activeTab === 'crear' ? 'lt-tab--active' : ''}`}
             onClick={() => setActiveTab('crear')}
           >
-            Crear Nueva Ruta
+            Nuevo pedido
           </button>
           <button
             type="button"
-            className={`lt-tab ${activeTab === 'lista' ? 'active' : ''}`}
-            style={{ padding: '12px 24px', background: 'transparent', border: 'none', borderBottom: activeTab === 'lista' ? '2px solid #3B82F6' : '2px solid transparent', color: activeTab === 'lista' ? '#3B82F6' : 'inherit', fontWeight: activeTab === 'lista' ? 'bold' : 'normal', cursor: 'pointer', fontSize: '16px', transition: 'all 0.2s' }}
+            className={`lt-tab ${activeTab === 'lista' ? 'lt-tab--active' : ''}`}
             onClick={() => setActiveTab('lista')}
           >
-            Rutas Registradas
+            Pedidos registrados
           </button>
         </div>
-
+        </div>
       </div>
 
       {activeTab === 'crear' && (
-         <div className="lt-card lt-module-card" style={{ padding: 0, background: 'transparent', border: 'none', boxShadow: 'none' }}>
+        <>
+          <div className="lt-card lt-module-card">
+            <div className="lt-card__body">
+            <div className="lt-dashboard__map-filters">
+              <button
+                type="button"
+                className={`lt-btn lt-btn--filter ${origenPedido === 'nuevo' ? 'lt-btn--filter-active' : ''}`}
+                onClick={() => setOrigenPedido('nuevo')}
+              >
+                Pedido nuevo
+              </button>
+              {UI_FEATURES.repetirPedido ? (
+                <button
+                  type="button"
+                  className={`lt-btn lt-btn--filter ${origenPedido === 'anterior' ? 'lt-btn--filter-active' : ''}`}
+                  onClick={() => setOrigenPedido('anterior')}
+                >
+                  Usar pedido anterior
+                </button>
+              ) : null}
+            </div>
+            </div>
+          </div>
+          {origenPedido === 'nuevo' ? (
             <CreadorCarga />
-         </div>
+          ) : (
+            <div className="lt-card lt-module-card">
+              <div className="lt-empty">
+                Función no disponible. Cree un pedido nuevo.
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {activeTab === 'lista' && (
 <div className="lt-card lt-module-card">
-        <h3 className="lt-module-card__title">Rutas registradas</h3>
+        <div className="lt-card__body">
         {loading ? (
-          <Spinner message="Cargando rutas…" />
+          <Spinner message="Cargando pedidos…" />
         ) : rutas.length === 0 ? (
-          <div className="lt-empty">No hay rutas para mostrar. Cree una con el botón superior.</div>
+          <EmptyState
+            title="Sin pedidos"
+            description="No hay pedidos para mostrar. Cree uno en la pestaña «Nuevo pedido»."
+          />
         ) : (
           <div className="lt-table-wrap">
             <table className="lt-table">
               <thead>
                 <tr>
-                  <th>Ruta</th>
+                  <th>Pedido</th>
                   <th>Cliente</th>
                   <th>Trayecto</th>
                   <th>Estado</th>
@@ -1295,26 +1269,24 @@ export default function RutasActivas() {
                     <td>
                       <strong>{getNombreRuta(ruta)}</strong>
                     </td>
-                    <td>{truncarTexto(ruta.clientes?.nombre, 28)}</td>
-                    <td>
-                      <div style={{ fontSize: 13, lineHeight: 1.4 }}>
-                        <div>{truncarTexto(ruta.origen, 32)}</div>
-                        <div className="lt-list-item__sub" style={{ marginTop: 2 }}>
-                          → {truncarTexto(ruta.destino, 32)}
-                        </div>
+                    <td className="lt-table__col--truncate">{truncarTexto(ruta.clientes?.nombre, 28)}</td>
+                    <td className="lt-table__col--truncate">
+                      <div>{truncarTexto(ruta.origen, 32)}</div>
+                      <div className="lt-table__cell-sub">
+                        → {truncarTexto(ruta.destino, 32)}
                       </div>
                     </td>
                     <td>
-                      <Badge variant={estadoBadgeVariant(ruta.estado)}>
+                      <Badge variant={estadoBadgeVariant(ruta.estado)} showDot={false}>
                         {estadoLabel(ruta.estado)}
                       </Badge>
                     </td>
                     <td>
-                      <Badge variant={estadoPagoBadgeVariant(ruta.estado_pago)}>
+                      <Badge variant={estadoPagoBadgeVariant(ruta.estado_pago)} showDot={false}>
                         {estadoLabel(ruta.estado_pago || "PENDIENTE")}
                       </Badge>
                       {monto != null && (
-                        <div className="lt-list-item__sub" style={{ marginTop: 6, fontSize: 12 }}>
+                        <div className="lt-table__cell-sub">
                           {formatCurrencyClp(monto)}
                         </div>
                       )}
@@ -1323,17 +1295,17 @@ export default function RutasActivas() {
                           type="button"
                           onClick={() => setComprobanteRutaId(ruta.id)}
                           className="lt-btn lt-btn--secondary lt-btn--sm"
-                          style={{ marginTop: 6, width: "100%" }}
+                          style={{ marginTop: 6 }}
                         >
                           Comprobante
                         </button>
                       )}
                     </td>
                     <td>
+                      <div className="lt-table__actions">
                       <button
                         type="button"
-                        className="lt-btn lt-btn--primary lt-btn--sm lt-btn--full"
-                        style={{ marginBottom: 6 }}
+                        className="lt-btn lt-btn--secondary lt-btn--sm"
                         onClick={() =>
                           setRutaDetalleSeleccionada({
                             ...(rutas.find((r) => r.id === ruta.id) || ruta),
@@ -1346,12 +1318,11 @@ export default function RutasActivas() {
                           })
                         }
                       >
-                        Ver detalles
+                        Ver detalle
                       </button>
                       <button
                         type="button"
-                        className={`lt-btn lt-btn--sm lt-btn--full ${consolidacionAbiertaId === ruta.id ? "lt-btn--primary" : "lt-btn--secondary"}`}
-                        style={{ marginBottom: 6 }}
+                        className={`lt-btn lt-btn--sm ${consolidacionAbiertaId === ruta.id ? "lt-btn--primary" : "lt-btn--secondary"}`}
                         onClick={() =>
                           setConsolidacionAbiertaId((prev) =>
                             prev === ruta.id ? null : ruta.id,
@@ -1368,8 +1339,7 @@ export default function RutasActivas() {
                       </button>
                       <button
                         type="button"
-                        className={`lt-btn lt-btn--sm lt-btn--full ${costosAbiertoId === ruta.id ? "lt-btn--primary" : "lt-btn--secondary"}`}
-                        style={{ marginBottom: 6 }}
+                        className={`lt-btn lt-btn--sm ${costosAbiertoId === ruta.id ? "lt-btn--primary" : "lt-btn--secondary"}`}
                         onClick={() =>
                           setCostosAbiertoId((prev) =>
                             prev === ruta.id ? null : ruta.id,
@@ -1378,10 +1348,10 @@ export default function RutasActivas() {
                       >
                         {costosAbiertoId === ruta.id ? "Cerrar costos" : "Ver costos"}
                       </button>
+                      {UI_FEATURES.repetirPedido && (
                       <button
                         type="button"
-                        className="lt-btn lt-btn--secondary lt-btn--sm lt-btn--full"
-                        style={{ marginBottom: 6 }}
+                        className="lt-btn lt-btn--secondary lt-btn--sm"
                         onClick={() => {
                           setRutaRecurrenciaCtx({
                             clienteId: ruta.cliente_id,
@@ -1391,20 +1361,17 @@ export default function RutasActivas() {
                           setRecurrenciaModalOpen(true);
                         }}
                       >
-                        Repetir pedido
+                        Usar pedido anterior
                       </button>
+                      )}
                       <button
                         type="button"
-                        className="lt-btn lt-btn--full"
-                        style={{
-                          backgroundColor: "transparent",
-                          border: "1px solid #ef4444",
-                          color: "#ef4444",
-                        }}
+                        className="lt-btn lt-btn--danger lt-btn--sm"
                         onClick={() => handleDelete(ruta.id)}
                       >
-                        Eliminar ruta
+                        Eliminar
                       </button>
+                      </div>
                     </td>
                   </tr>
                   {consolidacionAbiertaId === ruta.id && (
@@ -1445,9 +1412,11 @@ export default function RutasActivas() {
             />
           </div>
         )}
+        </div>
       </div>
       )}
 
+      {UI_FEATURES.repetirPedido ? (
       <ModalRecurrencia
         open={recurrenciaModalOpen}
         onClose={() => {
@@ -1457,14 +1426,15 @@ export default function RutasActivas() {
         onSuccess={() => {
           setMensaje({
             tipo: "ok",
-            texto: "Recurrencia configurada correctamente.",
+            texto: "Recurrencia configurada.",
           });
         }}
         clienteId={rutaRecurrenciaCtx?.clienteId}
         rutaOrigenId={rutaRecurrenciaCtx?.rutaOrigenId}
         rutaPlantillaId={rutaRecurrenciaCtx?.rutaPlantillaId}
-        titulo="Repetir pedido"
+        titulo="Usar pedido anterior"
       />
+      ) : null}
 
       {rutaDetalleSeleccionada && (
         <div
@@ -1483,7 +1453,7 @@ export default function RutasActivas() {
             <div className="lt-modal-header">
               <div>
                 <div className="lt-modal-header__title" id="ruta-detalle-title">
-                  Detalle de ruta
+                  Detalle del pedido
                 </div>
                 <div className="lt-modal-header__sub">
                   {getNombreRuta(rutaDetalleSeleccionada)}
@@ -1526,7 +1496,7 @@ export default function RutasActivas() {
                       </div>
                     </div>
                     <div style={{ minWidth: 120, flex: "1 1 140px" }}>
-                      <div style={labelStyle}>Cantidad de bultos</div>
+                      <div style={labelStyle}>Slots utilizados</div>
                       <div style={valueStyle}>
                         {rutaDetalleSeleccionada.bultos ??
                           rutaDetalleSeleccionada.bultos_despachados ??
@@ -1654,7 +1624,7 @@ export default function RutasActivas() {
                     Costos operativos
                   </div>
                   {loadingCostosDetalle ? (
-                    <p className="lt-list-item__sub" style={{ color: "#6b7280", margin: 0 }}>
+                    <p className="lt-list-item__sub" style={{ margin: 0 }}>
                       Calculando costos operativos...
                     </p>
                   ) : costosDetalle && (
@@ -1694,7 +1664,7 @@ export default function RutasActivas() {
 
                       <div className="lt-card" style={{ padding: 14, minWidth: 180, flex: "0 0 180px" }}>
                         <div className="lt-card__subtitle" style={{ marginBottom: 6 }}>
-                          Conductor (HU-37)
+                          Conductor
                         </div>
                         <div style={{ fontSize: 18, fontWeight: 700, color: "var(--lt-success)" }}>
                           {formatCurrencyClp(costosDetalle.conductor ?? costosDetalle.costoConductor)}
@@ -1736,7 +1706,7 @@ export default function RutasActivas() {
                       </div>
                     </div>
                   ) : (
-                    <p className="lt-list-item__sub" style={{ color: "#6b7280", margin: 0 }}>
+                    <p className="lt-list-item__sub" style={{ margin: 0 }}>
                       Sin costos operativos registrados
                     </p>
                   )}
@@ -1789,55 +1759,9 @@ export default function RutasActivas() {
                   )}
                 </div>
 
-                <div className="lt-card" style={{ padding: 16 }}>
-                  <div className="lt-list-item__title" style={{ marginBottom: 8, color: "var(--lt-success)" }}>
-                    Timeline de eventos
-                  </div>
-                  {buildEventosDetalle(rutaDetalleSeleccionada).length > 0 ? (
-                    <div style={{ display: "grid", gap: 10 }}>
-                      {buildEventosDetalle(rutaDetalleSeleccionada).map((evento, idx) => {
-                        const esPrioritario =
-                          Boolean(evento?.es_prioritario) ||
-                          Boolean(evento?.prioritario) ||
-                          String(evento?.prioridad || "").toLowerCase() === "alta";
-                        const titulo =
-                          evento?.titulo || evento?.title || evento?.tipo || evento?.nombre || "Evento";
-                        const descripcion =
-                          evento?.descripcion || evento?.detalle || evento?.mensaje || "Sin descripción";
-                        const fecha =
-                          evento?.created_at ||
-                          evento?.fecha ||
-                          evento?.timestamp_evento ||
-                          evento?.timestamp ||
-                          evento?.fecha_creacion;
-
-                        return (
-                          <div
-                            key={evento?.id || `${titulo}-${idx}`}
-                            className={`lt-alert-card ${esPrioritario ? "lt-alert-card--critical" : "lt-alert-card--normal"}`}
-                            style={{ margin: 0, padding: 10 }}
-                          >
-                            <div className="lt-list-item__row" style={{ marginBottom: 4 }}>
-                              <span style={{ ...valueStyle, fontSize: 14 }}>{titulo}</span>
-                              {esPrioritario && <Badge variant="danger">PRIORITARIO</Badge>}
-                            </div>
-                            <div style={labelStyle}>{fmtDate(fecha)}</div>
-                            <p className="lt-list-item__sub" style={{ margin: 0, color: "#4b5563" }}>
-                              {descripcion}
-                            </p>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="lt-list-item__sub" style={{ color: "#6b7280", margin: 0 }}>
-                      Sin eventos reportados
-                    </p>
-                  )}
-                </div>
               </div>
 
-              <div className="lt-form-actions" style={{ marginTop: 12 }}>
+              <div className="lt-modal-footer">
                 <button
                   type="button"
                   className="lt-btn lt-btn--secondary"
@@ -1857,45 +1781,71 @@ export default function RutasActivas() {
         />
       ) : null}
       {showRentabilidadModal && rutaRentabilidad ? (
-        <div className="lt-modal-overlay">
-          <div className="lt-modal" style={{ maxWidth: 450 }}>
-            <div className="lt-modal__header">
-              <h3>Simulador de rentabilidad interna</h3>
+        <div
+          className="lt-modal-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowRentabilidadModal(false);
+          }}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="lt-modal-dialog lt-modal-dialog--sm">
+            <div className="lt-modal-header">
+              <div>
+                <div className="lt-modal-header__title">Simulador de rentabilidad interna</div>
+                <div className="lt-modal-header__sub">Resumen financiero del pedido</div>
+              </div>
               <button
                 type="button"
-                className="lt-modal__close"
+                className="lt-modal-close"
                 onClick={() => setShowRentabilidadModal(false)}
+                aria-label="Cerrar"
               >
                 ×
               </button>
             </div>
-            <div className="lt-modal__content">
-              <p>
-                Total recaudado:{" "}
-                {new Intl.NumberFormat("es-CL", {
-                  style: "currency",
-                  currency: "CLP",
-                  maximumFractionDigits: 0,
-                }).format(rutaRentabilidad.totalCobradoBruto)}
-              </p>
-              <p>
-                Gastos operativos:{" "}
-                {new Intl.NumberFormat("es-CL", {
-                  style: "currency",
-                  currency: "CLP",
-                  maximumFractionDigits: 0,
-                }).format(rutaRentabilidad.gastos)}
-              </p>
-              <p>
-                Ganancia neta:{" "}
-                <strong style={{ color: "#10b981" }}>
-                  {new Intl.NumberFormat("es-CL", {
-                    style: "currency",
-                    currency: "CLP",
-                    maximumFractionDigits: 0,
-                  }).format(rutaRentabilidad.ganancia)}
-                </strong>
-              </p>
+            <div className="lt-modal-body">
+              <div className="lt-modal-detail-grid">
+                <div className="lt-modal-detail-row">
+                  <span className="lt-modal-detail-row__label">Total recaudado</span>
+                  <span className="lt-modal-detail-row__value">
+                    {new Intl.NumberFormat("es-CL", {
+                      style: "currency",
+                      currency: "CLP",
+                      maximumFractionDigits: 0,
+                    }).format(rutaRentabilidad.totalCobradoBruto)}
+                  </span>
+                </div>
+                <div className="lt-modal-detail-row">
+                  <span className="lt-modal-detail-row__label">Gastos operativos</span>
+                  <span className="lt-modal-detail-row__value">
+                    {new Intl.NumberFormat("es-CL", {
+                      style: "currency",
+                      currency: "CLP",
+                      maximumFractionDigits: 0,
+                    }).format(rutaRentabilidad.gastos)}
+                  </span>
+                </div>
+                <div className="lt-modal-detail-row">
+                  <span className="lt-modal-detail-row__label">Ganancia neta</span>
+                  <span className="lt-modal-detail-row__value lt-modal-detail-row__value--positive">
+                    {new Intl.NumberFormat("es-CL", {
+                      style: "currency",
+                      currency: "CLP",
+                      maximumFractionDigits: 0,
+                    }).format(rutaRentabilidad.ganancia)}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="lt-modal-footer">
+              <button
+                type="button"
+                className="lt-btn lt-btn--primary"
+                onClick={() => setShowRentabilidadModal(false)}
+              >
+                Cerrar
+              </button>
             </div>
           </div>
         </div>

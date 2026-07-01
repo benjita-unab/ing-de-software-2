@@ -71,7 +71,7 @@ export default function FormularioCamion({
     }
 
     if (!form.slots || Number.isNaN(capacidad) || capacidad <= 0 || capacidad > 96) {
-      setError("La capacidad debe ser entre 1 y 96 slots.");
+      setError("La capacidad debe ser entre 1 y 96 Slots.");
       return;
     }
 
@@ -203,7 +203,7 @@ export default function FormularioCamion({
 
           <div className="lt-field-group" style={{ marginBottom: 16 }}>
             <label className="lt-label" htmlFor="camion-capacidad">
-              Capacidad (slots) *
+              Capacidad (Slots) *
             </label>
             <input
               id="camion-capacidad"
@@ -234,7 +234,7 @@ export default function FormularioCamion({
               required={!isEdit}
             />
             <div className="lt-card__subtitle" style={{ marginTop: 4 }}>
-              Consumo de combustible para costos operativos (HU-50)
+              Consumo de combustible para costos operativos
             </div>
           </div>
 
@@ -300,17 +300,10 @@ export default function FormularioCamion({
             />
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "flex-end",
-              gap: 8,
-              marginTop: 8,
-            }}
-          >
+          <div className="lt-modal-footer">
             <button
               type="button"
-              className="lt-btn lt-btn--ghost"
+              className="lt-btn lt-btn--secondary"
               onClick={onCancel}
               disabled={loading}
             >

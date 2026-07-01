@@ -24,6 +24,7 @@ export default function ChatConversacionLista({
   onSelect,
   loading = false,
   error = null,
+  urgentByRutaId = {},
 }) {
   const [search, setSearch] = useState("");
 
@@ -77,11 +78,12 @@ export default function ChatConversacionLista({
           filtered.map((conv) => {
             const isActive = selectedRutaId === conv.ruta_id;
             const hasUnread = conv.cantidad_no_leidos > 0;
+            const urgentCount = urgentByRutaId[conv.ruta_id] || 0;
             return (
               <button
                 key={conv.ruta_id}
                 type="button"
-                className={`lt-mensajes-conv-item ${isActive ? "lt-mensajes-conv-item--active" : ""} ${hasUnread ? "lt-mensajes-conv-item--urgent" : ""}`}
+                className={`lt-mensajes-conv-item ${isActive ? "lt-mensajes-conv-item--active" : ""} ${hasUnread || urgentCount > 0 ? "lt-mensajes-conv-item--urgent" : ""}`}
                 onClick={() => onSelect?.(conv.ruta_id)}
               >
                 <div className="lt-mensajes-conv-item__title">{conv.codigo_ruta}</div>
@@ -95,6 +97,10 @@ export default function ChatConversacionLista({
                   {hasUnread ? (
                     <Badge variant="danger" showDot={false}>
                       {conv.cantidad_no_leidos}
+                    </Badge>
+                  ) : urgentCount > 0 ? (
+                    <Badge variant="danger" showDot={false}>
+                      {urgentCount} alerta{urgentCount !== 1 ? "s" : ""}
                     </Badge>
                   ) : (
                     <span>{formatTimestamp(conv.fecha_ultimo_mensaje)}</span>

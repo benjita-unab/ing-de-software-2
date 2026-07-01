@@ -66,6 +66,7 @@ export default function MetricasPagoConductor({
   }, [periodo, fechaInicio, fechaFin]);
 
   const cargarDatos = useCallback(async () => {
+    void configPagosVersion;
     if (!conductorId) return;
     if (periodo === "rango" && (!fechaInicio || !fechaFin)) {
       setLoading(false);
@@ -113,7 +114,7 @@ export default function MetricasPagoConductor({
   const filasDesglose = desglose
     ? [
         {
-          concepto: "Rutas completadas",
+          concepto: "Pedidos entregados",
           cantidad: desglose.totalRutas,
           unitario: desglose.precioUnitarioRuta,
           subtotal: desglose.montoPorRutas,
@@ -125,7 +126,7 @@ export default function MetricasPagoConductor({
           subtotal: desglose.montoPorEntregas,
         },
         {
-          concepto: "Paquetes entregados",
+          concepto: "Slots entregados",
           cantidad: desglose.totalBultos,
           unitario: desglose.precioUnitarioBulto,
           subtotal: desglose.montoPorBultos,
@@ -144,12 +145,8 @@ export default function MetricasPagoConductor({
   );
 
   return (
-    <div className="lt-modal-section">
+      <div className="lt-modal-section">
       <div className="lt-modal-section__title">Métricas y pago</div>
-      <p className="lt-module-card__subtitle" style={{ marginBottom: 14 }}>
-        Cálculo automático desde rutas en estado ENTREGADO.
-        {conductorRut ? ` Conductor: ${conductorRut}.` : ""}
-      </p>
 
       <div
         style={{
@@ -244,7 +241,7 @@ export default function MetricasPagoConductor({
             />
             <KpiCard
               icon={Truck}
-              label="Paquetes entregados"
+              label="Slots entregados"
               value={formatNumero(ops?.bultosEntregados)}
               iconClass="lt-kpi-icon--amber"
             />
@@ -263,7 +260,7 @@ export default function MetricasPagoConductor({
             />
           </div>
 
-          <div className="lt-modal-section" style={{ padding: 0, marginBottom: 16 }}>
+          <div className="lt-modal-section lt-modal-section--flush">
             <div className="lt-modal-section__title">Desglose del cálculo</div>
             <div className="lt-table-wrap">
               <table className="lt-table">
@@ -296,20 +293,17 @@ export default function MetricasPagoConductor({
           </div>
 
           {comparativa?.conductores?.length > 0 && (
-            <div className="lt-modal-section" style={{ padding: 0, marginBottom: 16 }}>
+            <div className="lt-modal-section lt-modal-section--flush">
               <div className="lt-modal-section__title">Comparativa de flota</div>
-              <p className="lt-module-card__subtitle" style={{ marginBottom: 10 }}>
-                Rendimiento de conductores activos en el mismo período.
-              </p>
               <div className="lt-table-wrap">
                 <table className="lt-table">
                   <thead>
                     <tr>
                       <th>#</th>
                       <th>Conductor</th>
-                      <th>Rutas</th>
+                      <th>Pedidos</th>
                       <th>Entregas</th>
-                      <th>Paquetes</th>
+                      <th>Slots</th>
                       <th>Km</th>
                       <th>Total pago</th>
                     </tr>
@@ -342,7 +336,7 @@ export default function MetricasPagoConductor({
           )}
 
           {metricas.rutas?.length > 0 && (
-            <div className="lt-modal-section" style={{ padding: 0 }}>
+            <div className="lt-modal-section lt-modal-section--flush">
               <div className="lt-modal-section__title">
                 Rutas incluidas ({metricas.rutas.length})
               </div>
@@ -350,11 +344,11 @@ export default function MetricasPagoConductor({
                 <table className="lt-table">
                   <thead>
                     <tr>
-                      <th>Ruta</th>
+                      <th>Pedido</th>
                       <th>Origen</th>
                       <th>Destino</th>
                       <th>Completada</th>
-                      <th>Paquetes</th>
+                      <th>Slots</th>
                       <th>Km</th>
                     </tr>
                   </thead>

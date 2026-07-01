@@ -34,8 +34,6 @@ export class TrazabilidadController {
       tipo?: string | null;
     },
   ) {
-    console.log('BODY TRAZABILIDAD:', body);
-
     const {
       id,
       etapa,
@@ -97,7 +95,6 @@ export class TrazabilidadController {
       ruta_id,
       tipo: tipoNorm,
     };
-    console.log('BODY TRAZABILIDAD normalizado:', normalized);
 
     return this.trazabilidadService.createEvent(normalized);
   }

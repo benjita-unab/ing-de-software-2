@@ -1,124 +1,5 @@
 import React, { useEffect } from "react";
 
-const modalStyles = {
-  overlay: {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(2,6,23,0.72)",
-    backdropFilter: "blur(4px)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 1000,
-    padding: "20px",
-  },
-  dialog: {
-    width: "100%",
-    maxWidth: "720px",
-    maxHeight: "85vh",
-    overflow: "auto",
-    background: "rgba(8,12,24,0.96)",
-    border: "1px solid rgba(255,255,255,0.14)",
-    borderRadius: "16px",
-    boxShadow: "0 25px 60px rgba(0,0,0,0.6)",
-    color: "#E2E8F0",
-    padding: "22px 24px",
-    fontFamily: "'Inter', system-ui, sans-serif",
-  },
-  header: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: "18px",
-  },
-  headerTitle: {
-    fontSize: "16px",
-    fontWeight: 800,
-    letterSpacing: "0.06em",
-    color: "#fff",
-  },
-  headerSub: {
-    fontSize: "12px",
-    color: "#94A3B8",
-    marginTop: "4px",
-  },
-  closeButton: {
-    background: "rgba(255,255,255,0.08)",
-    border: "1px solid rgba(255,255,255,0.15)",
-    color: "#e2e8f0",
-    borderRadius: "8px",
-    width: "36px",
-    height: "36px",
-    cursor: "pointer",
-    fontSize: "16px",
-  },
-  section: { marginBottom: "20px" },
-  sectionTitle: {
-    fontSize: "13px",
-    fontWeight: 700,
-    marginBottom: "10px",
-    color: "#cbd5e1",
-  },
-  emptyText: { fontSize: "13px", color: "#94A3B8", margin: 0 },
-  errorText: { fontSize: "13px", color: "#f87171", margin: 0 },
-  pdfRow: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: "12px",
-    padding: "10px 12px",
-    borderRadius: "8px",
-    background: "rgba(255,255,255,0.04)",
-    marginBottom: "8px",
-  },
-  pdfName: {
-    fontSize: "13px",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-    flex: 1,
-  },
-  pdfLink: {
-    fontSize: "13px",
-    color: "#93C5FD",
-    textDecoration: "none",
-    fontWeight: 600,
-  },
-  fotosGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
-    gap: "12px",
-  },
-  fotoItem: {
-    display: "block",
-    borderRadius: "10px",
-    overflow: "hidden",
-    border: "1px solid rgba(255,255,255,0.1)",
-    textDecoration: "none",
-    color: "inherit",
-  },
-  fotoImg: {
-    width: "100%",
-    height: "120px",
-    objectFit: "cover",
-    display: "block",
-    background: "rgba(0,0,0,0.3)",
-  },
-  fotoMeta: {
-    padding: "8px",
-    fontSize: "11px",
-    color: "#94A3B8",
-  },
-  firmaWrap: { textAlign: "center" },
-  firmaImg: {
-    maxWidth: "100%",
-    maxHeight: "160px",
-    borderRadius: "8px",
-    border: "1px solid rgba(255,255,255,0.12)",
-    background: "#fff",
-  },
-};
-
 function etiquetaEtapaVisible(foto) {
   const raw = String(foto?.etapa ?? "").trim();
   const u = raw.toUpperCase();
@@ -199,7 +80,7 @@ export default function PortalEvidenciasModal({
 
   return (
     <div
-      style={modalStyles.overlay}
+      className="lt-modal-overlay"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -207,119 +88,124 @@ export default function PortalEvidenciasModal({
       aria-modal="true"
       aria-labelledby="portal-evidencias-title"
     >
-      <div style={modalStyles.dialog}>
-        <div style={modalStyles.header}>
+      <div className="lt-modal-dialog lt-modal-dialog--lg">
+        <div className="lt-modal-header">
           <div>
-            <div id="portal-evidencias-title" style={modalStyles.headerTitle}>
+            <div className="lt-modal-header__title" id="portal-evidencias-title">
               Evidencias del pedido
             </div>
             {subtitulo ? (
-              <div style={modalStyles.headerSub}>{subtitulo}</div>
+              <div className="lt-modal-header__sub">{subtitulo}</div>
             ) : null}
           </div>
           <button
             type="button"
             onClick={onClose}
-            style={modalStyles.closeButton}
+            className="lt-modal-close"
             aria-label="Cerrar"
           >
-            ✕
+            ×
           </button>
         </div>
 
-        {loading && <p style={modalStyles.emptyText}>Cargando evidencias…</p>}
-        {error && (
-          <p style={modalStyles.errorText}>
-            No se pudieron cargar las evidencias: {error}
-          </p>
-        )}
+        <div className="lt-modal-body">
+          {loading && <p className="lt-empty">Cargando evidencias…</p>}
+          {error && (
+            <div className="lt-alert-banner lt-alert-banner--error" role="alert">
+              No se pudieron cargar las evidencias: {error}
+            </div>
+          )}
 
-        {!loading && !error && noHayNada && (
-          <p style={modalStyles.emptyText}>Sin evidencias disponibles para este pedido.</p>
-        )}
+          {!loading && !error && noHayNada && (
+            <p className="lt-empty">Sin evidencias disponibles para este pedido.</p>
+          )}
 
-        {!loading && !error && !noHayNada && (
-          <>
-            <div style={modalStyles.section}>
-              <div style={modalStyles.sectionTitle}>Documentos PDF</div>
-              {pdfs.length === 0 ? (
-                <p style={modalStyles.emptyText}>Sin documentos PDF adjuntos.</p>
-              ) : (
-                pdfs.map((pdf, idx) => (
-                  <div key={pdf.url || idx} style={modalStyles.pdfRow}>
-                    <span style={modalStyles.pdfName} title={pdf.nombre}>
-                      {pdf.nombre}
-                    </span>
-                    <a
-                      href={pdf.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={modalStyles.pdfLink}
-                    >
-                      Ver PDF
-                    </a>
+          {!loading && !error && !noHayNada && (
+            <>
+              <div className="lt-modal-section">
+                <div className="lt-modal-section__title">Documentos PDF</div>
+                {pdfs.length === 0 ? (
+                  <p className="lt-empty">Sin documentos PDF adjuntos.</p>
+                ) : (
+                  pdfs.map((pdf, idx) => (
+                    <div key={pdf.url || idx} className="lt-modal-pdf-row">
+                      <span className="lt-modal-pdf-name" title={pdf.nombre}>
+                        {pdf.nombre}
+                      </span>
+                      <a
+                        href={pdf.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="lt-btn lt-btn--secondary"
+                      >
+                        Ver PDF
+                      </a>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="lt-modal-section">
+                <div className="lt-modal-section__title">Fotografías</div>
+                {fotosMostrar.length === 0 ? (
+                  <p className="lt-empty">Sin fotografías registradas.</p>
+                ) : (
+                  <div className="lt-modal-fotos-grid">
+                    {fotosMostrar.map((foto) => (
+                      <a
+                        key={foto.id}
+                        href={foto.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="lt-modal-foto-item"
+                        title={etiquetaEtapaVisible(foto)}
+                      >
+                        <img
+                          src={foto.url}
+                          alt={etiquetaEtapaVisible(foto)}
+                          loading="lazy"
+                        />
+                        <div className="lt-modal-foto-meta">
+                          {etiquetaEtapaVisible(foto)}
+                          {foto.timestamp ? ` · ${formatFecha(foto.timestamp)}` : ""}
+                        </div>
+                      </a>
+                    ))}
                   </div>
-                ))
-              )}
-            </div>
+                )}
+              </div>
 
-            <div style={modalStyles.section}>
-              <div style={modalStyles.sectionTitle}>Fotografías</div>
-              {fotosMostrar.length === 0 ? (
-                <p style={modalStyles.emptyText}>Sin fotografías registradas.</p>
-              ) : (
-                <div style={modalStyles.fotosGrid}>
-                  {fotosMostrar.map((foto) => (
-                    <a
-                      key={foto.id}
-                      href={foto.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={modalStyles.fotoItem}
-                      title={etiquetaEtapaVisible(foto)}
-                    >
-                      <img
-                        src={foto.url}
-                        alt={etiquetaEtapaVisible(foto)}
-                        style={modalStyles.fotoImg}
-                        loading="lazy"
-                      />
-                      <div style={modalStyles.fotoMeta}>
-                        {etiquetaEtapaVisible(foto)}
-                        {foto.timestamp ? ` · ${formatFecha(foto.timestamp)}` : ""}
-                      </div>
-                    </a>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div style={modalStyles.section}>
-              <div style={modalStyles.sectionTitle}>Firma de recepción</div>
-              {!firmaUrl ? (
-                <p style={modalStyles.emptyText}>Sin firma registrada.</p>
-              ) : (
-                <div style={modalStyles.firmaWrap}>
-                  <img
-                    src={firmaUrl}
-                    alt="Firma de recepción"
-                    style={modalStyles.firmaImg}
-                  />
-                  <p style={{ marginTop: "10px" }}>
+              <div className="lt-modal-section">
+                <div className="lt-modal-section__title">Firma de recepción</div>
+                {!firmaUrl ? (
+                  <p className="lt-empty">Sin firma registrada.</p>
+                ) : (
+                  <div className="lt-modal-firma-wrap">
+                    <img
+                      src={firmaUrl}
+                      alt="Firma de recepción"
+                      className="lt-modal-firma-img"
+                    />
                     <a
                       href={firmaUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      style={modalStyles.pdfLink}
+                      className="lt-btn lt-btn--secondary"
                     >
                       Abrir firma en pestaña nueva
                     </a>
-                  </p>
-                </div>
-              )}
-            </div>
-          </>
-        )}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="lt-modal-footer">
+          <button type="button" className="lt-btn lt-btn--secondary" onClick={onClose}>
+            Cerrar
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -18,6 +18,7 @@ import EmptyState from "./ui/EmptyState";
 import FormularioCamion from "./FormularioCamion";
 import OccupancyBar from "./ui/OccupancyBar";
 import Pagination from "./ui/Pagination";
+import Spinner from "./ui/Spinner";
 
 const OPCIONES_FILTRO = [
   { value: FILTRO_ESTADO_TODOS, label: "Todos" },
@@ -92,7 +93,7 @@ export default function CamionesFlota({ operator }) {
 
   const handleCamionCreado = async (nuevoCamion) => {
     setMostrarFormulario(false);
-    setMensaje({ tipo: "success", texto: "Camión agregado correctamente." });
+    setMensaje({ tipo: "success", texto: "Camión agregado." });
     await cargarCamiones();
     if (nuevoCamion?.id) {
       setCamionDetalle(nuevoCamion);
@@ -185,11 +186,12 @@ export default function CamionesFlota({ operator }) {
           )}
 
           {cargando ? (
-            <p className="lt-empty">Cargando camiones...</p>
+            <Spinner message="Cargando camiones…" />
           ) : camiones.length === 0 ? (
-            <div className="lt-alert-banner lt-alert-banner--warning">
-              No hay camiones activos
-            </div>
+            <EmptyState
+              title="Sin camiones"
+              description="No hay camiones activos o no hay resultados para la búsqueda o filtro."
+            />
           ) : (meta?.total_items ?? camiones.length) === 0 ? (
             <EmptyState
               title="Sin resultados"
@@ -201,7 +203,7 @@ export default function CamionesFlota({ operator }) {
                 <thead>
                   <tr>
                     <th>Patente</th>
-                    <th>Capacidad (slots)</th>
+                    <th>Capacidad (Slots)</th>
                     <th>Estado</th>
                     <th>Próxima revisión técnica</th>
                     <th>Días restantes</th>
@@ -224,7 +226,7 @@ export default function CamionesFlota({ operator }) {
                             slotsTotales={camion.slots}
                             slotsUtilizados={camion.slots_utilizados}
                           />
-                          <div style={{ fontSize: "0.75rem", color: "#64748b", marginTop: "4px" }}>
+                          <div className="lt-table__cell-sub">
                             Talla: {camion.talla || "DESCONOCIDO"}
                           </div>
                         </td>
@@ -241,14 +243,16 @@ export default function CamionesFlota({ operator }) {
                           </Badge>
                         </td>
                         <td>
-                          <button
-                            type="button"
-                            className="lt-btn lt-btn--ghost"
-                            onClick={() => setCamionDetalle(camion)}
-                          >
-                            <Eye size={14} />
-                            Ver detalle
-                          </button>
+                          <div className="lt-table__actions">
+                            <button
+                              type="button"
+                              className="lt-btn lt-btn--secondary lt-btn--sm"
+                              onClick={() => setCamionDetalle(camion)}
+                            >
+                              <Eye size={14} />
+                              Ver detalle
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );

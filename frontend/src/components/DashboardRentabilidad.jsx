@@ -166,7 +166,7 @@ function RutaExtremaCard({ title, icon: Icon, iconClass, ruta, emptyLabel }) {
               fontSize: "13px",
             }}
           >
-            <dt className="lt-text-muted">Ruta</dt>
+            <dt className="lt-text-muted">Pedido</dt>
             <dd style={{ margin: 0, fontWeight: 600 }}>{nombre}</dd>
             <dt className="lt-text-muted">Ingresos</dt>
             <dd style={{ margin: 0 }}>{formatClp(ruta.ingresos)}</dd>
@@ -272,24 +272,24 @@ export default function DashboardRentabilidad() {
         <div className="lt-dashboard-rutas-grid">
           {loading ? (
             <>
-              <RutaExtremaSkeleton title="Ruta más rentable" />
-              <RutaExtremaSkeleton title="Ruta menos rentable" />
+              <RutaExtremaSkeleton title="Pedido más rentable" />
+              <RutaExtremaSkeleton title="Pedido menos rentable" />
             </>
           ) : (
             <>
               <RutaExtremaCard
-                title="Ruta más rentable"
+                title="Pedido más rentable"
                 icon={Trophy}
                 iconClass="lt-kpi-icon--green"
                 ruta={data?.rutaMasRentable}
-                emptyLabel="Sin rutas con comprobante en el período"
+                emptyLabel="Sin pedidos con comprobante en el período"
               />
               <RutaExtremaCard
-                title="Ruta menos rentable"
+                title="Pedido menos rentable"
                 icon={TrendingDown}
                 iconClass="lt-kpi-icon--red"
                 ruta={data?.rutaMenosRentable}
-                emptyLabel="Sin rutas con comprobante en el período"
+                emptyLabel="Sin pedidos con comprobante en el período"
               />
             </>
           )}

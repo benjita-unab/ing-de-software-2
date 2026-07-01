@@ -34,8 +34,6 @@ export class EntregasController {
       comentario_diferencia_bultos?: string;
     },
   ) {
-    // TEMP LOG
-    console.log('CLOSE DELIVERY -> rutaId:', rutaId, 'body:', body);
     return await this.entregasService.closeDelivery(
       rutaId,
       body?.clienteEmail || userEmail,
@@ -54,13 +52,6 @@ export class EntregasController {
     @Param('rutaId') rutaId: string,
     @Body() body: { base64Signature: string },
   ) {
-    // TEMP LOG
-    console.log(
-      'SAVE SIGNATURE -> rutaId:',
-      rutaId,
-      'base64Signature length:',
-      body?.base64Signature?.length ?? 0,
-    );
     return await this.entregasService.saveSignature(
       rutaId,
       body.base64Signature,

@@ -149,7 +149,7 @@ export default function FormularioCliente({ onGuardado, clienteInicial = null, o
           payload.nuevaPassword = formData.nuevaPassword.trim();
         }
         await updateCliente(clienteInicial.id, payload);
-        alert("Cliente y acceso al portal actualizados correctamente.");
+        alert("Cliente actualizado.");
       } else {
         payload.password = formData.password.trim();
         const creado = await createCliente(payload);
@@ -199,23 +199,24 @@ export default function FormularioCliente({ onGuardado, clienteInicial = null, o
 
   return (
     <Card className="lt-module-card">
-      <div className="lt-clientes-form-header">
-        <h3 className="lt-module-card__title">
-          {esEdicion ? "Editar cliente" : "Registrar nuevo cliente"}
-        </h3>
-        {onCancel && (
-          <button type="button" className="lt-btn lt-btn--ghost" onClick={onCancel}>
-            <X size={14} />
-            Cerrar
-          </button>
+      <div className="lt-card__body">
+        <div className="lt-clientes-form-header">
+          <h3 className="lt-module-card__title">
+            {esEdicion ? "Editar cliente" : "Registrar nuevo cliente"}
+          </h3>
+          {onCancel && (
+            <button type="button" className="lt-btn lt-btn--ghost" onClick={onCancel}>
+              <X size={14} />
+              Cerrar
+            </button>
+          )}
+        </div>
+
+        {errorMsg && (
+          <div className="lt-alert-banner lt-alert-banner--error">{errorMsg}</div>
         )}
-      </div>
 
-      {errorMsg && (
-        <div className="lt-alert-banner lt-alert-banner--error">{errorMsg}</div>
-      )}
-
-      <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit}>
         <div className="lt-field-group">
           <label className="lt-label">Nombre cliente o empresa</label>
           <input
@@ -250,8 +251,8 @@ export default function FormularioCliente({ onGuardado, clienteInicial = null, o
           </div>
         </div>
 
-        <div className="lt-module-card__subtitle" style={{ margin: "16px 0 8px" }}>
-          Acceso al portal cliente (HU-60)
+        <div className="lt-form-subsection">
+          <div className="lt-form-subsection__title">Acceso al portal</div>
         </div>
 
         <div className="lt-field-group">
@@ -270,10 +271,10 @@ export default function FormularioCliente({ onGuardado, clienteInicial = null, o
           <label className="lt-label">
             {esEdicion ? "Nueva contraseña (opcional)" : "Contraseña inicial *"}
           </label>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div className="lt-form-row lt-form-row--grow">
             <input
               type="text"
-              className="lt-input"
+              className="lt-input lt-input--grow"
               placeholder={esEdicion ? "Dejar vacío para no cambiar" : "Mínimo 6 caracteres"}
               value={esEdicion ? formData.nuevaPassword : formData.password}
               onChange={(e) =>
@@ -296,7 +297,7 @@ export default function FormularioCliente({ onGuardado, clienteInicial = null, o
         </div>
 
         <div className="lt-field-group">
-          <label className="lt-label" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <label className="lt-label lt-checkbox-label">
             <input
               type="checkbox"
               checked={formData.accesoActivo}
@@ -347,7 +348,8 @@ export default function FormularioCliente({ onGuardado, clienteInicial = null, o
         >
           {loading ? "Guardando..." : esEdicion ? "Actualizar cliente" : "Guardar cliente"}
         </button>
-      </form>
+        </form>
+      </div>
     </Card>
   );
 }

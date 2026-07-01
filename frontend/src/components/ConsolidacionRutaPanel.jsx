@@ -44,7 +44,7 @@ export default function ConsolidacionRutaPanel({ rutaId, onConsolidado }) {
 
   const ejecutarConsolidacion = async (opciones = {}) => {
     if (!pedidoSeleccionado) {
-      setMensaje({ tipo: "error", texto: "Seleccione un pedido para consolidar." });
+      setMensaje({ tipo: "error", texto: "Seleccione un pedido." });
       return;
     }
 
@@ -59,7 +59,7 @@ export default function ConsolidacionRutaPanel({ rutaId, onConsolidado }) {
       setConfirmarOcupacion(false);
       setConfirmarDistancia(false);
       setAdvertenciasPendientes([]);
-      setMensaje({ tipo: "ok", texto: "Pedido consolidado correctamente." });
+      setMensaje({ tipo: "ok", texto: "Pedido consolidado." });
       onConsolidado?.();
     } else if (res.requiere_confirmacion) {
       setAdvertenciasPendientes(res.advertencias || []);
@@ -109,7 +109,7 @@ export default function ConsolidacionRutaPanel({ rutaId, onConsolidado }) {
     <div className="lt-consolidacion-panel lt-form-subsection" style={{ marginTop: 0 }}>
       <div className="lt-form-subsection__header" style={{ marginBottom: 12 }}>
         <Layers size={18} />
-        <span>Consolidación de pedidos (HU-59)</span>
+        <span>Consolidación de pedidos</span>
       </div>
 
       <div className="lt-field-group" style={{ marginBottom: 16, maxWidth: 420 }}>
@@ -119,7 +119,7 @@ export default function ConsolidacionRutaPanel({ rutaId, onConsolidado }) {
           slotsTotales={capacidad?.slots ?? 96}
         />
         <p className="lt-list-item__sub" style={{ marginTop: 6 }}>
-          Capacidad restante: <strong>{capacidad?.slots_disponibles ?? 0}</strong> slots
+          Capacidad restante: <strong>{capacidad?.slots_disponibles ?? 0}</strong> Slots
           · Talla camión: <strong>{capacidad?.talla ?? "—"}</strong>
         </p>
       </div>
@@ -147,7 +147,7 @@ export default function ConsolidacionRutaPanel({ rutaId, onConsolidado }) {
 
       <div className="lt-form-subsection" style={{ marginBottom: 16 }}>
         <span className="lt-label" style={{ display: "block", marginBottom: 8 }}>
-          Pedidos consolidados en esta ruta
+          Pedidos consolidados
         </span>
         {pedidos?.length ? (
           <div className="lt-table-wrap">
@@ -158,7 +158,7 @@ export default function ConsolidacionRutaPanel({ rutaId, onConsolidado }) {
                   <th>Cliente</th>
                   <th>Origen</th>
                   <th>Destino</th>
-                  <th>Bultos</th>
+                  <th>Slots</th>
                 </tr>
               </thead>
               <tbody>
@@ -212,7 +212,7 @@ export default function ConsolidacionRutaPanel({ rutaId, onConsolidado }) {
               {pedidos_disponibles.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.cliente_nombre || "Cliente"} — {p.origen} → {p.destino}
-                  {p.bultos_despachados != null ? ` (${p.bultos_despachados} bultos)` : ""}
+                  {p.bultos_despachados != null ? ` (${p.bultos_despachados} Slots)` : ""}
                 </option>
               ))}
             </select>

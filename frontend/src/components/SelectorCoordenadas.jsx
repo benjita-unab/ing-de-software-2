@@ -104,7 +104,7 @@ export default function SelectorCoordenadas({
 
   return (
     <div style={{ marginTop: "10px", marginBottom: "16px" }} className="coord-selector">
-      <p style={{ fontSize: "12px", color: "#94A3B8", marginBottom: "8px" }}>
+      <p className="lt-text-muted" style={{ fontSize: "12px", marginBottom: "8px" }}>
         📍 Arrastra el pin rojo o haz clic en el mapa para establecer la ubicación exacta.
       </p>
       <div 

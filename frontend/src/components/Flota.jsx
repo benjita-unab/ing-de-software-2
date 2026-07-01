@@ -4,7 +4,7 @@ import ChoferesFlota from "./ChoferesFlota";
 import { ConfiguracionPagosButton } from "./ConfiguracionPagosModal";
 
 const TABS = [
-  { id: "choferes", label: "Choferes" },
+  { id: "choferes", label: "Conductores" },
   { id: "camiones", label: "Camiones" },
 ];
 

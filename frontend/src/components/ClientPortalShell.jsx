@@ -4,11 +4,14 @@ import ComprobanteModal from "./ComprobanteModal";
 import PortalPagos from "./PortalPagos";
 import PortalRecurrencias from "./PortalRecurrencias";
 import ModalRecurrencia from "./ModalRecurrencia";
+import ThemeToggle from "./ui/ThemeToggle";
+import { useTheme } from "../hooks/useTheme";
 import {
   getPortalPedidoById,
   getPortalPedidoEvidencias,
   getPortalPedidos,
 } from "../lib/portalService";
+import { UI_FEATURES } from "../lib/featureVisibility";
 
 const SECCION_PEDIDOS = "pedidos";
 const SECCION_PAGOS = "pagos";
@@ -25,9 +28,9 @@ function isPedidoCompletado(estado) {
 const styles = {
   page: {
     minHeight: "100vh",
-    background: "#0a0e1a",
-    color: "#e2e8f0",
-    fontFamily: "'Inter', system-ui, sans-serif",
+    background: "var(--lt-bg-page)",
+    color: "var(--lt-text-primary)",
+    fontFamily: "var(--lt-font)",
     padding: "24px",
   },
   header: {
@@ -40,42 +43,55 @@ const styles = {
   },
   card: {
     padding: "16px",
-    borderRadius: "12px",
-    border: "1px solid rgba(255,255,255,0.12)",
-    background: "rgba(15,23,42,0.85)",
+    borderRadius: "var(--lt-radius-lg)",
+    border: "1px solid var(--lt-border)",
+    background: "var(--lt-bg-surface)",
     marginBottom: "12px",
     cursor: "pointer",
+    boxShadow: "var(--lt-shadow-sm)",
   },
   cardActive: {
-    borderColor: "#0ea5e9",
+    borderColor: "var(--lt-accent)",
+    background: "var(--lt-accent-light)",
   },
   badge: (estado) => ({
     display: "inline-block",
     padding: "4px 10px",
-    borderRadius: "999px",
+    borderRadius: "var(--lt-radius-full)",
     fontSize: "12px",
     fontWeight: 600,
     background:
       estado === "ENTREGADO"
-        ? "rgba(34,197,94,0.2)"
-        : "rgba(14,165,233,0.2)",
-    color: estado === "ENTREGADO" ? "#86efac" : "#7dd3fc",
+        ? "var(--lt-success-bg)"
+        : "var(--lt-info-bg)",
+    color:
+      estado === "ENTREGADO"
+        ? "var(--lt-success-text)"
+        : "var(--lt-info-text)",
   }),
+  headerActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    flexWrap: "wrap",
+  },
   btn: {
     padding: "10px 16px",
-    borderRadius: "8px",
-    border: "1px solid rgba(255,255,255,0.2)",
-    background: "transparent",
-    color: "#fff",
+    borderRadius: "var(--lt-radius-md)",
+    border: "1px solid var(--lt-border-strong)",
+    background: "var(--lt-bg-surface)",
+    color: "var(--lt-text-primary)",
     cursor: "pointer",
+    fontFamily: "inherit",
+    fontSize: "14px",
   },
   btnEvidencias: {
     marginTop: "16px",
     padding: "10px 16px",
-    borderRadius: "8px",
-    border: "1px solid rgba(59,130,246,0.45)",
-    background: "rgba(59,130,246,0.18)",
-    color: "#93C5FD",
+    borderRadius: "var(--lt-radius-md)",
+    border: "1px solid var(--lt-border-strong)",
+    background: "var(--lt-info-bg)",
+    color: "var(--lt-info-text)",
     cursor: "pointer",
     fontWeight: 600,
     fontSize: "14px",
@@ -84,16 +100,17 @@ const styles = {
   detail: {
     marginTop: "20px",
     padding: "20px",
-    borderRadius: "12px",
-    border: "1px solid rgba(255,255,255,0.12)",
-    background: "rgba(8,12,24,0.9)",
+    borderRadius: "var(--lt-radius-lg)",
+    border: "1px solid var(--lt-border)",
+    background: "var(--lt-bg-muted)",
   },
   timelineItem: {
     padding: "8px 0",
-    borderLeft: "2px solid #0ea5e9",
+    borderLeft: "2px solid var(--lt-accent)",
     paddingLeft: "12px",
     marginBottom: "8px",
     fontSize: "14px",
+    color: "var(--lt-text-secondary)",
   },
   tabs: {
     display: "flex",
@@ -106,12 +123,12 @@ const styles = {
     alignItems: "center",
     gap: "8px",
     padding: "10px 16px",
-    borderRadius: "10px",
+    borderRadius: "var(--lt-radius-md)",
     border: active
-      ? "1px solid rgba(14,165,233,0.65)"
-      : "1px solid rgba(255,255,255,0.12)",
-    background: active ? "rgba(14,165,233,0.18)" : "rgba(15,23,42,0.6)",
-    color: active ? "#e0f2fe" : "rgba(226,232,240,0.85)",
+      ? "1px solid var(--lt-accent)"
+      : "1px solid var(--lt-border)",
+    background: active ? "var(--lt-accent-light)" : "var(--lt-bg-surface)",
+    color: active ? "var(--lt-accent)" : "var(--lt-text-secondary)",
     cursor: "pointer",
     fontSize: "14px",
     fontWeight: active ? 600 : 500,
@@ -121,22 +138,25 @@ const styles = {
     display: "inline-block",
     minWidth: "22px",
     padding: "2px 8px",
-    borderRadius: "999px",
+    borderRadius: "var(--lt-radius-full)",
     fontSize: "12px",
     fontWeight: 700,
     textAlign: "center",
     background:
       variant === "completados"
-        ? "rgba(34,197,94,0.25)"
-        : "rgba(14,165,233,0.25)",
-    color: variant === "completados" ? "#86efac" : "#7dd3fc",
+        ? "var(--lt-success-bg)"
+        : "var(--lt-info-bg)",
+    color:
+      variant === "completados"
+        ? "var(--lt-success-text)"
+        : "var(--lt-info-text)",
   }),
   emptyState: {
     textAlign: "center",
     padding: "48px 24px",
-    borderRadius: "16px",
-    border: "1px solid rgba(255,255,255,0.1)",
-    background: "rgba(15,23,42,0.65)",
+    borderRadius: "var(--lt-radius-lg)",
+    border: "1px solid var(--lt-border)",
+    background: "var(--lt-bg-muted)",
     maxWidth: "480px",
     margin: "24px auto 0",
   },
@@ -150,13 +170,13 @@ const styles = {
     margin: "0 0 10px",
     fontSize: "18px",
     fontWeight: 700,
-    color: "#f1f5f9",
+    color: "var(--lt-text-primary)",
   },
   emptyMessage: {
     margin: 0,
     fontSize: "14px",
     lineHeight: 1.5,
-    color: "#94a3b8",
+    color: "var(--lt-text-secondary)",
   },
 };
 
@@ -185,6 +205,7 @@ function formatDate(value) {
 }
 
 export default function ClientPortalShell({ user, onSignOut }) {
+  const { isDark, toggleTheme } = useTheme();
   const [seccionActiva, setSeccionActiva] = useState(SECCION_PEDIDOS);
   const [pedidos, setPedidos] = useState([]);
   const [activeTab, setActiveTab] = useState(TAB_PENDIENTES);
@@ -228,13 +249,25 @@ export default function ClientPortalShell({ user, onSignOut }) {
   }, [loadPedidos]);
 
   useEffect(() => {
+    if (!UI_FEATURES.recurrencias && seccionActiva === SECCION_RECURRENCIAS) {
+      setSeccionActiva(SECCION_PEDIDOS);
+    }
+  }, [seccionActiva]);
+
+  useEffect(() => {
+    if (!UI_FEATURES.crearPedidoCliente && showCreateModal) {
+      setShowCreateModal(false);
+    }
+  }, [showCreateModal]);
+
+  useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const paymentResult = params.get("payment_result");
     if (!paymentResult) return;
 
     if (paymentResult === "success") {
       alert(
-        "Pago completado con éxito. Su pedido pasará a estar 'En Curso' en breve mientras verificamos la transacción.",
+        "Pago completado. Su pedido se actualizará en breve.",
       );
       let retries = 0;
       const interval = setInterval(() => {
@@ -243,7 +276,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
         if (retries > 3) clearInterval(interval);
       }, 5000);
     } else if (paymentResult === "failed") {
-      alert("El pago no se ha podido completar. Por favor, inténtelo de nuevo.");
+      alert("No fue posible completar el pago.");
     }
     window.history.replaceState({}, document.title, window.location.pathname);
   }, [loadPedidos]);
@@ -330,7 +363,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
         </div>
         <p style={{ margin: "8px 0 0", fontSize: "13px", opacity: 0.8 }}>
           Entrega estimada: {formatDate(p.fecha_estimada_entrega)}
-          {p.bultos_despachados != null ? ` ┬À ${p.bultos_despachados} bultos` : ""}
+          {p.bultos_despachados != null ? ` · ${p.bultos_despachados} Slots` : ""}
         </p>
       </div>
     );
@@ -373,7 +406,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
     const dist = Number(newOrderForm.distancia_km);
 
     if (!origen || !destino || Number.isNaN(dist) || dist <= 0) {
-      setCreateError("Por favor completa origen, destino y kilómetros aproximados.");
+      setCreateError("Complete origen, destino y kilómetros.");
       setCreatingOrder(false);
       return;
     }
@@ -427,18 +460,25 @@ export default function ClientPortalShell({ user, onSignOut }) {
             {user?.email}
           </p>
         </div>
-        <button type="button" style={styles.btn} onClick={onSignOut}>
-          Cerrar sesión
-        </button>
-        {seccionActiva === SECCION_PEDIDOS ? (
-          <button
-            type="button"
-            style={{ ...styles.btn, borderColor: "#0ea5e9", color: "#38bdf8" }}
-            onClick={() => setShowCreateModal(true)}
-          >
-            Crear pedido
+        <div style={styles.headerActions}>
+          <ThemeToggle
+            isDark={isDark}
+            onToggle={toggleTheme}
+            className="lt-btn lt-btn--secondary"
+          />
+          <button type="button" style={styles.btn} onClick={onSignOut}>
+            Cerrar sesión
           </button>
-        ) : null}
+          {UI_FEATURES.crearPedidoCliente && seccionActiva === SECCION_PEDIDOS ? (
+            <button
+              type="button"
+              style={{ ...styles.btn, borderColor: "var(--lt-accent)", color: "var(--lt-accent)" }}
+              onClick={() => setShowCreateModal(true)}
+            >
+              Crear pedido
+            </button>
+          ) : null}
+        </div>
       </header>
 
       <div style={styles.tabs} role="tablist" aria-label="Secciones del portal">
@@ -460,6 +500,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
         >
           Pagos
         </button>
+        {UI_FEATURES.recurrencias ? (
         <button
           type="button"
           role="tab"
@@ -469,20 +510,21 @@ export default function ClientPortalShell({ user, onSignOut }) {
         >
           Recurrencias
         </button>
+        ) : null}
       </div>
 
       {seccionActiva === SECCION_PAGOS ? (
         <PortalPagos clienteId={user?.clienteId} />
       ) : null}
 
-      {seccionActiva === SECCION_RECURRENCIAS ? (
+      {UI_FEATURES.recurrencias && seccionActiva === SECCION_RECURRENCIAS ? (
         <PortalRecurrencias />
       ) : null}
 
       {seccionActiva !== SECCION_PEDIDOS ? null : (
         <>
       {error ? (
-        <p style={{ color: "#f87171", marginBottom: "16px" }} role="alert">
+        <p className="lt-alert-banner lt-alert-banner--error" style={{ marginBottom: "16px" }} role="alert">
           {error}
         </p>
       ) : null}
@@ -543,7 +585,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
 
                   {detalle.bultos?.length > 0 && (
                     <>
-                      <h3 style={{ fontSize: "15px", marginTop: "16px" }}>Paquetes registrados</h3>
+                      <h3 style={{ fontSize: "15px", marginTop: "16px" }}>Slots registrados</h3>
                       {Object.entries(
                         detalle.bultos.reduce((acc, b) => {
                           const label = b.categoria
@@ -590,7 +632,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
                           <button
                             type="button"
                             disabled={pagandoBase}
-                            style={{ ...styles.btn, background: "#ef4444", borderColor: "#ef4444" }}
+                            style={{ ...styles.btn, background: "var(--lt-danger)", borderColor: "var(--lt-danger)", color: "#fff" }}
                             onClick={(e) =>
                               handlePagarKhipu(selectedId, "atraso", e)
                             }
@@ -600,7 +642,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
                         ) : detalle.ruta.estado_pago === "pagado" ? (
                           <button
                             type="button"
-                            style={{ ...styles.btn, background: "#3B82F6", borderColor: "#3B82F6" }}
+                            style={{ ...styles.btn, background: "var(--lt-info)", borderColor: "var(--lt-info)", color: "#fff" }}
                             onClick={() => setComprobanteRutaId(selectedId)}
                           >
                             Ver comprobante
@@ -609,7 +651,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
                           <button
                             type="button"
                             disabled={pagandoBase}
-                            style={{ ...styles.btn, background: "#10b981", borderColor: "#10b981" }}
+                            style={{ ...styles.btn, background: "var(--lt-success-text)", borderColor: "var(--lt-success-text)", color: "#fff" }}
                             onClick={(e) => handlePagarKhipu(selectedId, "base", e)}
                           >
                             {pagandoBase ? "Redirigiendo..." : "Pagar"}
@@ -672,16 +714,18 @@ export default function ClientPortalShell({ user, onSignOut }) {
                     Ver evidencias
                   </button>
 
+                  {UI_FEATURES.repetirPedido ? (
                   <button
                     type="button"
                     style={{ ...styles.btnEvidencias, marginLeft: 8 }}
                     onClick={() => setModalRecurrenciaOpen(true)}
                   >
-                    Repetir pedido
+                    Usar pedido anterior
                   </button>
+                  ) : null}
                 </>
               ) : (
-                <p style={{ opacity: 0.7 }}>Sin datos de detalle.</p>
+                <p className="lt-text-muted">Sin datos de detalle.</p>
               )}
             </div>
           </div>
@@ -710,48 +754,32 @@ export default function ClientPortalShell({ user, onSignOut }) {
         clienteId={user?.clienteId || detalle?.ruta?.cliente_id}
         rutaOrigenId={selectedId}
         portalMode
-        titulo="Repetir pedido"
+        titulo="Usar pedido anterior"
       />
 
       {comprobanteRutaId ? (
         <ComprobanteModal
           rutaId={comprobanteRutaId}
           onClose={() => setComprobanteRutaId(null)}
-          stylesObj={styles}
         />
       ) : null}
 
-      {showCreateModal ? (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.75)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1000,
-            padding: 20,
-          }}
-        >
+      {UI_FEATURES.crearPedidoCliente && showCreateModal ? (
+        <div className="lt-modal-overlay">
           <div
-            style={{
-              background: "#0f172a",
-              border: "1px solid rgba(255,255,255,0.15)",
-              borderRadius: 16,
-              padding: 24,
-              width: "100%",
-              maxWidth: 560,
-              color: "#e2e8f0",
-            }}
+            className="lt-modal-dialog"
+            style={{ maxWidth: 560 }}
           >
-            <h2 style={{ marginTop: 0 }}>Crear nuevo pedido</h2>
+            <div className="lt-modal-header">
+              <div className="lt-modal-header__title">Nuevo pedido</div>
+            </div>
+            <div className="lt-modal-body">
             {createError ? (
-              <p style={{ color: "#f87171" }} role="alert">
+              <div className="lt-alert-banner lt-alert-banner--error" role="alert">
                 {createError}
-              </p>
+              </div>
             ) : null}
-            <form onSubmit={handleCreateOrderSubmit}>
+            <form id="portal-create-order-form" onSubmit={handleCreateOrderSubmit}>
               <label style={{ display: "block", marginBottom: 12 }}>
                 Origen
                 <input
@@ -791,7 +819,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
                 />
               </label>
               <label style={{ display: "block", marginBottom: 16 }}>
-                Cantidad de paquetes
+                Slots utilizados
                 <input
                   type="number"
                   min="1"
@@ -807,19 +835,21 @@ export default function ClientPortalShell({ user, onSignOut }) {
                   }}
                 />
               </label>
-              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                <button type="button" style={styles.btn} onClick={() => setShowCreateModal(false)}>
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  style={{ ...styles.btn, background: "#0ea5e9", borderColor: "#0ea5e9" }}
-                  disabled={creatingOrder}
-                >
-                  {creatingOrder ? "Guardando..." : "Guardar pedido"}
-                </button>
-              </div>
             </form>
+            </div>
+            <div className="lt-modal-footer">
+              <button type="button" className="lt-btn lt-btn--secondary" onClick={() => setShowCreateModal(false)}>
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                form="portal-create-order-form"
+                className="lt-btn lt-btn--primary"
+                disabled={creatingOrder}
+              >
+                {creatingOrder ? "Guardando..." : "Guardar pedido"}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

@@ -3,7 +3,6 @@ import { CalendarCheck, Pencil, X } from "lucide-react";
 import {
   calcularDiasRestantesRevision,
   estadoCamionBadge,
-  formatCapacidadKg,
   formatDiasRestantesText,
   formatFechaCamion,
   obtenerEstadoRevision,
@@ -48,7 +47,7 @@ export default function DetalleCamionModal({
 
   const filas = [
     { label: "Patente", value: camionActual.patente || "—" },
-    { label: "Capacidad (slots)", value: camionActual.slots },
+    { label: "Capacidad (Slots)", value: camionActual.slots },
     { label: "Talla", value: camionActual.talla || "DESCONOCIDO" },
     { label: "Ocupación", customValue: <OccupancyBar slotsTotales={camionActual.slots} slotsUtilizados={camionActual.slots_utilizados} /> },
     {
@@ -72,7 +71,7 @@ export default function DetalleCamionModal({
     setModoEdicion(false);
     if (actualizado) {
       setCamionActual(actualizado);
-      setMensaje({ tipo: "success", texto: "Camión actualizado correctamente." });
+      setMensaje({ tipo: "success", texto: "Camión actualizado." });
       onCamionActualizado?.(actualizado);
     }
   };
@@ -179,9 +178,6 @@ export default function DetalleCamionModal({
                 style={{ marginBottom: 16 }}
               >
                 <div className="lt-modal-section__title">Registrar revisión técnica</div>
-                <p className="lt-module-card__subtitle" style={{ marginBottom: 12 }}>
-                  Se actualizará la última mantención a la fecha de hoy.
-                </p>
                 <div className="lt-field-group" style={{ marginBottom: 12 }}>
                   <label className="lt-label" htmlFor="proxima-revision">
                     Próxima revisión técnica *

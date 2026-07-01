@@ -1,8 +1,15 @@
 import React, { useMemo, useState } from "react";
+import { isUrgentAlerta } from "../lib/alertasConductorUtils";
 import { useChatRuta } from "../hooks/useChatRuta";
 import ChatConversacionLista from "./ChatConversacionLista";
 import ChatMensajeLista from "./ChatMensajeLista";
-export default function ChatOperador() {
+
+export default function ChatOperador({
+  alertas = [],
+  alertasLoading = false,
+  alertasError = null,
+  acknowledgeAlerta,
+}) {
   const [selectedRutaId, setSelectedRutaId] = useState(null);
   const {
     conversaciones,
@@ -19,6 +26,15 @@ export default function ChatOperador() {
     [conversaciones, selectedRutaId],
   );
 
+  const urgentByRutaId = useMemo(() => {
+    const map = {};
+    alertas.forEach((item) => {
+      if (!isUrgentAlerta(item) || !item.ruta_id) return;
+      map[item.ruta_id] = (map[item.ruta_id] || 0) + 1;
+    });
+    return map;
+  }, [alertas]);
+
   return (
     <div className="lt-mensajes-split">
       <ChatConversacionLista
@@ -27,6 +43,7 @@ export default function ChatOperador() {
         onSelect={setSelectedRutaId}
         loading={loadingConversaciones}
         error={error}
+        urgentByRutaId={urgentByRutaId}
       />
 
       <ChatMensajeLista
@@ -35,6 +52,10 @@ export default function ChatOperador() {
         loading={loadingMensajes}
         onSend={sendMensaje}
         sending={sending}
+        alertas={alertas}
+        alertasLoading={alertasLoading}
+        alertasError={alertasError}
+        acknowledgeAlerta={acknowledgeAlerta}
       />
     </div>
   );

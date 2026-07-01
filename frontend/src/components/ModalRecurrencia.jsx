@@ -36,7 +36,7 @@ export default function ModalRecurrencia({
   clienteId,
   rutaOrigenId,
   rutaPlantillaId,
-  titulo = "Repetir pedido",
+  titulo = "Usar pedido anterior",
   portalMode = false,
 }) {
   const [form, setForm] = useState(EMPTY);
@@ -279,11 +279,11 @@ export default function ModalRecurrencia({
             </div>
           </div>
 
-          <div className="lt-form-actions" style={{ marginTop: 20 }}>
+          <div className="lt-modal-footer">
             <button type="submit" className="lt-btn lt-btn--primary" disabled={saving}>
               {saving ? "Guardando…" : "Activar recurrencia"}
             </button>
-            <button type="button" className="lt-btn lt-btn--ghost" onClick={onClose}>
+            <button type="button" className="lt-btn lt-btn--secondary" onClick={onClose}>
               Cancelar
             </button>
           </div>

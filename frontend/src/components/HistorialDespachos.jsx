@@ -2,8 +2,10 @@ import React, { useEffect, useState, useCallback } from "react";
 import { apiFetch } from "../lib/apiClient";
 import { getNombreRuta } from "../lib/rutasUtils";
 import Badge from "./ui/Badge";
+import EmptyState from "./ui/EmptyState";
 import Pagination from "./ui/Pagination";
-import { Search } from "lucide-react";
+import Spinner from "./ui/Spinner";
+import { Eye, Search } from "lucide-react";
 
 const ESTADOS_FINALIZADOS = ["ENTREGADO", "ENTREGADA"];
 
@@ -121,7 +123,7 @@ function EvidenciasModal({ despacho, evidencias, loading, error, onClose }) {
           {!loading && !error && (pdfs.length > 0 || fotos.length > 0 || firmaUrl) && (
             <>
               <div className="lt-modal-section">
-                <div className="lt-modal-section__title">📄 Comprobante PDF</div>
+                <div className="lt-modal-section__title">Comprobante PDF</div>
                 {pdfs.length === 0 ? (
                   <p className="lt-empty">Sin comprobante adjunto.</p>
                 ) : (
@@ -144,7 +146,7 @@ function EvidenciasModal({ despacho, evidencias, loading, error, onClose }) {
               </div>
 
               <div className="lt-modal-section">
-                <div className="lt-modal-section__title">📷 Evidencias fotográficas</div>
+                <div className="lt-modal-section__title">Evidencias fotográficas</div>
                 {fotosEvidencia.length === 0 ? (
                   <p className="lt-empty">
                     Sin evidencias fotográficas para este despacho.
@@ -178,7 +180,7 @@ function EvidenciasModal({ despacho, evidencias, loading, error, onClose }) {
               </div>
 
               <div className="lt-modal-section">
-                <div className="lt-modal-section__title">📑 Ficha de despacho</div>
+                <div className="lt-modal-section__title">Ficha de despacho</div>
                 {fichasDespacho.length === 0 ? (
                   <p className="lt-empty">
                     Sin ficha registrada desde la app u otros canales.
@@ -212,7 +214,7 @@ function EvidenciasModal({ despacho, evidencias, loading, error, onClose }) {
               </div>
 
               <div className="lt-modal-section">
-                <div className="lt-modal-section__title">✍️ Firma del cliente</div>
+                <div className="lt-modal-section__title">Firma del cliente</div>
                 {!firmaUrl ? (
                   <p className="lt-empty">Sin firma registrada.</p>
                 ) : (
@@ -259,7 +261,6 @@ export default function HistorialDespachos() {
   
   const [searchQuery, setSearchQuery] = useState("");
   const [searchInput, setSearchInput] = useState("");
-  const [filtroAuto, setFiltroAuto] = useState("all");
 
   useEffect(() => {
     let cancelled = false;
@@ -275,11 +276,6 @@ export default function HistorialDespachos() {
       });
       if (searchQuery) {
         queryParams.append("search", searchQuery);
-      }
-      if (filtroAuto === "auto") {
-        queryParams.append("generadoAutomaticamente", "true");
-      } else if (filtroAuto === "manual") {
-        queryParams.append("generadoAutomaticamente", "false");
       }
 
       const resAll = await apiFetch(`/api/rutas?${queryParams.toString()}`);
@@ -314,7 +310,7 @@ export default function HistorialDespachos() {
     return () => {
       cancelled = true;
     };
-  }, [page, limit, searchQuery, filtroAuto]);
+  }, [page, limit, searchQuery]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -364,55 +360,40 @@ export default function HistorialDespachos() {
 
   return (
     <div className="lt-module-inner">
-      <div className="lt-toolbar" style={{ marginBottom: "16px" }}>
-        <form className="lt-search-wrap" onSubmit={handleSearchSubmit} style={{ flex: 1, maxWidth: "400px" }}>
-          <Search size={16} className="lt-search-wrap__icon" />
-          <input
-            type="search"
-            className="lt-input"
-            placeholder="Buscar por cliente, conductor o ruta..."
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-          />
+      <div className="lt-toolbar lt-toolbar--historial">
+        <form className="lt-toolbar__search-group" onSubmit={handleSearchSubmit}>
+          <div className="lt-search-wrap">
+            <Search size={16} className="lt-search-icon" />
+            <input
+              type="search"
+              className="lt-input"
+              placeholder="Buscar..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              aria-label="Buscar en historial"
+            />
+          </div>
+          <button type="submit" className="lt-btn lt-btn--secondary">
+            Buscar
+          </button>
         </form>
-        <button
-          type="button"
-          className="lt-btn lt-btn--secondary"
-          onClick={() => {
-            setSearchQuery(searchInput);
-            setPage(1);
-          }}
-        >
-          Buscar
-        </button>
-        <select
-          className="lt-input"
-          style={{ maxWidth: 220 }}
-          value={filtroAuto}
-          onChange={(e) => {
-            setFiltroAuto(e.target.value);
-            setPage(1);
-          }}
-          aria-label="Filtrar por origen del pedido"
-        >
-          <option value="all">Todos los pedidos</option>
-          <option value="auto">Generado automáticamente</option>
-          <option value="manual">Creado manualmente</option>
-        </select>
       </div>
 
       <div className="lt-card lt-module-card">
         <div className="lt-card__body">
           {loading ? (
-            <p className="lt-empty">Cargando historial...</p>
+            <Spinner message="Cargando historial…" />
           ) : historial.length === 0 ? (
-            <p className="lt-empty">No hay despachos finalizados todavía.</p>
+            <EmptyState
+              title="Sin despachos finalizados"
+              description="No hay despachos finalizados todavía."
+            />
           ) : (
             <div className="lt-table-wrap">
               <table className="lt-table">
                 <thead>
                   <tr>
-                    <th>Ruta</th>
+                    <th>Pedido</th>
                     <th>Cliente</th>
                     <th>Conductor / Vehículo</th>
                     <th>Destino</th>
@@ -428,7 +409,7 @@ export default function HistorialDespachos() {
                     <tr key={despacho.id}>
                       <td>
                         <strong>{getNombreRuta(despacho)}</strong>
-                        <div className="lt-card__subtitle">
+                        <div className="lt-table__cell-sub">
                           #{String(despacho.id).substring(0, 8)}
                         </div>
                       </td>
@@ -437,11 +418,11 @@ export default function HistorialDespachos() {
                         <strong>
                           {despacho.conductores?.usuarios?.nombre || despacho.conductores?.rut || "N/A"}
                         </strong>
-                        <div className="lt-card__subtitle">
-                          🚚 {despacho.camiones?.patente || "-"}
+                        <div className="lt-table__cell-sub">
+                          {despacho.camiones?.patente || "—"}
                         </div>
                       </td>
-                      <td>{despacho.destino}</td>
+                      <td className="lt-table__col--truncate">{despacho.destino}</td>
                       <td>
                         {despacho.tiempo_espera_minutos !== null && despacho.tiempo_espera_minutos !== undefined ? (
                           despacho.tiempo_espera_minutos > 30 ? (
@@ -460,7 +441,7 @@ export default function HistorialDespachos() {
                       )}</td>
                       <td>
                         <Badge variant="success" showDot={false}>
-                          ✅ {despacho.estado}
+                          {despacho.estado}
                         </Badge>
                       </td>
                       <td>
@@ -473,32 +454,33 @@ export default function HistorialDespachos() {
                         )}
                       </td>
                       <td>
-                        <button
-                          type="button"
-                          className="lt-btn lt-btn--secondary"
-                          onClick={() => abrirEvidencias(despacho)}
-                        >
-                          🔍 Ver evidencias
-                        </button>
+                        <div className="lt-table__actions">
+                          <button
+                            type="button"
+                            className="lt-btn lt-btn--secondary lt-btn--sm"
+                            onClick={() => abrirEvidencias(despacho)}
+                          >
+                            <Eye size={14} />
+                            Ver evidencias
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              <Pagination
+                currentPage={page}
+                totalPages={totalPages}
+                totalItems={totalItems}
+                limit={limit}
+                onPageChange={setPage}
+                onLimitChange={(newLimit) => {
+                  setLimit(newLimit);
+                  setPage(1);
+                }}
+              />
             </div>
-          )}
-          {!loading && historial.length > 0 && (
-            <Pagination
-              currentPage={page}
-              totalPages={totalPages}
-              totalItems={totalItems}
-              limit={limit}
-              onPageChange={setPage}
-              onLimitChange={(newLimit) => {
-                setLimit(newLimit);
-                setPage(1); // Paginación No Destructiva
-              }}
-            />
           )}
         </div>
       </div>

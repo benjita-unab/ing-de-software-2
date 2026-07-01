@@ -11,7 +11,6 @@ import Sidebar from "./Sidebar";
 import DashboardOperational from "./DashboardOperational";
 import AlertQueue from "./AlertQueue";
 import AlertDetailPanel from "./AlertDetailPanel";
-import AlertasConductor from "./AlertasConductor";
 import MonitoreoLicencias from "./MonitoreoLicencias";
 
 import Flota from "./Flota";
@@ -28,11 +27,11 @@ import ModulePage from "./ui/ModulePage";
 import PageHeader from "./ui/PageHeader";
 import { useAlertasConductor } from "../hooks/useAlertasConductor";
 import { useTheme } from "../hooks/useTheme";
+import { UI_FEATURES } from "../lib/featureVisibility";
 
 export default function OperatorDashboard({ operator, onSignOut }) {
   const {
     alertas,
-    rutasMap,
     loading: alertasLoading,
     error: alertasError,
     acknowledgeAlerta,
@@ -48,6 +47,18 @@ export default function OperatorDashboard({ operator, onSignOut }) {
   const mostrarRentabilidad = puedeVerDashboardRentabilidad(operator?.role);
 
   useEffect(() => {
+    if (!UI_FEATURES.rutasPlantilla && activeSection === "rutas-plantilla") {
+      setActiveSection("dashboard");
+    }
+  }, [activeSection]);
+
+  useEffect(() => {
+    if (activeSection === "alertas") {
+      setActiveSection("mensajes");
+    }
+  }, [activeSection]);
+
+  useEffect(() => {
     if (!mostrarFinanciero && pagosView === "financiero") {
       setPagosView("gestion");
     }
@@ -58,19 +69,10 @@ export default function OperatorDashboard({ operator, onSignOut }) {
 
   const pagosPageMeta =
     pagosView === "financiero"
-      ? {
-          title: "Dashboard financiero",
-          subtitle: "Indicadores de ingresos, cartera y margen bruto",
-        }
+      ? { title: "Financiero" }
       : pagosView === "rentabilidad"
-        ? {
-            title: "Dashboard de rentabilidad",
-            subtitle: "Indicadores de margen y costos operativos por ruta",
-          }
-        : {
-            title: "Pagos de clientes",
-            subtitle: "Consulta y gestión de cobros B2B asociados a pedidos",
-          };
+        ? { title: "Rentabilidad" }
+        : { title: "Pagos" };
 
   return (
     <div className="lt-app-shell">
@@ -99,58 +101,42 @@ export default function OperatorDashboard({ operator, onSignOut }) {
           </div>
         )}
 
-        {activeSection === "alertas" && (
+        {activeSection === "mensajes" && (
           <ModulePage
-            title="Centro de alertas"
-            subtitle="Estados y emergencias enviados desde la app del conductor"
-            className="lt-module-page--mensajes"
+            title="Mensajes"
+            className="lt-module-page--mensajes lt-module-page--compact"
           >
-            <AlertasConductor
-              mensajes={alertas}
-              rutasMap={rutasMap}
-              loading={alertasLoading}
-              error={alertasError}
-              acknowledgeMensaje={acknowledgeAlerta}
+            <ChatOperador
+              alertas={alertas}
+              alertasLoading={alertasLoading}
+              alertasError={alertasError}
+              acknowledgeAlerta={acknowledgeAlerta}
             />
           </ModulePage>
         )}
 
-        {activeSection === "mensajes" && (
-          <ModulePage
-            title="Mensajes"
-            subtitle="Comunicación operador ↔ conductor"
-            className="lt-module-page--mensajes"
-          >
-            <ChatOperador />
-          </ModulePage>
-        )}
-
-        {activeSection !== "alertas" &&
-          activeSection !== "mensajes" &&
+        {activeSection !== "mensajes" &&
           activeSection !== "dashboard" && (
             <div className="lt-main-scroll">
               {activeSection === "rrhh" && (
-                <ModulePage title="Recursos Humanos" subtitle="Monitoreo de licencias de conductores">
+                <ModulePage title="RRHH" className="lt-module-page--compact">
                   <MonitoreoLicencias />
                 </ModulePage>
               )}
-              {activeSection === "rutas-plantilla" && (
-                <ModulePage
-                  title="Rutas plantilla"
-                  subtitle="Plantillas reutilizables para originar pedidos (HU-57)"
-                >
+              {UI_FEATURES.rutasPlantilla && activeSection === "rutas-plantilla" && (
+                <ModulePage title="Plantillas de ruta" className="lt-module-page--compact">
                   <RutasPlantilla operator={operator} />
                 </ModulePage>
               )}
               {activeSection === "rutas" && (
-                <ModulePage title="Rutas">
+                <ModulePage title="Pedidos" className="lt-module-page--compact">
                   <RutasActivas />
                 </ModulePage>
               )}
 
   {
     activeSection === "clientes" && (
-      <ModulePage title="Clientes" subtitle="Directorio de clientes y historial de despachos">
+      <ModulePage title="Clientes" className="lt-module-page--compact">
         <Clientes operator={operator} />
       </ModulePage>
     )
@@ -159,7 +145,7 @@ export default function OperatorDashboard({ operator, onSignOut }) {
     activeSection === "pagos" && (
       <ModulePage
         title={pagosPageMeta.title}
-        subtitle={pagosPageMeta.subtitle}
+        className="lt-module-page--compact"
         actions={
           <div className="lt-dashboard__map-filters">
             <button
@@ -167,7 +153,7 @@ export default function OperatorDashboard({ operator, onSignOut }) {
               className={`lt-btn--filter ${pagosView === "gestion" ? "lt-btn--filter-active" : ""}`}
               onClick={() => setPagosView("gestion")}
             >
-              Gestión de cobros
+              Cobros
             </button>
             {mostrarFinanciero ? (
               <button
@@ -202,21 +188,21 @@ export default function OperatorDashboard({ operator, onSignOut }) {
   }
   {
     activeSection === "historial" && (
-      <ModulePage title="Historial de despachos" subtitle="Consulta de entregas completadas y evidencias">
+      <ModulePage title="Historial" className="lt-module-page--compact">
         <HistorialDespachos />
       </ModulePage>
     )
   }
   {
     activeSection === "despachos" && (
-      <ModulePage title="Rutas Activas" subtitle="Seguimiento de rutas activas y cierre de despachos">
+      <ModulePage title="Despachos activos" className="lt-module-page--compact">
         <GuiasDespacho />
       </ModulePage>
     )
   }
   {
     activeSection === "camiones" && (
-      <ModulePage title="Flota" subtitle="Gestión de choferes y vehículos">
+      <ModulePage title="Flota" className="lt-module-page--compact">
         <Flota operator={operator} />
       </ModulePage>
     )
@@ -244,7 +230,7 @@ export function LegacyIncidenciasAlertPanel({
     <div className="lt-module-page lt-module-page--ops-split">
       <PageHeader
         title="Centro de alertas (incidencias)"
-        subtitle="Monitoreo y gestión de incidentes en tiempo real"
+        subtitle="Incidentes en tiempo real"
       />
       <div className="lt-module-split lt-module-split--nested">
         <div className="lt-module-split__queue">

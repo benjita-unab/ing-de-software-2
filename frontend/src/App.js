@@ -7,12 +7,12 @@ import ClientPortalShell from "./components/ClientPortalShell";
 
 const loadingStyle = {
   minHeight: "100vh",
-  background: "#0a0e1a",
+  background: "var(--lt-bg-page)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  color: "#556",
-  fontFamily: "'DM Mono', monospace",
+  color: "var(--lt-text-secondary)",
+  fontFamily: "var(--lt-font)",
   fontSize: "14px",
   flexDirection: "column",
   gap: "12px",

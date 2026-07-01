@@ -37,7 +37,7 @@ const SIZES_CONFIG = {
   M: { label: "M (12 Slots)", slots: 12, color: "#3B82F6", textDark: true },
   L: { label: "L (24 Slots)", slots: 24, color: "#FBBF24", textDark: true },
   XL: { label: "XL (48 Slots)", slots: 48, color: "#8B5CF6", textDark: true },
-  MAXIMO: { label: "MÁXIMO (96)", slots: 96, color: "#DC2626", textDark: false }
+  MAXIMO: { label: "Máximo (96)", slots: 96, color: "#DC2626", textDark: false }
 };
 
 const CALCULAR_DIAS_ENTREGA = (km) => {
@@ -173,7 +173,7 @@ export default function CreadorCarga() {
     }
     const res = await getRutaPlantillaById(plantillaId);
     if (res.error || !res.data) {
-      setMensaje({ tipo: "error", texto: res.error || "No se pudo cargar la ruta." });
+      setMensaje({ tipo: "error", texto: res.error || "No se pudo cargar la configuración." });
       return;
     }
     const plantilla = res.data;
@@ -205,18 +205,6 @@ export default function CreadorCarga() {
       modoCarga, clienteId, nombreRuta, origen, origenInput, paradas, bultos, rutaPlantillaId, observaciones
     }));
   }, [modoCarga, clienteId, nombreRuta, origen, origenInput, paradas, bultos, rutaPlantillaId, observaciones]);
-
-  const handleNuevoPedido = () => {
-    if(window.confirm("¿Estás seguro de que quieres borrar el pedido actual y empezar uno nuevo?")) {
-      localStorage.removeItem('creadorCargaDraft');
-      setModoCarga('CENTRAL'); setClienteId(""); setNombreRuta(""); setOrigen(""); setOrigenInput("");
-      setRutaPlantillaId(""); setObservaciones(""); setRutasReutilizables([]);
-      setParadas([]); setBultos([]); setCostoTac("");
-      setFechaEntregaStr(""); setFechaEntregaTimestamp(""); setActiveSizeBrush(null);
-      setIsTarifaManual(false); setCamionId(""); setActiveParadaId("");
-      if(origenRef.current) origenRef.current.value = "";
-    }
-  };
 
   const [camionId, setCamionId] = useState("");
   const [rendimientoCamion, setRendimientoCamion] = useState(4.5);
@@ -356,7 +344,6 @@ export default function CreadorCarga() {
 
   const totalSlotsUsed = bultos.reduce((acc, b) => acc + b.slots, 0);
   const isCapacidadExcedida = totalSlotsUsed > CAPACIDAD_MAXIMA_SLOTS;
-  const isCargaMaximizada = totalSlotsUsed === CAPACIDAD_MAXIMA_SLOTS;
   const isCargaMinimaRetornoValida = modoCarga !== 'RETORNO' || totalSlotsUsed >= 24;
 
   const camionesDisponiblesParaEstaCarga = camiones.filter(c => {
@@ -377,15 +364,15 @@ export default function CreadorCarga() {
 
   const handleTruckClick = (e) => {
     if (!origen) {
-      alert("Debes seleccionar y autocompletar el Origen antes de empezar a cargar bultos.");
+      alert("Debes seleccionar y autocompletar el Origen antes de empezar a cargar slots.");
       return;
     }
     if (!activeSizeBrush) {
-      alert("Selecciona primero un tamaño de bulto para agregarlo al camión.");
+      alert("Selecciona primero un tamaño de slot para agregarlo al camión.");
       return;
     }
     if (!activeParadaId) {
-      alert("Selecciona a qué parada de destino va dirigido este bulto.");
+      alert("Selecciona a qué parada de destino va dirigido este slot.");
       return;
     }
     const paradaValida = paradas.find(p => p.id === activeParadaId);
@@ -418,14 +405,18 @@ export default function CreadorCarga() {
     }
   };
 
+  const remainingSlots = CAPACIDAD_MAXIMA_SLOTS - totalSlotsUsed;
+  const occupancyPct = Math.round((totalSlotsUsed / CAPACIDAD_MAXIMA_SLOTS) * 100);
+  const modoCargaLabel = modoCarga === 'RETORNO' ? 'Retorno' : 'Desde central';
+  const canvasInteractive = !!(activeSizeBrush && activeParadaId && origen);
+
   const slotsPintados = [];
-  bultos.forEach((b, index) => {
+  bultos.forEach((b) => {
     const bParadaIndex = paradas.findIndex(p => p.id === b.paradaId) + 1;
     for (let i = 0; i < b.slots; i++) {
       slotsPintados.push({ color: SIZES_CONFIG[b.categoria].color, paradaNumber: bParadaIndex, id: b.id });
     }
   });
-  const remainingSlots = CAPACIDAD_MAXIMA_SLOTS - totalSlotsUsed;
 
   useEffect(() => {
     if (bultos.length === 0 || paradas.length === 0) {
@@ -473,17 +464,13 @@ export default function CreadorCarga() {
   const tarifaFinalBase = cotizacion?.tarifaBaseTotal ?? 0;
   const ivaCalculado = cotizacion?.iva ?? 0;
   const totalAPagarCliente = cotizacion?.totalPagar ?? 0;
-  const desgloseTarifa = cotizacion?.desglose ?? [];
   const pagoConductorAutomatico = cotizacion?.costosOperativos?.conductor ?? 0;
-  const costoCombustibleCalculado = cotizacion?.costosOperativos?.combustible ?? 0;
-  const totalCostosOperativos = cotizacion?.costosOperativos?.total ?? 0;
-  const margenGanancia = cotizacion?.costosOperativos?.margen ?? 0;
 
   const handleCrearRuta = async (e) => {
     e.preventDefault();
     if (isCapacidadExcedida) return;
     if (!clienteId || !camionId || bultos.length === 0 || paradas.length === 0 || !fechaEntregaTimestamp) {
-      setMensaje({ tipo: "error", texto: "Revisa: Cliente, Camión, Fecha y al menos 1 parada/bulto deben ser definidos." });
+      setMensaje({ tipo: "error", texto: "Complete cliente, camión, fecha y al menos un destino con slot." });
       return;
     }
     if (!cotizacion && !isTarifaManual) {
@@ -538,10 +525,10 @@ export default function CreadorCarga() {
 
       const resultado = await crearRuta(payload);
       if (!resultado.success) {
-        throw new Error(resultado.error || "Error al crear ruta.");
+        throw new Error(resultado.error || "Error al crear el pedido.");
       }
 
-      setMensaje({ tipo: "ok", texto: "¡Ruta guardada exitosamente! Visita Gestión de Rutas." });
+      setMensaje({ tipo: "ok", texto: "Pedido creado." });
 
       localStorage.removeItem('creadorCargaDraft');
       setOrigen(""); setOrigenInput(""); setParadas([]); setCostoTac("");
@@ -556,429 +543,484 @@ export default function CreadorCarga() {
     }
   };
 
+  const camionSeleccionado = camiones.find((c) => c.id === camionId);
+  const maxCapCamion = camionSeleccionado?.slots || CAPACIDAD_MAXIMA_SLOTS;
+  const slotsDisponiblesCamion = camionId
+    ? (modoCarga === 'RETORNO' ? maxCapCamion : (camionesDisponibilidad[camionId] ?? maxCapCamion))
+    : null;
+
+  const puedeConfirmar = !saving
+    && bultos.length > 0
+    && camionId
+    && isCargaMinimaRetornoValida
+    && !cotizacionLoading
+    && (cotizacion || isTarifaManual);
+
+  const validaciones = [
+    { ok: !!clienteId, label: 'Cliente' },
+    { ok: !!origen && paradas.length > 0, label: 'Destinos' },
+    {
+      ok: totalSlotsUsed > 0 && !isCapacidadExcedida && isCargaMinimaRetornoValida,
+      error: modoCarga === 'RETORNO' && totalSlotsUsed > 0 && !isCargaMinimaRetornoValida,
+      label: 'Slots',
+    },
+    { ok: !!camionId, label: 'Camión' },
+    {
+      ok: !!(cotizacion || isTarifaManual),
+      pending: cotizacionLoading && bultos.length > 0 && paradas.length > 0,
+      label: 'Tarifa',
+    },
+  ];
+
   return (
     <div className="liquid-container">
-      <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px'}}>
-        <h2 className="liquid-title" style={{fontSize: '28px', fontWeight: 900, margin: 0}}>Creador de Carga</h2>
-        {(bultos.length > 0 || paradas.length > 0 || origen) && (
-          <button type="button" onClick={handleNuevoPedido} style={{padding: '8px 16px', background: '#DC2626', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 2px 5px rgba(220,38,38,0.3)'}}>
-            Limpiar / Nuevo Pedido
-          </button>
-        )}
-      </div>
-      <p className="liquid-text" style={{ fontSize: '14px', marginBottom: '24px', lineHeight: '1.5', fontWeight: '500' }}>
-        Arma tu carga (96 Slots). Usa <b>Click Izquierdo</b> para pintar en el camión y <b>Click Derecho</b> para borrar paquetes.
-      </p>
-
       {mensaje && (
-        <div style={{ padding: '12px', background: mensaje.tipo === "ok" ? '#D1FAE5' : '#FEE2E2', border: `1px solid ${mensaje.tipo === 'ok' ? '#10B981' : '#DC2626'}`, color: mensaje.tipo === 'ok' ? '#065F46' : '#991B1B', borderRadius: '8px', marginBottom: '16px', fontWeight: 'bold' }}>
+        <div
+          className={`liquid-msg-compact ${mensaje.tipo === 'ok' ? 'liquid-msg-compact--ok' : 'liquid-msg-compact--error'}`}
+          role={mensaje.tipo === 'ok' ? 'status' : 'alert'}
+        >
           {mensaje.texto}
         </div>
       )}
 
       {(origenErr || destinoErr) && (
-        <div style={{ padding: '12px', background: '#FEE2E2', border: '1px solid #DC2626', color: '#991B1B', borderRadius: '8px', marginBottom: '16px', fontWeight: 'bold' }}>
-          Google Maps Auth Error: Configura tu REACT_APP_GOOGLE_MAPS_API_KEY
+        <div className="liquid-msg-compact liquid-msg-compact--error" role="alert">
+          Configure REACT_APP_GOOGLE_MAPS_API_KEY para autocompletar direcciones.
         </div>
       )}
 
-      <form onSubmit={handleCrearRuta} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      <form onSubmit={handleCrearRuta} className="liquid-form-stack">
 
-        {/* PESTAÑAS MODO CARGA */}
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button type="button" onClick={() => { setModoCarga('CENTRAL'); setOrigen(""); if(origenRef.current) origenRef.current.value=""; setParadas([]); setBultos([]); setActiveParadaId(""); }} style={{ flex: 1, padding: '16px', borderRadius: '12px', border: 'none', fontWeight: '900', fontSize: '15px', cursor: 'pointer', background: modoCarga === 'CENTRAL' ? '#3B82F6' : 'rgba(128,128,128,0.2)', color: modoCarga === 'CENTRAL' ? '#fff' : 'inherit', transition: 'all 0.2s' }}>
-            🚛 Crear Pedido desde Central
-          </button>
-          <button type="button" onClick={() => { setModoCarga('RETORNO'); setOrigen(""); if(origenRef.current) origenRef.current.value=""; setParadas([]); setBultos([]); setActiveParadaId(""); }} style={{ flex: 1, padding: '16px', borderRadius: '12px', border: 'none', fontWeight: '900', fontSize: '15px', cursor: 'pointer', background: modoCarga === 'RETORNO' ? '#10B981' : 'rgba(128,128,128,0.2)', color: modoCarga === 'RETORNO' ? '#fff' : 'inherit', transition: 'all 0.2s' }}>
-            🔙 Crear Pedido de Retorno
-          </button>
-        </div>
+        {/* 1. Información del pedido */}
+        <section className="liquid-block" aria-labelledby="pedido-info-title">
+          <h3 className="liquid-block__title" id="pedido-info-title">Información del pedido</h3>
 
-        {/* PASO 1: DIRECCIONES Y CLIENTE */}
-        <div className="liquid-step-box" style={{ padding: '24px', borderRadius: '16px' }}>
-          <div className="liquid-text" style={{ fontSize: '18px', fontWeight: '800', marginBottom: '16px', borderBottom: '2px solid rgba(128,128,128,0.1)', paddingBottom: '8px' }}>
-            Paso 1: Direcciones, Cliente y Paradas 
-            {modoCarga === 'RETORNO' && <span style={{ color: '#10B981', fontSize: '14px', marginLeft:'8px' }}>(Solo Camiones a &lt;100km)</span>}
-            {modoCarga === 'CENTRAL' && <span style={{ color: '#3B82F6', fontSize: '14px', marginLeft:'8px' }}>(Salida Base: Quillota 980, Viña del Mar)</span>}
+          <div className="liquid-mode-tabs" style={{ marginBottom: 'var(--lt-space-4)' }}>
+            <button
+              type="button"
+              className={`lt-btn lt-btn--filter ${modoCarga === 'CENTRAL' ? 'lt-btn--filter-active' : ''}`}
+              onClick={() => { setModoCarga('CENTRAL'); setOrigen(""); if(origenRef.current) origenRef.current.value=""; setParadas([]); setBultos([]); setActiveParadaId(""); }}
+            >
+              Desde central
+            </button>
+            <button
+              type="button"
+              className={`lt-btn lt-btn--filter ${modoCarga === 'RETORNO' ? 'lt-btn--filter-active' : ''}`}
+              onClick={() => { setModoCarga('RETORNO'); setOrigen(""); if(origenRef.current) origenRef.current.value=""; setParadas([]); setBultos([]); setActiveParadaId(""); }}
+            >
+              Retorno
+            </button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <label className="liquid-label" style={{ fontSize: '13px', fontWeight: '700' }}>Cliente Principal B2B *</label>
-              <select required value={clienteId} onChange={e => setClienteId(e.target.value)} className="liquid-input" style={{ padding: '12px', borderRadius: '8px', outline: 'none' }}>
-                <option value="">Selecciona Cliente...</option>
+          <div className="liquid-block__grid-2">
+            <div className="liquid-field">
+              <label className="liquid-label">Cliente *</label>
+              <select required value={clienteId} onChange={e => setClienteId(e.target.value)} className="liquid-input">
+                <option value="">Seleccionar</option>
                 {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre || c.contacto_email}</option>)}
               </select>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <label className="liquid-label" style={{ fontSize: '13px', fontWeight: '700' }}>Nombre de Ruta (Opcional)</label>
-              <input 
-                type="text" 
+            <div className="liquid-field">
+              <label className="liquid-label">Entrega estimada</label>
+              <input type="text" disabled value={fechaEntregaStr || "—"} className="liquid-input" />
+            </div>
+            <div className="liquid-field">
+              <label className="liquid-label">Referencia (opcional)</label>
+              <input
+                type="text"
                 value={nombreRuta}
                 onChange={e => setNombreRuta(e.target.value)}
-                placeholder="Ej: Pedido Falabella..." 
-                className="liquid-input" 
-                style={{ padding: '12px', borderRadius: '8px', outline: 'none' }} 
+                placeholder="Ej. Pedido semanal norte"
+                className="liquid-input"
               />
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <label className="liquid-label" style={{ fontSize: '13px', fontWeight: '700' }}>Origen (Autocompletado) *</label>
-              <input 
-                ref={origenRef} 
-                required 
-                type="text" 
+          </div>
+
+          <div className="liquid-field" style={{ marginTop: 'var(--lt-space-4)' }}>
+            <label className="liquid-label">Observaciones</label>
+            <textarea
+              value={observaciones}
+              onChange={e => setObservaciones(e.target.value)}
+              placeholder="Notas operativas"
+              className="liquid-input"
+              style={{ resize: 'vertical', minHeight: '56px' }}
+            />
+          </div>
+
+          {modoCarga === 'CENTRAL' && (
+            <p className="liquid-block__footer-hint">Salida desde base Quillota 980, Viña del Mar.</p>
+          )}
+          {modoCarga === 'RETORNO' && (
+            <p className="liquid-block__footer-hint">Solo camiones a menos de 100 km del origen.</p>
+          )}
+        </section>
+
+        {/* 2. Destinos */}
+        <section className="liquid-block" aria-labelledby="pedido-destinos-title">
+          <h3 className="liquid-block__title" id="pedido-destinos-title">Destinos</h3>
+
+          <div className="liquid-block__grid-2">
+            <div className="liquid-field">
+              <label className="liquid-label">Origen *</label>
+              <input
+                ref={origenRef}
+                required
+                type="text"
                 defaultValue={origenInput || origen}
                 onChange={e => {
                   setOrigenInput(e.target.value);
                   if (!e.target.value) setOrigen("");
                 }}
                 disabled={paradas.length > 0}
-                placeholder="Ej: Santiago, Chile" 
-                className="liquid-input" 
-                style={{ padding: '12px', borderRadius: '8px', outline: 'none', opacity: paradas.length > 0 ? 0.6 : 1 }} 
+                placeholder="Ciudad o dirección"
+                className="liquid-input"
               />
-              {paradas.length > 0 && <span style={{ fontSize: '11px', color: '#FBBF24' }}>Para cambiar el origen, elimina los destinos.</span>}
+              {paradas.length > 0 && (
+                <span className="liquid-block__footer-hint">Elimine destinos para cambiar el origen.</span>
+              )}
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', gridColumn: 'span 2' }}>
-              <label className="liquid-label" style={{ fontSize: '13px', fontWeight: '700' }}>Añadir Parada (Destino) {calculandoRuta && <span style={{ fontSize: '12px', color: '#1D4ED8' }}>(Calculando...)</span>}</label>
-              <input ref={nuevaParadaRef} type="text" placeholder="Ej: Coquimbo, Antofagasta..." className="liquid-input" style={{ padding: '12px', borderRadius: '8px', outline: 'none' }} disabled={calculandoRuta || !origen || (modoCarga === 'RETORNO' && paradas.length >= 1)} />
-              {!origen && <span style={{ fontSize: '11px', color: '#f87171' }}>Debes establecer el Origen primero</span>}
-              {modoCarga === 'RETORNO' && paradas.length >= 1 && <span style={{ fontSize: '11px', color: '#FBBF24' }}>Solo se permite 1 destino en modo Retorno.</span>}
+            <div className="liquid-field">
+              <label className="liquid-label">
+                Añadir parada
+                {calculandoRuta && <span className="liquid-step-title__hint"> · calculando</span>}
+              </label>
+              <input
+                ref={nuevaParadaRef}
+                type="text"
+                placeholder="Destino intermedio o final"
+                className="liquid-input"
+                disabled={calculandoRuta || !origen || (modoCarga === 'RETORNO' && paradas.length >= 1)}
+              />
+              {!origen && <span className="liquid-block__footer-hint">Defina el origen primero.</span>}
+              {modoCarga === 'RETORNO' && paradas.length >= 1 && (
+                <span className="liquid-block__footer-hint">Un solo destino en modo retorno.</span>
+              )}
             </div>
           </div>
 
           {paradas.length > 0 && (
-            <div style={{ background: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '12px', marginBottom: '16px', border: '1px solid rgba(255,255,255,0.1)' }}>
-              <div style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '12px' }} className="liquid-label">Ruta Consolidada ({distanciaLogisticaKm} km logísticos):</div>
-              
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '8px', padding: '0 4px' }}>
-                <span style={{ fontSize: '16px' }}>📍</span>
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <span style={{ fontSize: '11px', color: '#9CA3AF', fontWeight: 'bold', textTransform: 'uppercase' }}>Desde (Origen)</span>
-                  <span className="liquid-text" style={{ fontSize: '13px', fontWeight: '500' }}>{origen}</span>
+            <div className="liquid-route-panel" style={{ marginTop: 'var(--lt-space-4)', marginBottom: 0 }}>
+              <div className="liquid-route-panel__label">{distanciaLogisticaKm} km totales</div>
+
+              <div className="liquid-route-stop" style={{ marginBottom: '8px' }}>
+                <div>
+                  <div className="liquid-route-stop__meta">Origen</div>
+                  <span className="liquid-text">{origen}</span>
                 </div>
               </div>
 
-              <div style={{ borderLeft: '2px dashed rgba(255,255,255,0.15)', marginLeft: '11px', paddingLeft: '18px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div style={{ borderLeft: '2px dashed var(--lt-border)', marginLeft: '8px', paddingLeft: '16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {paradas.map((p, idx) => (
-                  <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: 'rgba(0,0,0,0.2)', borderRadius: '6px', fontSize: '13px', alignItems: 'center' }} className="liquid-text">
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ fontSize: '11px', color: '#9CA3AF', fontWeight: 'bold', textTransform: 'uppercase' }}>Hacia (Destino {idx + 1})</span>
+                  <div key={p.id} className="liquid-route-stop">
+                    <div>
+                      <div className="liquid-route-stop__meta">Destino {idx + 1}</div>
                       <span>{p.address}</span>
                     </div>
                     <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                      <span style={{ fontWeight: 'bold', color: '#38BDF8' }}>+{Number(p.distanceFromPrev || p.distanceKm || 0).toFixed(1)} km</span>
-                      <button type="button" onClick={() => handleRemoveParada(p.id)} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', fontWeight: 'bold', fontSize: '16px', padding: '0 4px' }}>×</button>
+                      <span className="liquid-route-stop__km">+{Number(p.distanceFromPrev || p.distanceKm || 0).toFixed(1)} km</span>
+                      <button type="button" onClick={() => handleRemoveParada(p.id)} className="lt-btn lt-btn--ghost" style={{ padding: '2px 8px', color: 'var(--lt-danger)' }} aria-label="Eliminar parada">×</button>
                     </div>
                   </div>
                 ))}
 
-                {modoCarga !== 'RETORNO' && paradas.length > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '6px', fontSize: '13px', alignItems: 'center', border: '1px solid rgba(16, 185, 129, 0.2)' }} className="liquid-text">
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ fontSize: '11px', color: '#10B981', fontWeight: 'bold', textTransform: 'uppercase' }}>Retorno a Base</span>
-                      <span style={{ color: '#A7F3D0' }}>{origen}</span>
+                {modoCarga !== 'RETORNO' && (
+                  <div className="liquid-route-stop liquid-route-stop--return">
+                    <div>
+                      <div className="liquid-route-stop__meta">Retorno a base</div>
+                      <span>{origen}</span>
                     </div>
-                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                      <span style={{ fontWeight: 'bold', color: '#10B981' }}>+{Number(paradas[paradas.length - 1].distanceToOrigin || 0).toFixed(1)} km</span>
-                    </div>
+                    <span className="liquid-route-stop__km">+{Number(paradas[paradas.length - 1].distanceToOrigin || 0).toFixed(1)} km</span>
                   </div>
                 )}
               </div>
             </div>
           )}
+        </section>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px' }}>
-            <label className="liquid-label" style={{ fontSize: '13px', fontWeight: '700' }}>Observaciones (Opcional)</label>
-            <textarea
-              value={observaciones}
-              onChange={e => setObservaciones(e.target.value)}
-              placeholder="Notas operativas del pedido..."
-              className="liquid-input"
-              style={{ padding: '12px', borderRadius: '8px', outline: 'none', resize: 'vertical', minHeight: '60px' }}
-            />
-          </div>
+        {/* 3. Configuración de carga */}
+        <section className="liquid-block" aria-labelledby="pedido-carga-title">
+          <h3 className="liquid-block__title" id="pedido-carga-title">Configuración de carga</h3>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '24px' }}>
-            <label className="liquid-label" style={{ fontSize: '13px', fontWeight: '700' }}>Entrega Estimada Final (Automática)</label>
-            <input type="text" disabled value={fechaEntregaStr || "Esperando paradas..."} className="liquid-input" style={{ padding: '12px', borderRadius: '8px', fontWeight: 'bold', opacity: 0.8 }} />
-          </div>
-
-          <div className="liquid-section-divider" style={{ fontSize: '13px', fontWeight: '800', marginTop: '16px', marginBottom: '10px' }}>SELECCIONA TAMAÑO, DESTINO Y PINTA LA CARGA</div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-              {Object.entries(SIZES_CONFIG).map(([k, v]) => {
-                const isSelected = activeSizeBrush === k;
-                const isYellow = k === 'L';
-                return (
-                  <button
-                    key={k} type="button"
-                    onClick={() => setActiveSizeBrush(k)}
-                    style={{
-                      padding: '10px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px', transition: 'all 0.2s', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', border: 'none',
-                      background: isSelected ? v.color : "rgba(128,128,128,0.2)",
-                      color: isSelected && !v.textDark ? "#fff" : (isSelected ? "#000" : "inherit"),
-                      textShadow: (isSelected && isYellow) ? "-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000" : "none",
-                    }}
-                    className={!isSelected ? "liquid-text" : ""}
-                  >
-                    <span style={{ color: (isSelected && isYellow) ? '#fff' : 'inherit' }}>{v.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-            <div>
-              <select value={activeParadaId} onChange={e => setActiveParadaId(e.target.value)} className="liquid-input" style={{ padding: '10px', borderRadius: '8px', width: '100%', outline: 'none', fontSize: '13px' }} disabled={paradas.length === 0}>
-                <option value="">Selecciona la parada de destino para el bulto...</option>
-                {paradas.map((p, idx) => <option key={p.id} value={p.id}>{idx + 1}. {p.address} (+{Number(p.distanceFromPrev || p.distanceKm || 0).toFixed(1)} km)</option>)}
-              </select>
-            </div>
-          </div>
-
-          {/* Grilla Interactiva */}
-          {(!activeSizeBrush || !activeParadaId || !origen) && paradas.length > 0 && (
-            <div style={{ color: '#DC2626', fontWeight: 'bold', fontSize: '13px', marginTop: '14px', textAlign: 'center' }}>
-              ⚠️ Selecciona un ORIGEN, un TAMAÑO y una PARADA DE DESTINO para poder pintar en el camión.
-            </div>
-          )}
-          <div
-            className="liquid-canvas"
-            style={{
-              display: 'flex', gap: '10px', padding: '10px', borderRadius: '16px',
-              cursor: (!activeSizeBrush || !activeParadaId || !origen) ? 'not-allowed' : 'crosshair',
-              marginTop: '14px',
-              opacity: (!activeSizeBrush || !activeParadaId || !origen) ? 0.5 : 1,
-              pointerEvents: (!activeSizeBrush || !activeParadaId || !origen) ? 'none' : 'auto'
-            }}
-            onClick={handleTruckClick}
-            onContextMenu={(e) => handleRightClick(e, null)}
-          >
-            <div style={{ width: '80px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(180deg, #1D4ED8, #1e3a8a)', border: '2px solid rgba(255,255,255,0.8)', borderRadius: '12px 4px 4px 12px', fontSize: '18px', fontWeight: 'bold', color: '#ffffff', boxShadow: '5px 0 15px rgba(0,0,0,0.2)' }}>LOGI</div>
-            <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(16, 1fr)', gridTemplateRows: 'repeat(6, 1fr)', gap: '2px' }}>
-              {Array.from({ length: CAPACIDAD_MAXIMA_SLOTS }).map((_, i) => {
-                const p = slotsPintados[i];
-                return (
-                  <div
-                    key={i}
-                    className={p ? "" : "liquid-slot-empty"}
-                    onContextMenu={(e) => p ? handleRightClick(e, p.id) : null}
-                    style={{
-                      aspectRatio: '1', borderRadius: '2px', border: '1px solid', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s',
-                      backgroundColor: p ? p.color : "",
-                      borderColor: p ? "transparent" : "",
-                      boxShadow: p ? `0 0 5px ${p.color}AA` : "none"
-                    }}>
-                    {p && <div style={{ fontSize: '11px', fontWeight: '900', color: '#000', textAlign: 'center', lineHeight: '1' }}>P{p.paradaNumber}</div>}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-          <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <p
-              className="liquid-text"
-              style={{
-                fontSize: '12px',
-                lineHeight: 1.5,
-                margin: 0,
-                padding: '8px 12px',
-                borderRadius: '8px',
-                background: 'rgba(128,128,128,0.12)',
-                border: '1px solid rgba(128,128,128,0.2)',
-              }}
-            >
-              <strong>¿Qué es un Slot?</strong>{' '}
-              Cada celda de la grilla representa 1 Slot. Los Slots representan la capacidad utilizada del camión
-              {' '}(96 Slots = carga completa).
-            </p>
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: '6px',
-                textAlign: 'right',
-              }}
-            >
-              <span className="liquid-text" style={{ fontSize: '14px', fontWeight: 'bold', width: '100%' }}>
-                <span style={{ color: totalSlotsUsed > 0 ? '#1D4ED8' : 'inherit' }}>
-                  {totalSlotsUsed} / {CAPACIDAD_MAXIMA_SLOTS} Slots utilizados
-                </span>
-                <span
-                  style={{
-                    fontWeight: '600',
-                    marginLeft: '10px',
-                    color: remainingSlots === 0 ? '#DC2626' : '#38BDF8',
-                  }}
+          <div className="liquid-size-toolbar">
+            {Object.entries(SIZES_CONFIG).map(([k, v]) => {
+              const isSelected = activeSizeBrush === k;
+              const isYellow = k === 'L';
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setActiveSizeBrush(k)}
+                  className={`liquid-size-btn ${isSelected ? 'liquid-size-btn--active' : ''}`}
+                  style={isSelected ? {
+                    background: v.color,
+                    color: isSelected && !v.textDark ? '#fff' : (isYellow ? '#fff' : '#000'),
+                  } : undefined}
                 >
-                  · Disponibles: {remainingSlots} Slots
-                </span>
-              </span>
-            </div>
+                  {v.label}
+                </button>
+              );
+            })}
           </div>
 
-          {isCargaMaximizada && (
-            <div style={{ color: '#DC2626', fontWeight: 'bold', fontSize: '14px', marginTop: '10px', textAlign: 'right' }}>
-              ¡CARGA MÁXIMA ALCANZADA!
-            </div>
+          <div className="liquid-field" style={{ marginBottom: 'var(--lt-space-3)' }}>
+            <label className="liquid-label">Parada de destino del slot</label>
+            <select value={activeParadaId} onChange={e => setActiveParadaId(e.target.value)} className="liquid-input" disabled={paradas.length === 0}>
+              <option value="">Seleccionar parada</option>
+              {paradas.map((p, idx) => (
+                <option key={p.id} value={p.id}>{idx + 1}. {p.address}</option>
+              ))}
+            </select>
+          </div>
+
+          {paradas.length > 0 && (!activeSizeBrush || !activeParadaId || !origen) && (
+            <p className="liquid-block__footer-hint" style={{ marginBottom: 'var(--lt-space-3)' }}>
+              Seleccione tamaño y parada para asignar en la grilla.
+            </p>
           )}
-          {modoCarga === 'RETORNO' && totalSlotsUsed > 0 && !isCargaMinimaRetornoValida && (
-            <div style={{ color: '#FBBF24', fontWeight: 'bold', fontSize: '14px', marginTop: '10px', textAlign: 'right' }}>
-              ⚠️ Mínimo 25% (24 Slots) requerido para Retorno. Faltan {24 - totalSlotsUsed} Slots.
+
+          <div className="liquid-truck-panel">
+            <div className="liquid-truck-stats" aria-label="Ocupación del vehículo">
+              <div className="liquid-truck-stats__item">
+                <span className="liquid-truck-stats__label">Capacidad</span>
+                <span className="liquid-truck-stats__value">{CAPACIDAD_MAXIMA_SLOTS}</span>
+              </div>
+              <div className="liquid-truck-stats__item">
+                <span className="liquid-truck-stats__label">Ocupados</span>
+                <span className="liquid-truck-stats__value">{totalSlotsUsed}</span>
+              </div>
+              <div className="liquid-truck-stats__item">
+                <span className="liquid-truck-stats__label">Disponibles</span>
+                <span className="liquid-truck-stats__value">{remainingSlots}</span>
+              </div>
+              <div className="liquid-truck-stats__item">
+                <span className="liquid-truck-stats__label">Ocupación</span>
+                <span className="liquid-truck-stats__value">{occupancyPct}%</span>
+              </div>
+              <div className="liquid-truck-stats__item">
+                <span className="liquid-truck-stats__label">Modo</span>
+                <span className="liquid-truck-stats__value">{modoCargaLabel}</span>
+              </div>
             </div>
-          )}
+
+            <div className="liquid-truck-occupancy" aria-hidden="true">
+              <div className="liquid-truck-occupancy__track">
+                <div
+                  className={`liquid-truck-occupancy__fill ${occupancyPct >= 90 ? 'liquid-truck-occupancy__fill--high' : occupancyPct >= 75 ? 'liquid-truck-occupancy__fill--mid' : ''}`}
+                  style={{ width: `${occupancyPct}%` }}
+                />
+              </div>
+            </div>
+
+            <div
+              className={`liquid-truck-canvas ${canvasInteractive ? 'liquid-truck-canvas--active' : 'liquid-truck-canvas--disabled'}`}
+              onClick={handleTruckClick}
+              onContextMenu={(e) => handleRightClick(e, null)}
+              role="group"
+              aria-label="Plano de carga del vehículo, 96 slots"
+            >
+              <div className="liquid-truck-cab" aria-hidden="true">
+                <span className="liquid-truck-cab__label">Cabina</span>
+              </div>
+
+              <div className="liquid-truck-body">
+                <div className="liquid-truck-body__header">
+                  <span className="liquid-truck-body__title">Plano de carga</span>
+                  <span className="liquid-truck-body__meta">16 × 6 · 96 slots</span>
+                </div>
+                <div className="liquid-slots-grid">
+                  {Array.from({ length: CAPACIDAD_MAXIMA_SLOTS }).map((_, i) => {
+                    const p = slotsPintados[i];
+                    return (
+                      <div
+                        key={i}
+                        className={`liquid-slot-cell ${p ? 'liquid-slot-cell--filled' : 'liquid-slot-empty'}`}
+                        onContextMenu={(e) => p ? handleRightClick(e, p.id) : null}
+                        style={p ? { backgroundColor: p.color, borderColor: 'transparent' } : undefined}
+                        title={p ? `Parada ${p.paradaNumber}` : `Slot ${i + 1}`}
+                      >
+                        {p && (
+                          <span className="liquid-slot-cell__tag">P{p.paradaNumber}</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="liquid-truck-tail" aria-hidden="true">
+                <span className="liquid-truck-tail__label">Trasera</span>
+              </div>
+            </div>
+
+            <p className="liquid-truck-hint">
+              Clic izquierdo: asignar · Clic derecho: quitar
+            </p>
+          </div>
 
           {bultos.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '16px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: 'var(--lt-space-4)' }}>
               {bultos.map((b, i) => {
                 const bParada = paradas.find(p => p.id === b.paradaId);
                 return (
-                  <div key={b.id} className="liquid-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', borderRadius: '8px' }}>
-                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                      <span style={{ fontWeight: 'bold' }}>#{i + 1}</span>
+                  <div key={b.id} className="liquid-row">
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <span style={{ fontWeight: '600', fontSize: '12px' }}>#{i + 1}</span>
                       <span style={{
-                        padding: '4px 8px', borderRadius: '4px', background: SIZES_CONFIG[b.categoria].color,
-                        color: SIZES_CONFIG[b.categoria].textDark ? '#000' : '#fff', fontSize: '12px', fontWeight: 'bold',
-                        textShadow: b.categoria === 'L' ? "-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000" : "none"
+                        padding: '2px 8px', borderRadius: '4px', background: SIZES_CONFIG[b.categoria].color,
+                        color: SIZES_CONFIG[b.categoria].textDark ? '#000' : '#fff', fontSize: '11px', fontWeight: '600',
                       }}>
-                        <span style={{ color: b.categoria === 'L' ? '#fff' : 'inherit' }}>{b.categoria}</span>
+                        {b.categoria}
                       </span>
-                      <span style={{ fontSize: '13px', fontWeight: '500' }}>{b.slots} Slots</span>
-                      <span style={{ fontSize: '12px', fontStyle: 'italic' }}>→ {bParada ? bParada.address.split(',')[0] : '???'}</span>
+                      <span style={{ fontSize: '12px' }}>{b.slots} slots</span>
+                      <span className="liquid-text" style={{ fontSize: '12px' }}>{bParada ? bParada.address.split(',')[0] : '—'}</span>
                     </div>
-                    <button type="button" onClick={(e) => handleRightClick(e, b.id)} style={{ background: 'none', border: 'none', color: '#DC2626', fontSize: '20px', cursor: 'pointer', fontWeight: 'bold' }}>×</button>
+                    <button type="button" onClick={(e) => handleRightClick(e, b.id)} className="lt-btn lt-btn--ghost" style={{ padding: '2px 8px', color: 'var(--lt-danger)' }} aria-label="Quitar">×</button>
                   </div>
                 );
               })}
             </div>
           )}
-        </div>
+        </section>
 
-        {/* WIDGET ALERTA DE PÉRDIDA FINANCIERA (ELIMINADO) */}
+        {/* 4. Configuración logística */}
+        <section className="liquid-block" aria-labelledby="pedido-logistica-title">
+          <h3 className="liquid-block__title" id="pedido-logistica-title">Configuración logística</h3>
 
-        {/* PASO 2: ASIGNACIÓN DE CAMIÓN */}
-        <div className="liquid-step-box" style={{ padding: '24px', borderRadius: '16px', opacity: totalSlotsUsed > 0 ? 1 : 0.5 }}>
-          <div className="liquid-text" style={{ fontSize: '18px', fontWeight: '800', marginBottom: '16px', borderBottom: '2px solid rgba(128,128,128,0.1)', paddingBottom: '8px' }}>Paso 2: Selección de Vehículo Compatible</div>
-          {totalSlotsUsed === 0 ? (
-            <div style={{ color: '#DC2626', fontSize: '14px', marginBottom: '10px', fontWeight: '600' }}>⚠️ Agrega carga en el Paso 1 para buscar camiones.</div>
-          ) : (
-            <div style={{ color: '#38BDF8', fontSize: '14px', marginBottom: '10px', fontWeight: '600' }}>✓ Buscando camiones con al menos {totalSlotsUsed} Slots disponibles.</div>
-          )}
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <label className="liquid-label" style={{ fontSize: '13px', fontWeight: '700' }}>Camiones Disponibles *</label>
-            <select required value={camionId} onChange={e => handleSelectCamion(e.target.value)} className="liquid-input" style={{ padding: '12px', borderRadius: '8px', outline: 'none' }} disabled={totalSlotsUsed === 0}>
-              <option value="">Selecciona Vehículo...</option>
+          <div className="liquid-field">
+            <label className="liquid-label">Camión *</label>
+            <select
+              required
+              value={camionId}
+              onChange={e => handleSelectCamion(e.target.value)}
+              className="liquid-input"
+              disabled={totalSlotsUsed === 0}
+            >
+              <option value="">{totalSlotsUsed === 0 ? 'Asigne slots primero' : 'Seleccionar vehículo'}</option>
               {camionesDisponiblesParaEstaCarga.map(c => {
                 const maxCap = c.slots || CAPACIDAD_MAXIMA_SLOTS;
                 const available = modoCarga === 'RETORNO' ? maxCap : (camionesDisponibilidad[c.id] ?? maxCap);
-                const ocupadosFlota = Math.max(0, maxCap - available);
                 return (
                   <option key={c.id} value={c.id}>
-                    {c.patente || c.placa} ({c.modelo}) — {ocupadosFlota}/{maxCap} Slots utilizados · Disponibles: {available} Slots
-                    {modoCarga === 'RETORNO' ? ' (Cerca de origen)' : ''}
+                    {c.patente || c.placa} — {available} slots libres
+                    {modoCarga === 'RETORNO' ? ' (cerca)' : ''}
                   </option>
                 );
               })}
             </select>
-            {totalSlotsUsed > 0 && modoCarga === 'RETORNO' && camionesDisponiblesParaEstaCarga.length === 0 && (
-              <div style={{ color: '#FBBF24', fontSize: '13px', marginTop: '6px', fontWeight: 'bold' }}>No hay camiones en ruta retornando a menos de 100km de tu Origen. Intenta otra ubicación.</div>
-            )}
-            {totalSlotsUsed > 0 && modoCarga === 'CENTRAL' && camionesDisponiblesParaEstaCarga.length === 0 && (
-              <div style={{ color: '#DC2626', fontSize: '13px', marginTop: '6px', fontWeight: 'bold' }}>No hay camiones en la flota con {totalSlotsUsed} Slots disponibles en este momento.</div>
-            )}
-          </div>
-        </div>
-
-        {/* PASO 3: SIMULADOR DE RENTABILIDAD */}
-        <div className="liquid-step-box" style={{ padding: '24px', borderRadius: '16px', opacity: (totalSlotsUsed > 0 && camionId) ? 1 : 0.5 }}>
-          <div className="liquid-text" style={{ fontSize: '18px', fontWeight: '800', marginBottom: '16px', borderBottom: '2px solid rgba(128,128,128,0.1)', paddingBottom: '8px' }}>Paso 3: Simulador de Rentabilidad Interna</div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px', marginBottom: '16px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <label className="liquid-label" style={{ fontSize: '13px', fontWeight: '700' }}>Costo TAC / Peajes (CLP)</label>
-              <input type="number" required disabled={!camionId} value={costoTac} onChange={e => setCostoTac(e.target.value)} className="liquid-input" style={{ padding: '12px', borderRadius: '8px', outline: 'none' }} placeholder="Ej: 5000" />
-            </div>
           </div>
 
-          <div style={{ padding: '16px', borderRadius: '12px', border: '1px solid rgba(128,128,128,0.2)' }}>
-            <label className="liquid-text" style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold' }}>
-              <input type="checkbox" disabled={!camionId} checked={isTarifaManual} onChange={e => setIsTarifaManual(e.target.checked)} />
-              Tarifa Manual Override (Sobrescribir precios cobrados a clientes)
-            </label>
-            {isTarifaManual && (
-              <input type="number" value={tarifaManualTotal} onChange={e => setTarifaManualTotal(e.target.value)} placeholder="Tarifa total recaudada (CLP)" className="liquid-input" style={{ padding: '12px', borderRadius: '8px', marginTop: '10px', width: '100%', outline: 'none' }} />
-            )}
-          </div>
-
-          {/* BALANCE FINANCIERO */}
-          <div className="liquid-resume" style={{ padding: '20px', borderRadius: '16px', marginTop: '16px' }}>
-            {cotizacionLoading && (
-              <div className="liquid-text" style={{ fontSize: '14px', marginBottom: '12px', opacity: 0.8 }}>
-                Calculando tarifas con el servidor…
+          {camionId && (
+            <div className="liquid-logistics-meta">
+              <div className="liquid-logistics-meta__item">
+                <span className="liquid-logistics-meta__label">Capacidad</span>
+                <span className="liquid-logistics-meta__value">{maxCapCamion} slots</span>
               </div>
-            )}
-            {cotizacionError && (
-              <div style={{ color: '#EF4444', fontSize: '14px', marginBottom: '12px', fontWeight: '600' }}>
-                {cotizacionError}
+              <div className="liquid-logistics-meta__item">
+                <span className="liquid-logistics-meta__label">Disponibles</span>
+                <span className="liquid-logistics-meta__value">{slotsDisponiblesCamion} slots</span>
               </div>
-            )}
-            <div style={{ fontSize: '16px', fontWeight: '900', color: '#38BDF8', borderBottom: '1px solid rgba(56,189,248,0.3)', paddingBottom: '8px', marginBottom: '12px' }}>
-              INGRESOS (COBRO A CLIENTES)
-            </div>
-            {desgloseTarifa.map((bk) => (
-              <div key={bk.indice} className="liquid-text" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '4px', fontWeight: '500' }}>
-                <span>Bulto #{bk.indice}: {bk.categoria} ({distanciaLogisticaKm} km)</span>
-                <span>+${Number(bk.tarifaClp || 0).toLocaleString()}</span>
+              <div className="liquid-logistics-meta__item">
+                <span className="liquid-logistics-meta__label">Asignados</span>
+                <span className="liquid-logistics-meta__value">{totalSlotsUsed} slots</span>
               </div>
-            ))}
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '15px', marginBottom: '8px', fontWeight: '700', color: '#6EE7B7' }}>
-              <span>Subtotal Neto</span>
-              <span>${tarifaFinalBase.toLocaleString()}</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '15px', marginBottom: '8px', fontWeight: '700', color: '#93C5FD' }}>
-              <span>IVA (19%)</span>
-              <span>+${ivaCalculado.toLocaleString()}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', marginBottom: '20px', fontWeight: '900', color: '#10B981', paddingTop: '8px', borderTop: '1px solid rgba(16,185,129,0.3)' }}>
-              <span>Total Recaudado (Total a Pagar por Cliente)</span>
-              <span>${totalAPagarCliente.toLocaleString()}</span>
-            </div>
+          )}
 
-            <div style={{ fontSize: '16px', fontWeight: '900', color: '#FCA5A5', borderBottom: '1px solid rgba(248,113,113,0.3)', paddingBottom: '8px', marginBottom: '12px' }}>
-              COSTOS OPERATIVOS (INTERNOS)
-            </div>
-            <div className="liquid-text" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '4px', fontWeight: '500' }}>
-              <span>Costo Combustible Físico ({distanciaLogisticaKm}km {modoCarga === 'RETORNO' ? 'Solo Ida (Referencia)' : 'Viaje Redondo'} / {rendimientoCamion}km/L)</span>
-              <span>{modoCarga === 'RETORNO' ? '$0 (-$' + costoCombustibleCalculado.toLocaleString() + ' Financiado por Ida)' : '-$' + costoCombustibleCalculado.toLocaleString()}</span>
-            </div>
-            <div className="liquid-text" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '4px', fontWeight: '500' }}>
-              <span>Pago Conductor</span>
-              <span>-${pagoConductorAutomatico.toLocaleString()}</span>
-            </div>
-            <div className="liquid-text" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '4px', fontWeight: '500' }}>
-              <span>Costo TAC / Peajes</span>
-              <span>-${Number(costoTac || 0).toLocaleString()}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', marginBottom: '20px', fontWeight: '900', color: '#EF4444', paddingTop: '8px' }}>
-              <span>Gasto Total Estimado</span>
-              <span>-${totalCostosOperativos.toLocaleString()}</span>
-            </div>
+          {totalSlotsUsed > 0 && modoCarga === 'RETORNO' && camionesDisponiblesParaEstaCarga.length === 0 && (
+            <p className="liquid-block__footer-hint" style={{ color: 'var(--lt-warning-text)' }}>
+              Sin camiones retornando a menos de 100 km del origen.
+            </p>
+          )}
+          {totalSlotsUsed > 0 && modoCarga === 'CENTRAL' && camionesDisponiblesParaEstaCarga.length === 0 && (
+            <p className="liquid-block__footer-hint" style={{ color: 'var(--lt-danger-text)' }}>
+              Sin camiones con {totalSlotsUsed} slots disponibles.
+            </p>
+          )}
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', color: margenGanancia < 0 ? '#EF4444' : '#10B981', fontSize: '22px', fontWeight: '900', marginTop: '12px', borderTop: '2px dashed rgba(255,255,255,0.2)', paddingTop: '16px' }}>
-              <span>MARGEN DE GANANCIA (PROFIT)</span>
-              <span>{margenGanancia < 0 ? '-' : '+'}${Math.abs(margenGanancia).toLocaleString()} CLP</span>
+          <div className="liquid-block__grid-2" style={{ marginTop: 'var(--lt-space-4)' }}>
+            <div className="liquid-field">
+              <label className="liquid-label">TAC / peajes (CLP)</label>
+              <input type="number" required disabled={!camionId} value={costoTac} onChange={e => setCostoTac(e.target.value)} className="liquid-input" placeholder="0" />
+            </div>
+            <div className="liquid-field">
+              <label className="liquid-label" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <input type="checkbox" disabled={!camionId} checked={isTarifaManual} onChange={e => setIsTarifaManual(e.target.checked)} />
+                Tarifa manual
+              </label>
+              {isTarifaManual && (
+                <input type="number" value={tarifaManualTotal} onChange={e => setTarifaManualTotal(e.target.value)} placeholder="Monto neto (CLP)" className="liquid-input" />
+              )}
             </div>
           </div>
+        </section>
 
-          {/* BOTONES DE DECISION */}
-          <div style={{ display: 'flex', gap: '16px', marginTop: '20px' }}>
-            <button type="submit" disabled={saving || bultos.length === 0 || !camionId || !isCargaMinimaRetornoValida || cotizacionLoading || (!cotizacion && !isTarifaManual)} style={{ flex: 1, padding: '16px', borderRadius: '12px', background: 'linear-gradient(90deg, #10B981, #059669)', color: '#fff', fontSize: '18px', fontWeight: '900', border: 'none', cursor: 'pointer', boxShadow: '0 4px 15px rgba(16, 185, 129, 0.4)', transition: 'all 0.2s', textTransform: 'uppercase', opacity: (!isCargaMinimaRetornoValida || bultos.length === 0 || !camionId || cotizacionLoading || (!cotizacion && !isTarifaManual)) ? 0.5 : 1 }}>
-              {saving ? "Procesando..." : "Aprobar Ruta para Salida"}
-            </button>
+        {/* 5. Resumen */}
+        <section className="liquid-block liquid-block--summary" aria-labelledby="pedido-resumen-title">
+          <h3 className="liquid-block__title" id="pedido-resumen-title">Resumen</h3>
+
+          <ul className="liquid-validation-list" aria-label="Estado de validación">
+            {validaciones.map((v) => {
+              const stateClass = v.ok
+                ? 'liquid-validation-list__item--ok'
+                : v.error
+                  ? 'liquid-validation-list__item--error'
+                  : v.pending
+                    ? 'liquid-validation-list__item--pending'
+                    : 'liquid-validation-list__item--pending';
+              return (
+                <li key={v.label} className={`liquid-validation-list__item ${stateClass}`}>
+                  <span className="liquid-validation-dot" aria-hidden />
+                  {v.label}
+                  {v.pending && !v.ok && '…'}
+                </li>
+              );
+            })}
+          </ul>
+
+          {cotizacionError && (
+            <p className="liquid-block__footer-hint" style={{ color: 'var(--lt-danger-text)', marginBottom: 'var(--lt-space-3)' }}>
+              {cotizacionError}
+            </p>
+          )}
+
+          <div className="liquid-summary-table">
+            <div className="liquid-summary-row">
+              <span className="liquid-summary-row__label">Slots utilizados</span>
+              <span className="liquid-summary-row__value">{totalSlotsUsed} / {CAPACIDAD_MAXIMA_SLOTS}</span>
+            </div>
+            <div className="liquid-summary-row">
+              <span className="liquid-summary-row__label">Distancia</span>
+              <span className="liquid-summary-row__value">{distanciaLogisticaKm > 0 ? `${distanciaLogisticaKm} km` : '—'}</span>
+            </div>
+            <div className="liquid-summary-row">
+              <span className="liquid-summary-row__label">Tarifa neta</span>
+              <span className="liquid-summary-row__value">
+                {cotizacionLoading ? 'Calculando…' : tarifaFinalBase > 0 ? `$${tarifaFinalBase.toLocaleString()}` : '—'}
+              </span>
+            </div>
+            <div className="liquid-summary-row">
+              <span className="liquid-summary-row__label">IVA (19%)</span>
+              <span className="liquid-summary-row__value">
+                {cotizacionLoading ? '—' : ivaCalculado > 0 ? `$${ivaCalculado.toLocaleString()}` : '—'}
+              </span>
+            </div>
+            <div className="liquid-summary-row liquid-summary-row--total">
+              <span className="liquid-summary-row__label">Total</span>
+              <span className="liquid-summary-row__value">
+                {cotizacionLoading ? '—' : totalAPagarCliente > 0 ? `$${totalAPagarCliente.toLocaleString()}` : '—'}
+              </span>
+            </div>
           </div>
+        </section>
+
+        <div className="liquid-form-footer">
+          <button
+            type="submit"
+            className="lt-btn lt-btn--primary lt-btn--full lt-btn--lg"
+            disabled={!puedeConfirmar}
+          >
+            {saving ? 'Procesando…' : 'Confirmar pedido'}
+          </button>
         </div>
 
       </form>

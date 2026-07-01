@@ -90,10 +90,9 @@ export function formatRutaCodigo(ruta) {
   return id.length > 8 ? id.slice(0, 8) : id;
 }
 
-export const NOMBRE_NO_DISPONIBLE_API = "No disponible (API)";
+export const NOMBRE_NO_DISPONIBLE_API = "Sin nombre";
 
-export const NOMBRE_API_AYUDA =
-  "El nombre del conductor está en usuarios.nombre, pero GET /api/conductores no lo incluye actualmente. Requiere una mejora de backend.";
+export const NOMBRE_API_AYUDA = "Nombre no disponible en el listado.";
 
 export function conductorTieneNombre(conductor) {
   if (!conductor) return false;
@@ -209,17 +208,3 @@ export function filtrarYOrdenarConductores(conductores, search, orden) {
     orden,
   );
 }
-
-/** Textos informativos para el formulario de edición (HU-38). */
-export const EDICION_CONDUCTOR_INFO = {
-  titulo: "Alcance de edición en este panel",
-  editable: [
-    "Fecha de vencimiento de la licencia.",
-    "Documento de licencia (PDF o imagen), opcional si ya existe uno cargado.",
-  ],
-  soloLectura: [
-    "RUT, teléfono y número de licencia (la API no expone actualización directa).",
-    "Nombre del conductor (no incluido en GET /api/conductores).",
-  ],
-  nota: "Los cambios de licencia se guardan con POST /api/conductores/upload-license. Esto es el comportamiento esperado con la API actual, no un error del sistema.",
-};

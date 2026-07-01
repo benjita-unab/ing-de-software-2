@@ -1,25 +1,10 @@
 import React, { useMemo, useState } from "react";
-import { Search, MessageSquare, AlertTriangle, CheckCircle2 } from "lucide-react";
-import { groupMensajesByRuta, sortMensajes } from "../hooks/useMensajesConductor";
+import { Search, MessageSquare } from "lucide-react";
+import { groupMensajesByRuta } from "../hooks/useMensajesConductor";
 import Badge from "./ui/Badge";
 import Spinner from "./ui/Spinner";
 import EmptyState from "./ui/EmptyState";
-
-function formatTimestamp(value) {
-  if (!value) return "—";
-  try {
-    return new Date(value).toLocaleString("es-CL", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
-  } catch {
-    return "—";
-  }
-}
+import AlertasRutaTabla from "./AlertasRutaTabla";
 
 const PLACEHOLDER_GUION = "—";
 
@@ -52,33 +37,33 @@ function tituloGrupoRuta(rutaId, rutasMap = {}) {
 
   const id = String(rutaId ?? "").trim();
   if (id && id !== "SIN_RUTA") {
-    return `Ruta ${id.substring(0, 8)}`;
+    return `Pedido ${id.substring(0, 8)}`;
   }
 
-  return "Ruta sin identificar";
+  return "Pedido sin identificar";
 }
 
 const COPY = {
   mensajes: {
     loading: "Cargando mensajes...",
     emptyListTitle: "Sin conversaciones",
-    emptyListDescription: "No hay mensajes para la ruta indicada.",
-    emptyDetailTitle: "Selecciona una conversación",
-    emptyDetailDescription: "Elige una ruta a la izquierda para ver los mensajes del conductor.",
-    urgentSuffix: " · contiene emergencias",
-    polling: "Actualización automática cada 10 segundos",
-    searchPlaceholder: "Buscar por ruta o ID...",
+    emptyListDescription: "No hay mensajes para este pedido.",
+    emptyDetailTitle: "Seleccione una conversación",
+    emptyDetailDescription: "Elija un pedido a la izquierda.",
+    urgentSuffix: " · emergencia",
+    polling: "Actualización cada 10 s",
+    searchPlaceholder: "Buscar...",
     messageCount: (n) => `${n} mensaje${n !== 1 ? "s" : ""}`,
   },
   alertas: {
     loading: "Cargando alertas...",
     emptyListTitle: "Sin alertas",
-    emptyListDescription: "No hay estados ni emergencias para la ruta indicada.",
-    emptyDetailTitle: "Selecciona una ruta",
-    emptyDetailDescription: "Elige una ruta a la izquierda para ver el historial de alertas del conductor.",
-    urgentSuffix: " · contiene emergencias sin confirmar",
-    polling: "Actualización automática cada 10 segundos",
-    searchPlaceholder: "Buscar ruta o ID...",
+    emptyListDescription: "No hay alertas para este pedido.",
+    emptyDetailTitle: "Seleccione un pedido",
+    emptyDetailDescription: "Elija un pedido a la izquierda.",
+    urgentSuffix: " · emergencia sin confirmar",
+    polling: "Actualización cada 10 s",
+    searchPlaceholder: "Buscar...",
     messageCount: (n) => `${n} alerta${n !== 1 ? "s" : ""}`,
   },
 };
@@ -95,23 +80,15 @@ export default function MensajesConductor({
   const [searchRuta, setSearchRuta] = useState("");
   const [selectedRouteId, setSelectedRouteId] = useState(null);
 
-  const mensajesOrdenados = useMemo(() => sortMensajes(mensajes), [mensajes]);
   const routeGroups = useMemo(() => {
-    const groups = groupMensajesByRuta(mensajesOrdenados, searchRuta, rutasMap);
+    const groups = groupMensajesByRuta(mensajes, searchRuta, rutasMap);
     return groups.map((route) => ({
       ...route,
       rutaLabel: tituloGrupoRuta(route.rutaId, rutasMap),
     }));
-  }, [mensajesOrdenados, rutasMap, searchRuta]);
+  }, [mensajes, rutasMap, searchRuta]);
 
   const selectedRoute = routeGroups.find((r) => r.rutaId === selectedRouteId) ?? null;
-
-  const handleAcknowledge = async (mensajeId) => {
-    const res = await acknowledgeMensaje(mensajeId);
-    if (!res.ok) {
-      alert(`Error: ${res.message}`);
-    }
-  };
 
   return (
     <div className="lt-mensajes-split">
@@ -183,66 +160,21 @@ export default function MensajesConductor({
               </div>
               {selectedRoute.hasUrgent && (
                 <Badge variant="danger" showDot={false}>
-                  <AlertTriangle size={12} />
                   Urgente
                 </Badge>
               )}
             </div>
 
-            <div className="lt-table-wrap lt-mensajes-detail__table">
-              <table className="lt-table">
-                <thead>
-                  <tr>
-                    <th>Mensaje</th>
-                    <th>Fecha y hora</th>
-                    <th>Prioridad</th>
-                    <th>Acción</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedRoute.mensajes.map((mensaje) => {
-                    const isUrgentUnack =
-                      mensaje.prioridad === "ALTA" && !mensaje.acknowledged;
-                    return (
-                      <tr
-                        key={mensaje.id}
-                        className={isUrgentUnack ? "lt-table__row--urgent" : undefined}
-                      >
-                        <td>{mensaje.mensaje || "—"}</td>
-                        <td>{formatTimestamp(mensaje.timestamp_evento)}</td>
-                        <td>
-                          <Badge variant={mensaje.prioridad === "ALTA" ? "danger" : "info"}>
-                            {mensaje.prioridad === "ALTA" ? "ALTA" : "NORMAL"}
-                          </Badge>
-                        </td>
-                        <td>
-                          {mensaje.prioridad === "ALTA" ? (
-                            !mensaje.acknowledged ? (
-                              <button
-                                type="button"
-                                className="lt-btn lt-btn--primary"
-                                onClick={() => handleAcknowledge(mensaje.id)}
-                              >
-                                Confirmar
-                              </button>
-                            ) : (
-                              <span className="lt-mensajes-ack">
-                                <CheckCircle2 size={12} />
-                                Notificado
-                              </span>
-                            )
-                          ) : (
-                            "—"
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <div className="lt-table-wrap">
+              <AlertasRutaTabla
+                mensajes={selectedRoute.mensajes}
+                loading={loading}
+                error={error}
+                acknowledgeMensaje={acknowledgeMensaje}
+              />
             </div>
 
-            <p className="lt-mensajes-polling">{copy.polling}</p>
+
           </>
         )}
       </div>

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { DollarSign, RefreshCw, Search } from "lucide-react";
+import { Eye, RefreshCw, Search } from "lucide-react";
 import { actualizarEstado, getPagos } from "../lib/pagosClienteService";
 import {
   ESTADO_PAGADO,
@@ -14,6 +14,7 @@ import {
 import Badge from "./ui/Badge";
 import Card from "./ui/Card";
 import EmptyState from "./ui/EmptyState";
+import Pagination from "./ui/Pagination";
 import Spinner from "./ui/Spinner";
 
 const FILTRO_TODOS = "todos";
@@ -98,20 +99,21 @@ function DetallePagoModal({ pago, onClose, onCambiarEstado, updating }) {
             ) : null}
           </div>
 
-          <p className="lt-text-muted" style={{ fontSize: "13px" }}>
-            Cambio de estado manual para pruebas y contingencias. En producción el cobro se
-            originará al crear el pedido y confirmará vía Transbank.
+          <p className="lt-text-muted">
+            Cambio de estado manual del pago.
           </p>
+        </div>
 
+        <div className="lt-modal-footer">
           {puedeMarcarPagado ? (
-            <div style={{ marginTop: "16px", display: "flex", gap: "12px", flexWrap: "wrap" }}>
+            <>
               <button
                 type="button"
-                className="lt-btn lt-btn--ghost"
+                className="lt-btn lt-btn--secondary"
                 disabled={updating}
                 onClick={() => onCambiarEstado(pago, ESTADO_PROCESANDO, "transbank")}
               >
-                {updating ? "Guardando…" : "Marcar PROCESANDO"}
+                {updating ? "Guardando…" : "Marcar procesando"}
               </button>
               <button
                 type="button"
@@ -119,10 +121,13 @@ function DetallePagoModal({ pago, onClose, onCambiarEstado, updating }) {
                 disabled={updating}
                 onClick={() => onCambiarEstado(pago, ESTADO_PAGADO, "manual")}
               >
-                {updating ? "Guardando…" : "Marcar PAGADO"}
+                {updating ? "Guardando…" : "Marcar pagado"}
               </button>
-            </div>
+            </>
           ) : null}
+          <button type="button" className="lt-btn lt-btn--secondary" onClick={onClose}>
+            Cerrar
+          </button>
         </div>
       </div>
     </div>
@@ -143,6 +148,8 @@ export default function PagosCliente() {
   const [filtroEstado, setFiltroEstado] = useState(FILTRO_TODOS);
   const [detalle, setDetalle] = useState(null);
   const [updating, setUpdating] = useState(false);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
 
   const loadPagos = useCallback(async () => {
     setLoading(true);
@@ -190,6 +197,24 @@ export default function PagosCliente() {
     });
   }, [pagos, search, filtroEstado]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [search, filtroEstado]);
+
+  const totalPagosFiltrados = pagosFiltrados.length;
+  const totalPages = Math.max(1, Math.ceil(totalPagosFiltrados / limit) || 1);
+
+  const pagosPaginados = useMemo(() => {
+    const start = (page - 1) * limit;
+    return pagosFiltrados.slice(start, start + limit);
+  }, [pagosFiltrados, page, limit]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
   async function handleCambiarEstado(pago, estado, metodoPago) {
     setUpdating(true);
     const res = await actualizarEstado(pago.id, {
@@ -216,14 +241,11 @@ export default function PagosCliente() {
 
   return (
     <div className="lt-module-inner">
-      <div className="lt-kpi-grid" style={{ marginBottom: "20px" }}>
+      <div className="lt-kpi-strip lt-kpi-strip--dashboard">
         <Card>
           <div className="lt-kpi-card">
-            <div className="lt-kpi-card__icon">
-              <DollarSign size={20} />
-            </div>
             <div>
-              <div className="lt-kpi-card__label">Total acumulado (calculado)</div>
+              <div className="lt-kpi-card__label">Total</div>
               <div className="lt-kpi-card__value">
                 {new Intl.NumberFormat("es-CL", {
                   style: "currency",
@@ -237,7 +259,7 @@ export default function PagosCliente() {
         <Card>
           <div className="lt-kpi-card">
             <div>
-              <div className="lt-kpi-card__label">Pendiente / procesando</div>
+              <div className="lt-kpi-card__label">Pendiente</div>
               <div className="lt-kpi-card__value">
                 {new Intl.NumberFormat("es-CL", {
                   style: "currency",
@@ -266,7 +288,7 @@ export default function PagosCliente() {
 
       {totales.pagosSinMontoCalculado > 0 ? (
         <p className="lt-text-muted" style={{ marginBottom: "12px", fontSize: "13px" }}>
-          {totales.pagosSinMontoCalculado} pago(s) con monto pendiente de cálculo (HU-51).
+          {totales.pagosSinMontoCalculado} pago(s) con monto pendiente de cálculo.
         </p>
       ) : null}
 
@@ -307,7 +329,7 @@ export default function PagosCliente() {
       {pagosFiltrados.length === 0 ? (
         <EmptyState
           title="Sin pagos registrados"
-          message="Los pagos aparecerán aquí cuando se generen al crear pedidos."
+          description="Los pagos aparecerán aquí cuando se generen al crear pedidos."
         />
       ) : (
         <div className="lt-card lt-module-card">
@@ -323,17 +345,17 @@ export default function PagosCliente() {
                     <th>Método</th>
                     <th>Fecha creación</th>
                     <th>Fecha pago</th>
-                    <th />
+                    <th>Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {pagosFiltrados.map((p) => (
+                  {pagosPaginados.map((p) => (
                     <tr key={p.id}>
                       <td>{p.clienteNombre || "—"}</td>
                       <td>{etiquetaPedido(p.pedidoId)}</td>
                       <td>{formatMontoPago(p)}</td>
                       <td>
-                        <Badge variant={estadoBadgeVariant(p.estado)}>
+                        <Badge variant={estadoBadgeVariant(p.estado)} showDot={false}>
                           {normalizarEstadoPago(p.estado)}
                         </Badge>
                       </td>
@@ -341,18 +363,33 @@ export default function PagosCliente() {
                       <td>{formatDate(p.fechaCreacion)}</td>
                       <td>{formatDate(p.fechaPago)}</td>
                       <td>
-                        <button
-                          type="button"
-                          className="lt-btn lt-btn--ghost lt-btn--sm"
-                          onClick={() => setDetalle(p)}
-                        >
-                          Ver detalle
-                        </button>
+                        <div className="lt-table__actions">
+                          <button
+                            type="button"
+                            className="lt-btn lt-btn--secondary lt-btn--sm"
+                            onClick={() => setDetalle(p)}
+                          >
+                            <Eye size={14} />
+                            Ver detalle
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              <Pagination
+                currentPage={page}
+                totalPages={totalPages}
+                totalItems={totalPagosFiltrados}
+                limit={limit}
+                limitOptions={[5, 10, 20]}
+                onPageChange={setPage}
+                onLimitChange={(newLimit) => {
+                  setLimit(newLimit);
+                  setPage(1);
+                }}
+              />
             </div>
           </div>
         </div>

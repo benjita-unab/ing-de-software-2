@@ -1,7 +1,6 @@
 import React from "react";
 import {
   LayoutDashboard,
-  Bell,
   Route,
   Truck,
   Users,
@@ -14,23 +13,22 @@ import {
   ChevronLeft,
   ChevronRight,
   LogOut,
-  Sun,
-  Moon,
 } from "lucide-react";
+import { isNavSectionVisible } from "../lib/featureVisibility";
+import ThemeToggle from "./ui/ThemeToggle";
 
 const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { id: "alertas", label: "Alertas", icon: Bell, badgeKey: "urgent" },
-  { id: "rutas-plantilla", label: "Plantillas", icon: Map },
-  { id: "rutas", label: "Rutas", icon: Route },
+  { id: "rutas-plantilla", label: "Plantillas de ruta", icon: Map },
+  { id: "rutas", label: "Pedidos", icon: Route },
 
 
   { id: "camiones", label: "Flota", icon: Truck },
   { id: "clientes", label: "Clientes", icon: Users },
   { id: "pagos", label: "Pagos", icon: DollarSign },
   { id: "rrhh", label: "RRHH", icon: UserCog },
-  { id: "mensajes", label: "Mensajes", icon: MessageSquare },
-  { id: "despachos", label: "Rutas Activas", icon: Package },
+  { id: "mensajes", label: "Mensajes", icon: MessageSquare, badgeKey: "urgent" },
+  { id: "despachos", label: "Despachos activos", icon: Package },
   { id: "historial", label: "Historial", icon: History },
 ];
 
@@ -56,13 +54,13 @@ export default function Sidebar({
         {!collapsed && (
           <div>
             <div className="lt-sidebar__logo-title">LogiTrack</div>
-            <div className="lt-sidebar__logo-sub">Fleet Operations</div>
+            <div className="lt-sidebar__logo-sub">Operaciones</div>
           </div>
         )}
       </div>
 
       <nav className="lt-sidebar__nav lt-scroll">
-        {NAV_ITEMS.map((item) => {
+        {NAV_ITEMS.filter((item) => isNavSectionVisible(item.id)).map((item) => {
           const Icon = item.icon;
           const isActive = activeSection === item.id;
           const showUrgentBadge = item.badgeKey === "urgent" && urgentCount > 0;
@@ -93,15 +91,11 @@ export default function Sidebar({
       </nav>
 
       <div className="lt-sidebar__footer">
-        <button
-          type="button"
-          className="lt-sidebar__action-btn"
-          onClick={onToggleTheme}
-          title={isDark ? "Modo claro" : "Modo oscuro"}
-        >
-          {isDark ? <Sun size={18} /> : <Moon size={18} />}
-          {!collapsed && <span>{isDark ? "Modo claro" : "Modo oscuro"}</span>}
-        </button>
+        <ThemeToggle
+          isDark={isDark}
+          onToggle={onToggleTheme}
+          collapsed={collapsed}
+        />
 
         {!collapsed && operator && (
           <div className="lt-sidebar__user">

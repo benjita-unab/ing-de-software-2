@@ -2,7 +2,9 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch } from "../lib/apiClient";
 import { getNombreRuta } from "../lib/rutasUtils";
 import Badge from "./ui/Badge";
+import EmptyState from "./ui/EmptyState";
 import Pagination from "./ui/Pagination";
+import Spinner from "./ui/Spinner";
 
 const AUTO_REFRESH_MS = 15000;
 
@@ -144,29 +146,24 @@ export default function GuiasDespacho() {
     <div className="lt-module-inner">
       <div className="lt-card lt-module-card">
         <div className="lt-card__body">
-          <p className="lt-module-card__subtitle">
-            La ficha de despacho se captura desde la app móvil («Hoja de despacho»). Esta pestaña es solo
-            para consultar la ficha y finalizar el despacho cuando esté registrada.
-          </p>
-
           <div className="lt-toolbar">
-            <span className="lt-card__subtitle">
-              {refreshing ? "Actualizando…" : `Auto-actualización cada ${AUTO_REFRESH_MS / 1000}s`}
-            </span>
             <button
               type="button"
               className="lt-btn lt-btn--secondary"
               onClick={() => void cargarRutasEnCurso({ silent: !!rutas.length })}
               disabled={loading || refreshing}
             >
-              🔄 Actualizar
+              Actualizar
             </button>
           </div>
 
           {loading ? (
-            <p className="lt-empty">Cargando rutas activas...</p>
+            <Spinner message="Cargando rutas activas…" />
           ) : rutas.length === 0 ? (
-            <p className="lt-empty">No hay rutas activas pendientes en este momento.</p>
+            <EmptyState
+              title="Sin rutas activas"
+              description="No hay rutas activas pendientes en este momento."
+            />
           ) : (
             <div className="lt-table-wrap">
               <table className="lt-table">
@@ -195,13 +192,13 @@ export default function GuiasDespacho() {
                           </div>
                         </td>
                         <td>
-                          <strong>{ruta.clientes?.nombre || "Sin Asignar"}</strong>
-                          <div className="lt-card__subtitle">🛑 {ruta.destino}</div>
+                          <strong>{ruta.clientes?.nombre || "Sin asignar"}</strong>
+                          <div className="lt-table__cell-sub">{ruta.destino}</div>
                         </td>
                         <td>
-                          <strong>🚚 {ruta.camiones?.patente || "-"}</strong>
-                          <div className="lt-card__subtitle">
-                            👤 {ruta.conductores?.usuarios?.nombre || ruta.conductores?.rut || "N/A"}
+                          <strong>{ruta.camiones?.patente || "—"}</strong>
+                          <div className="lt-table__cell-sub">
+                            {ruta.conductores?.usuarios?.nombre || ruta.conductores?.rut || "N/A"}
                           </div>
                         </td>
                         <td>
@@ -219,7 +216,7 @@ export default function GuiasDespacho() {
                         </td>
                         <td>
                           <Badge variant={estadoBadgeVariant(ruta.estado)} showDot={false}>
-                            {ruta.estado === "PENDIENTE" ? "⏳" : "🚛"} {ruta.estado || "EN CURSO"}
+                            {ruta.estado || "EN CURSO"}
                           </Badge>
                         </td>
                         <td>
@@ -229,58 +226,57 @@ export default function GuiasDespacho() {
                                 href={fichaUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="lt-btn lt-btn--ghost"
+                                className="lt-btn lt-btn--secondary lt-btn--sm"
                               >
-                                📄 Ver Ficha Adjunta
+                                Ver ficha
                               </a>
-                              <div className="lt-card__subtitle">Ficha registrada</div>
+                              <div className="lt-table__cell-sub">Ficha registrada</div>
                             </div>
                           ) : (
                             <div>
                               <Badge variant="warning" showDot={false}>
-                                Sin ficha de despacho registrada
+                                Sin ficha
                               </Badge>
-                              <div className="lt-card__subtitle">
+                              <div className="lt-table__cell-sub">
                                 Debe capturarse desde la app móvil
                               </div>
                             </div>
                           )}
                         </td>
                         <td>
-                          <button
-                            type="button"
-                            className="lt-btn lt-btn--primary"
-                            onClick={() => void handleFinalizarDespacho(ruta)}
-                            disabled={!tieneFicha}
-                            title={
-                              tieneFicha
-                                ? "Finalizar despacho"
-                                : "Requiere ficha capturada desde la app móvil"
-                            }
-                          >
-                            {tieneFicha ? "✅ Finalizar Despacho" : "Requiere ficha"}
-                          </button>
+                          <div className="lt-table__actions">
+                            <button
+                              type="button"
+                              className="lt-btn lt-btn--primary lt-btn--sm"
+                              onClick={() => void handleFinalizarDespacho(ruta)}
+                              disabled={!tieneFicha}
+                              title={
+                                tieneFicha
+                                  ? "Finalizar despacho"
+                                  : "Requiere ficha capturada desde la app móvil"
+                              }
+                            >
+                              {tieneFicha ? "Finalizar despacho" : "Requiere ficha"}
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
+              <Pagination
+                currentPage={page}
+                totalPages={totalPages}
+                totalItems={totalItems}
+                limit={limit}
+                onPageChange={setPage}
+                onLimitChange={(newLimit) => {
+                  setLimit(newLimit);
+                  setPage(1);
+                }}
+              />
             </div>
-          )}
-
-          {!loading && rutas.length > 0 && (
-            <Pagination
-              currentPage={page}
-              totalPages={totalPages}
-              totalItems={totalItems}
-              limit={limit}
-              onPageChange={setPage}
-              onLimitChange={(newLimit) => {
-                setLimit(newLimit);
-                setPage(1); // Paginación no destructiva
-              }}
-            />
           )}
         </div>
       </div>

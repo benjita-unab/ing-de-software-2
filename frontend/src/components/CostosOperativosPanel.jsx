@@ -96,7 +96,7 @@ export default function CostosOperativosPanel({ rutaId, rutaEstado }) {
   }
 
   async function handleCongelar() {
-    if (!window.confirm("¿Congelar costos? No podrán modificarse después (HU-50).")) {
+    if (!window.confirm("¿Congelar costos? No podrán modificarse después.")) {
       return;
     }
     setSaving(true);
@@ -108,7 +108,7 @@ export default function CostosOperativosPanel({ rutaId, rutaEstado }) {
       return;
     }
     setCostos(res.data);
-    setSuccess("Costos congelados correctamente.");
+    setSuccess("Costos congelados.");
   }
 
   if (loading) {
@@ -189,7 +189,7 @@ export default function CostosOperativosPanel({ rutaId, rutaEstado }) {
           value={costos.costoCombustible}
           hint={`${formatCLP(costos.precioCombustibleLitro)}/L`}
         />
-        <CostoCard label="Conductor (HU-37)" value={costos.costoConductor} />
+        <CostoCard label="Conductor" value={costos.costoConductor} />
         <CostoCard
           label="Espera"
           value={costos.costoEspera}
@@ -201,7 +201,7 @@ export default function CostosOperativosPanel({ rutaId, rutaEstado }) {
 
       {editable ? (
         <form onSubmit={handleRecalcular}>
-          <h5 className="lt-form-subsection__title">Ajustes manuales (CA-03)</h5>
+          <h5 className="lt-form-subsection__title">Ajustes manuales</h5>
           <div className="lt-form-grid" style={{ marginBottom: 12 }}>
             <div className="lt-field-group">
               <label className="lt-label" htmlFor={`km-l-${rutaId}`}>

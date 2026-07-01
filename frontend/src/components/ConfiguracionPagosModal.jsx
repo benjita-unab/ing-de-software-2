@@ -10,8 +10,8 @@ import Spinner from "./ui/Spinner";
 const CAMPOS = [
   {
     key: "precioPorRuta",
-    label: "Precio por ruta completada",
-    hint: "Monto fijo por cada ruta en estado ENTREGADO",
+    label: "Precio por pedido entregado",
+    hint: "Monto fijo por cada pedido en estado entregado",
   },
   {
     key: "precioPorEntrega",
@@ -26,28 +26,19 @@ const CAMPOS = [
   {
     key: "precioPorKm",
     label: "Precio por kilómetro",
-    hint: "Monto por km recorrido (distancia_km)",
+    hint: "Monto por kilómetro recorrido",
   },
   {
     key: "precioCombustibleLitro",
     label: "Precio combustible por litro",
-    hint: "Snapshot al calcular costos de cada pedido (HU-50)",
+    hint: "Valor al calcular costos del pedido",
   },
   {
     key: "precioEsperaMinuto",
     label: "Precio espera por minuto",
-    hint: "Costo de tiempo de espera en destino (HU-50)",
+    hint: "Costo por minuto de espera en destino",
   },
 ];
-
-function formatMontoPreview(valor) {
-  if (valor === "" || valor == null || Number.isNaN(Number(valor))) return "—";
-  return new Intl.NumberFormat("es-CL", {
-    style: "currency",
-    currency: "CLP",
-    maximumFractionDigits: 0,
-  }).format(Number(valor));
-}
 
 function formatFecha(iso) {
   if (!iso) return null;
@@ -157,26 +148,28 @@ export default function ConfiguracionPagosModal({ onClose, onGuardado }) {
       updatedAt: data.updatedAt ?? new Date().toISOString(),
       source: "database",
     });
-    setSuccess("Tarifas actualizadas correctamente.");
+    setSuccess("Tarifas actualizadas.");
     onGuardado?.(data);
   };
 
   return (
-    <div className="lt-modal-overlay" onClick={onClose} role="presentation">
+    <div
+      className="lt-modal-overlay"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      role="dialog"
+      aria-modal="true"
+    >
       <div
-        className="lt-modal-dialog"
+        className="lt-modal-dialog lt-modal-dialog--sm"
         onClick={(e) => e.stopPropagation()}
-        role="dialog"
         aria-labelledby="config-pagos-title"
-        style={{ maxWidth: 520 }}
       >
         <div className="lt-modal-header">
           <div>
             <div className="lt-modal-header__title" id="config-pagos-title">
               Configuración de pagos
-            </div>
-            <div className="lt-modal-header__sub">
-              Tarifas unitarias para pagos (HU-37) y costos operativos (HU-50)
             </div>
           </div>
           <button
@@ -189,16 +182,13 @@ export default function ConfiguracionPagosModal({ onClose, onGuardado }) {
           </button>
         </div>
 
-        <div className="lt-modal-body">
-          {loading ? (
-            <div
-              className="lt-empty"
-              style={{ display: "flex", justifyContent: "center", padding: "24px 0" }}
-            >
-              <Spinner />
-            </div>
-          ) : (
-            <form onSubmit={handleSubmit}>
+        {loading ? (
+          <div className="lt-modal-body">
+            <Spinner message="Cargando tarifas…" />
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit}>
+            <div className="lt-modal-body lt-modal-field-stack">
               {error && (
                 <div className="lt-alert-banner lt-alert-banner--error" role="alert">
                   {error}
@@ -211,15 +201,15 @@ export default function ConfiguracionPagosModal({ onClose, onGuardado }) {
               )}
 
               {meta.updatedAt && (
-                <p className="lt-module-card__subtitle" style={{ marginBottom: 12 }}>
+                <p className="lt-module-card__subtitle">
                   Última actualización: {formatFecha(meta.updatedAt)}
                   {meta.source === "env_fallback" ? " (valores por defecto)" : ""}
                 </p>
               )}
 
               {CAMPOS.map((campo) => (
-                <div key={campo.key} style={{ marginBottom: 14 }}>
-                  <label className="lt-info-row__label" htmlFor={campo.key}>
+                <div key={campo.key} className="lt-field-group">
+                  <label className="lt-label" htmlFor={campo.key}>
                     {campo.label}
                   </label>
                   <input
@@ -233,32 +223,30 @@ export default function ConfiguracionPagosModal({ onClose, onGuardado }) {
                     disabled={guardando}
                     required
                   />
-                  <div className="lt-card__subtitle" style={{ marginTop: 4 }}>
-                    {campo.hint} · Vista previa: {formatMontoPreview(valores[campo.key])}
-                  </div>
+                  <div className="lt-card__subtitle">{campo.hint}</div>
                 </div>
               ))}
+            </div>
 
-              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                <button
-                  type="button"
-                  className="lt-btn lt-btn--ghost"
-                  onClick={onClose}
-                  disabled={guardando}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="lt-btn lt-btn--primary"
-                  disabled={guardando}
-                >
-                  {guardando ? "Guardando..." : "Guardar tarifas"}
-                </button>
-              </div>
-            </form>
-          )}
-        </div>
+            <div className="lt-modal-footer">
+              <button
+                type="button"
+                className="lt-btn lt-btn--secondary"
+                onClick={onClose}
+                disabled={guardando}
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="lt-btn lt-btn--primary"
+                disabled={guardando}
+              >
+                {guardando ? "Guardando..." : "Guardar tarifas"}
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );

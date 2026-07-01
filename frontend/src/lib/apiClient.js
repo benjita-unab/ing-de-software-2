@@ -20,11 +20,6 @@ export function getApiBaseUrl() {
   return String(raw).replace(/\/+$/, '').replace(/\/api$/, '');
 }
 
-// TEMP: diagnóstico de "Failed to fetch" — eliminar luego de validar.
-if (typeof window !== 'undefined') {
-  // eslint-disable-next-line no-console
-  // API Base URL configured
-}
 
 export function getAuthToken() {
   if (typeof window === 'undefined') return null;
@@ -81,12 +76,6 @@ export async function loginWeb(
   });
 
   const data = await res.json().catch(() => ({}));
-
-  // eslint-disable-next-line no-console
-  console.log(
-    'WEB LOGIN status',
-    res.ok ? `ok ${res.status}` : `fail ${res.status}`,
-  );
 
   if (!res.ok || !data?.accessToken) {
     throw new Error(

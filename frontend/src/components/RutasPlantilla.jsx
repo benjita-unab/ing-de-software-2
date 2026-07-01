@@ -105,7 +105,7 @@ export default function RutasPlantilla({ operator }) {
   }
 
   async function handleDesactivar(ruta) {
-    if (!window.confirm(`¿Desactivar la ruta "${ruta.nombre}"?`)) return;
+    if (!window.confirm(`¿Desactivar la ruta «${ruta.nombre}»?`)) return;
     setAccionId(ruta.id);
     setError("");
     const res = await desactivarRutaPlantilla(ruta.id);
@@ -208,7 +208,7 @@ export default function RutasPlantilla({ operator }) {
             }}
           >
             <Plus size={16} />
-            Nueva plantilla
+            Nueva ruta
           </button>
         ) : null}
       </div>
@@ -221,8 +221,8 @@ export default function RutasPlantilla({ operator }) {
 
       {rutasVisibles.length === 0 ? (
         <EmptyState
-          title="Sin rutas plantilla"
-          message="Crea plantillas reutilizables para originar pedidos (HU-58)."
+          title="Sin plantillas de ruta"
+          description="Cree plantillas para originar pedidos."
         />
       ) : (
         <div className="lt-card lt-module-card">
@@ -240,7 +240,7 @@ export default function RutasPlantilla({ operator }) {
                     <th>Paradas</th>
                     <th>Pedidos</th>
                     <th>Estado</th>
-                    <th />
+                    <th>Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -248,31 +248,31 @@ export default function RutasPlantilla({ operator }) {
                     <tr key={r.id}>
                       <td>{r.nombre}</td>
                       <td>{r.clienteId ? clientesMap[r.clienteId] || "—" : "Global"}</td>
-                      <td>{r.origen}</td>
-                      <td>{r.destino}</td>
+                      <td className="lt-table__col--truncate">{r.origen}</td>
+                      <td className="lt-table__col--truncate">{r.destino}</td>
                       <td>{formatDistancia(r.distanciaEstimada)}</td>
                       <td>{formatTiempo(r.tiempoEstimado)}</td>
                       <td>{r.cantidadParadas ?? 0}</td>
                       <td>{r.cantidadPedidos ?? 0}</td>
                       <td>
-                        <Badge variant={r.activa ? "success" : "muted"}>
+                        <Badge variant={r.activa ? "success" : "muted"} showDot={false}>
                           {r.activa ? "Activa" : "Inactiva"}
                         </Badge>
                       </td>
                       <td>
-                        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                        <div className="lt-table__actions lt-table__actions--row">
                           {esAdminPlantillas ? (
                             <>
                               <button
                                 type="button"
-                                className="lt-btn lt-btn--ghost lt-btn--sm"
+                                className="lt-btn lt-btn--secondary lt-btn--sm"
                                 onClick={() => handleEditar(r)}
                               >
                                 Editar
                               </button>
                               <button
                                 type="button"
-                                className="lt-btn lt-btn--ghost lt-btn--sm"
+                                className="lt-btn lt-btn--secondary lt-btn--sm"
                                 disabled={accionId === r.id}
                                 onClick={() => handleDuplicar(r.id)}
                               >
@@ -281,7 +281,7 @@ export default function RutasPlantilla({ operator }) {
                               {r.activa ? (
                                 <button
                                   type="button"
-                                  className="lt-btn lt-btn--ghost lt-btn--sm"
+                                  className="lt-btn lt-btn--secondary lt-btn--sm"
                                   disabled={accionId === r.id}
                                   onClick={() => handleDesactivar(r)}
                                 >
@@ -292,10 +292,10 @@ export default function RutasPlantilla({ operator }) {
                           ) : (
                             <button
                               type="button"
-                              className="lt-btn lt-btn--ghost lt-btn--sm"
+                              className="lt-btn lt-btn--secondary lt-btn--sm"
                               onClick={() => handleVer(r)}
                             >
-                              Ver / calcular
+                              Ver detalle
                             </button>
                           )}
                         </div>

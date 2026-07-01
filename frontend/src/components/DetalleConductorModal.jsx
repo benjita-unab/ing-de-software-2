@@ -311,7 +311,6 @@ export default function DetalleConductorModal({
                   <div className="lt-modal-section__title">Documento de licencia</div>
                   {licenciaDocumentoUrl ? (
                     <>
-                      <p className="lt-module-card__subtitle">Documento disponible en el sistema.</p>
                       {licenseStatus?.status === "PENDING" && licenses[0] && (
                         <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
                           <button 
@@ -341,7 +340,7 @@ export default function DetalleConductorModal({
                     {busquedaRutas.trim() ? ` de ${rutasAsignadas.length}` : ""})
                   </div>
                   {rutasAsignadas.length === 0 ? (
-                    <p className="lt-empty">Sin rutas asignadas</p>
+                    <p className="lt-empty">Sin pedidos asignados</p>
                   ) : (
                     <>
                       <div className="lt-search-wrap" style={{ marginBottom: 12, maxWidth: "100%" }}>
@@ -362,7 +361,7 @@ export default function DetalleConductorModal({
                           <table className="lt-table">
                             <thead>
                               <tr>
-                                <th>Ruta</th>
+                                <th>Pedido</th>
                                 <th>Origen</th>
                                 <th>Destino</th>
                                 <th>Estado</th>

@@ -105,8 +105,8 @@ export default function Clientes({ operator }) {
 
   return (
     <div className="lt-module-inner">
-      <div className="lt-toolbar">
-        <div className="lt-search-wrap" style={{ flex: 1, maxWidth: 420 }}>
+      <div className="lt-toolbar lt-toolbar--clientes">
+        <div className="lt-search-wrap">
           <Search size={14} className="lt-search-icon" />
           <input
             type="text"
@@ -114,6 +114,7 @@ export default function Clientes({ operator }) {
             placeholder="Buscar por nombre, RUT o contacto..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            aria-label="Buscar clientes"
           />
         </div>
         {puedeCrear ? (
@@ -129,8 +130,9 @@ export default function Clientes({ operator }) {
         <EmptyState icon={Building2} title="Sin clientes" description="No se encontraron clientes con ese criterio." />
       ) : (
         <div className="lt-clientes-split">
-          <aside className="lt-clientes-list lt-scroll">
-            {clientes.map((cliente) => (
+          <aside className="lt-clientes-panel">
+            <div className="lt-clientes-panel__scroll lt-scroll">
+              {clientes.map((cliente) => (
               <button
                 key={cliente.id}
                 type="button"
@@ -147,14 +149,16 @@ export default function Clientes({ operator }) {
                   <Badge variant="danger" showDot={false}>Sin acceso</Badge>
                 )}
               </button>
-            ))}
+              ))}
+            </div>
           </aside>
 
           <div className="lt-clientes-detail">
             {selectedCliente ? (
               <>
-                <Card className="lt-clientes-detail__card">
-                  <div className="lt-clientes-detail__header">
+                <Card className="lt-module-card">
+                  <div className="lt-card__body">
+                    <div className="lt-clientes-detail__header">
                     <div>
                       <h3 className="lt-clientes-detail__title">{selectedCliente.nombre}</h3>
                       <p className="lt-clientes-detail__subtitle">{selectedCliente.rut || "Sin RUT"}</p>
@@ -185,21 +189,26 @@ export default function Clientes({ operator }) {
                       }
                     />
                   </div>
+                  </div>
                 </Card>
 
-                <Card className="lt-clientes-detail__card">
-                  <h4 className="lt-module-card__title">Historial de despachos</h4>
+                <Card className="lt-module-card">
+                  <div className="lt-card__body">
+                    <h4 className="lt-section-label">Despachos</h4>
                   {historialLoading && !historial ? (
                     <Spinner message="Cargando historial..." />
                   ) : !historial || historial.length === 0 ? (
-                    <p className="lt-empty">No hay despachos registrados para este cliente.</p>
+                    <EmptyState
+                      title="Sin despachos"
+                      description="No hay despachos registrados para este cliente."
+                    />
                   ) : (
                     <div className="lt-table-wrap">
                       <table className="lt-table">
                         <thead>
                           <tr>
                             <th>Fecha</th>
-                            <th>Dirección / Ruta</th>
+                            <th>Dirección / Pedido</th>
                             <th>Estado</th>
                           </tr>
                         </thead>
@@ -209,7 +218,7 @@ export default function Clientes({ operator }) {
                               <td>{new Date(hist.created_at).toLocaleDateString("es-CL")}</td>
                               <td>{hist.destino || `Ruta ${hist.id}`}</td>
                               <td>
-                                <Badge variant={historialBadgeVariant(hist.estado)}>
+                                <Badge variant={historialBadgeVariant(hist.estado)} showDot={false}>
                                   {hist.estado}
                                 </Badge>
                               </td>
@@ -219,10 +228,15 @@ export default function Clientes({ operator }) {
                       </table>
                     </div>
                   )}
+                  </div>
                 </Card>
               </>
             ) : (
-              <EmptyState icon={User} title="Selecciona un cliente" description="Elige un cliente del listado para ver su detalle." />
+              <Card className="lt-module-card">
+                <div className="lt-card__body">
+                  <EmptyState icon={User} title="Selecciona un cliente" description="Elige un cliente del listado para ver su detalle." />
+                </div>
+              </Card>
             )}
           </div>
         </div>
