@@ -234,6 +234,15 @@ export class RutasController {
   }
 
   /**
+   * POST /api/rutas/:id/reset
+   * Modo Prueba: Resetea el estado y horas de la ruta para volver a probar el flujo completo.
+   */
+  @Post(':id/reset')
+  async resetRouteForTesting(@Param('id') rutaId: string) {
+    return await this.rutasService.resetRouteForTesting(rutaId);
+  }
+
+  /**
    * GET /api/rutas
    * Lista rutas con filtros opcionales y paginación.
    * HU-26: CONDUCTOR solo ve rutas con su conductorId (JWT), ignora query conductorId.

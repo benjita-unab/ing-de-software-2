@@ -47,6 +47,28 @@ export class IncidenciasService {
     return { success: true, data };
   }
 
+  async createIncidencia(body: { ruta_id?: string; conductor_id?: string; tipo: string; descripcion: string; estado?: string }) {
+    const supabase = this.supabaseConfig.getClient();
+    const { data, error } = await supabase
+      .from('incidencias')
+      .insert({
+        ruta_id: body.ruta_id || null,
+        conductor_id: body.conductor_id || null,
+        tipo: body.tipo,
+        descripcion: body.descripcion,
+        estado: body.estado || ESTADO_INCIDENCIA.PENDIENTE
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.warn('createIncidencia error:', JSON.stringify(error));
+      throw new InternalServerErrorException(`Error al crear incidencia: ${error.message}`);
+    }
+
+    return { success: true, data };
+  }
+
   async acknowledgeIncidencia(incidenciaId: string, operatorId: string) {
     if (!incidenciaId) {
       throw new BadRequestException('incidenciaId es requerido');

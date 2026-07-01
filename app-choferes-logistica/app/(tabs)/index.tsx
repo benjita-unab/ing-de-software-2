@@ -8,6 +8,8 @@ import {
   Text,
   useColorScheme,
   View,
+  Alert,
+  TouchableOpacity,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -36,6 +38,9 @@ function mismoId(
 
 /** Etiqueta legible para lista de rutas */
 function etiquetaRutaDesdeApi(r: RutaListItem): string {
+  if (r.nombre_ruta) {
+    return r.nombre_ruta;
+  }
   const o = r.origen?.trim() || '—';
   const d = r.destino?.trim() || '—';
   return `${o} → ${d}`;
@@ -60,6 +65,7 @@ export default function HomeScreen() {
   const isDark = colorScheme === 'dark';
   const [cargandoRutas, setCargandoRutas] = useState(true);
   const [errorRutas, setErrorRutas] = useState<string | null>(null);
+  const [resetKey, setResetKey] = useState(0);
 
   const cargarRutas = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent ?? false;
@@ -152,13 +158,24 @@ export default function HomeScreen() {
     console.log('MOSTRANDO SELECTOR DE RUTAS');
   }, []);
 
-  /** Curry estable: una función por id, sin arrow inline en cada Pressable */
   const handleSeleccionRuta = useCallback(
     (id: string) => () => {
       console.log('CLICK REAL:', id);
-      void seleccionarRuta(id);
+      const ruta = rutasOperativas.find(r => String(r.id) === id);
+      if (ruta?.estado_pago !== 'pagado') {
+        Alert.alert('Pago Pendiente', 'El cliente aún no ha pagado esta ruta. No puedes iniciarla.');
+        return;
+      }
+      Alert.alert(
+        'Comenzar Ruta',
+        '¿Desea comenzar esta ruta?',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Sí, comenzar', onPress: () => void seleccionarRuta(id) }
+        ]
+      );
     },
-    [seleccionarRuta],
+    [seleccionarRuta, rutasOperativas],
   );
 
   const rutasMemo = useMemo(() => rutasOperativas, [rutasOperativas]);
@@ -232,25 +249,53 @@ export default function HomeScreen() {
             ]}
             collapsable={false}
           >
-            <Text
-              style={[
-                styles.selectorTitle,
-                { color: isDark ? '#F8FAFC' : '#0F172A' },
-              ]}
-            >
-              Ruta activa — elige una para continuar
-            </Text>
-            {rutasMemo.map((ruta) => {
-              const idStr = String(ruta.id);
+            {(() => {
+              const pagadas = rutasMemo.filter(r => r.estado_pago === 'pagado');
+              const noPagadas = rutasMemo.filter(r => r.estado_pago !== 'pagado');
+
               return (
-                <RutaChoferCard
-                  key={idStr}
-                  ruta={ruta}
-                  onPress={onPressPorRutaId.get(idStr)!}
-                  accessibilityLabel={`Seleccionar ${etiquetaRutaAccesibilidad(ruta)}`}
-                />
+                <>
+                  {pagadas.length > 0 && (
+                    <>
+                      <Text style={[styles.selectorTitle, { color: isDark ? '#F8FAFC' : '#0F172A', marginTop: 8 }]}>
+                        Rutas listas para iniciar (Pagadas)
+                      </Text>
+                      {pagadas.map((ruta) => {
+                        const idStr = String(ruta.id);
+                        return (
+                          <RutaChoferCard
+                            key={idStr}
+                            ruta={ruta}
+                            onPress={onPressPorRutaId.get(idStr)!}
+                            accessibilityLabel={`Seleccionar ${etiquetaRutaAccesibilidad(ruta)}`}
+                          />
+                        );
+                      })}
+                    </>
+                  )}
+
+                  {noPagadas.length > 0 && (
+                    <>
+                      <Text style={[styles.selectorTitle, { color: isDark ? '#94A3B8' : '#64748B', marginTop: 24 }]}>
+                        Rutas pendientes de pago
+                      </Text>
+                      {noPagadas.map((ruta) => {
+                        const idStr = String(ruta.id);
+                        return (
+                          <View key={idStr} style={{ opacity: 0.65 }}>
+                            <RutaChoferCard
+                              ruta={ruta}
+                              onPress={onPressPorRutaId.get(idStr)!}
+                              accessibilityLabel={`Seleccionar ${etiquetaRutaAccesibilidad(ruta)}`}
+                            />
+                          </View>
+                        );
+                      })}
+                    </>
+                  )}
+                </>
               );
-            })}
+            })()}
           </View>
         </ScrollView>
       </View>
@@ -279,49 +324,42 @@ export default function HomeScreen() {
         </View>
       ) : null}
 
-      {rutasMemo.length > 1 ? (
-        <View
-          style={[
-            styles.cambiarRutaBar,
-            {
-              paddingTop: insets.top + 14,
-              paddingBottom: 14,
-            },
-          ]}
-          collapsable={false}
-        >
-          <Pressable
-            style={({ pressed }) => [
-              styles.btnCambiarRuta,
-              pressed && styles.cardPressed,
-            ]}
-            onPress={() => void cambiarRuta()}
-            accessibilityRole="button"
-            accessibilityLabel="Cambiar de ruta"
-            hitSlop={{ top: 18, bottom: 18, left: 24, right: 24 }}
+      <View style={styles.selectorSingle}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text style={styles.selectorSingleText}>
+            Ruta Activa: {rutaActiva ? etiquetaRutaDesdeApi(rutaActiva) : '—'}
+          </Text>
+          <TouchableOpacity 
+            style={{ backgroundColor: '#EF4444', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 }}
+            onPress={async () => {
+              if (rutaActivaId) {
+                try {
+                  setTodoSincronizado(false);
+                  const res = await bffFetch(`/api/rutas/${rutaActivaId}/reset`, { method: 'POST' });
+                  if (!res.ok) {
+                    const raw = await res.json().catch(() => ({}));
+                    throw new Error(raw.message || `Error HTTP ${res.status}`);
+                  }
+                  await cargarRutas();
+                  setResetKey(prev => prev + 1);
+                  Alert.alert('Éxito', 'Ruta reseteada correctamente para pruebas.');
+                } catch (e: any) {
+                  Alert.alert('Error', e.message || 'No se pudo resetear la ruta.');
+                  console.error("Error al resetear la ruta", e);
+                }
+              }
+            }}
           >
-            <Text style={styles.btnCambiarRutaText}>Cambiar ruta</Text>
-          </Pressable>
+            <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>Reset (Dev)</Text>
+          </TouchableOpacity>
         </View>
-      ) : rutasMemo.length === 1 ? (
-        <View style={styles.selectorSingle}>
-          <Text style={styles.selectorSingleText}>
-            Ruta: {etiquetaRutaDesdeApi(rutasMemo[0])}
-          </Text>
-        </View>
-      ) : (
-        <View style={styles.selectorSingle}>
-          <Text style={styles.selectorSingleText}>
-            Sin rutas operativas en servidor — elija cuando haya rutas disponibles
-          </Text>
-        </View>
-      )}
+      </View>
 
-      <View style={styles.mainContent} collapsable={false}>
+      <ScrollView style={styles.mainContent} collapsable={false} contentContainerStyle={{ paddingBottom: 60 }}>
         {rutaActivaId ? (
           <>
             <RegistroViajeLinear
-              key={rutaActivaId}
+              key={`${rutaActivaId}-${rutaActiva?.estado || 'init'}-${resetKey}`}
               onSyncComplete={setTodoSincronizado}
               rutaId={rutaActivaId}
               destino={rutaActiva?.destino}
@@ -340,7 +378,7 @@ export default function HomeScreen() {
             )}
           </>
         ) : null}
-      </View>
+      </ScrollView>
     </View>
   );
 }

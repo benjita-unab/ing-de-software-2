@@ -1,6 +1,7 @@
 /** Forma de ruta devuelta por GET /api/rutas (sin transformar en backend). */
 export type RutaListItem = {
   id: string;
+  nombre_ruta?: string | null;
   estado?: string | null;
   estado_pago?: string | null;
   origen?: string | null;

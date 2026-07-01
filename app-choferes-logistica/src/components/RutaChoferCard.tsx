@@ -60,6 +60,7 @@ export function RutaChoferCard({
   const cliente = getClienteNombre(ruta);
   const origen = ruta.origen?.trim() || '—';
   const destino = ruta.destino?.trim() || '—';
+  const nombreRuta = ruta.nombre_ruta?.trim();
   const bultos = tieneBultos(ruta.bultos_despachados)
     ? String(ruta.bultos_despachados)
     : null;
@@ -108,13 +109,21 @@ export function RutaChoferCard({
       ) : null}
 
       <View style={styles.routeBlock}>
-        <Text style={[styles.routeLine, { color: c.routeText }]} numberOfLines={2}>
-          {origen}
-        </Text>
-        <Text style={[styles.arrow, { color: c.arrow }]}>↓</Text>
-        <Text style={[styles.routeLine, { color: c.routeText }]} numberOfLines={2}>
-          {destino}
-        </Text>
+        {nombreRuta ? (
+          <Text style={[styles.routeLine, { color: c.routeText }]} numberOfLines={2}>
+            {nombreRuta}
+          </Text>
+        ) : (
+          <>
+            <Text style={[styles.routeLine, { color: c.routeText }]} numberOfLines={2}>
+              {origen}
+            </Text>
+            <Text style={[styles.arrow, { color: c.arrow }]}>↓</Text>
+            <Text style={[styles.routeLine, { color: c.routeText }]} numberOfLines={2}>
+              {destino}
+            </Text>
+          </>
+        )}
       </View>
 
       {metaParts.length > 0 ? (
