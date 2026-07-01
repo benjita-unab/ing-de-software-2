@@ -52,6 +52,12 @@ export class PagosService {
       throw new BadRequestException('La ruta ya se encuentra pagada y no tiene atrasos pendientes.');
     }
 
+    if (String(ruta.estado_pago ?? '').toLowerCase() === 'procesando') {
+      throw new BadRequestException(
+        'Ya existe un proceso de pago en curso para esta ruta.',
+      );
+    }
+
     const monto = this.resolverMontoCobro(ruta, tipo);
 
     const backendUrl = this.configService.get<string>('BACKEND_URL') || process.env.BACKEND_URL || 'http://localhost:3000';
@@ -162,14 +168,23 @@ export class PagosService {
         if (updateError) throw new InternalServerErrorException('Error al actualizar estado de atraso');
 
         // Insertar comprobante de atraso
-        await supabase.from('comprobantes_pago').insert({
-          ruta_id: rutaId,
-          monto: response.amount,
-          fecha_pago: fechaPago,
-          metodo_pago: 'transbank_atraso',
-          transaction_id: response.buy_order,
-          metadata: response,
-        });
+        const { error: insertError } = await supabase
+          .from('comprobantes_pago')
+          .insert({
+            ruta_id: rutaId,
+            monto: response.amount,
+            fecha_pago: fechaPago,
+            metodo_pago: 'transbank_atraso',
+            transaction_id: response.buy_order,
+            metadata: response,
+          });
+
+        if (insertError) {
+          this.logger.error('Error insertando comprobante_pago', insertError);
+          throw new InternalServerErrorException(
+            'Pago recibido pero fallo el registro del comprobante',
+          );
+        }
 
       } else {
         // Pago base normal
