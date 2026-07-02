@@ -23,7 +23,6 @@ function esRutaCompletada(estado: string | null | undefined): boolean {
 export default function HistorialScreen() {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
 
   const [rutasHistorial, setRutasHistorial] = useState<RutaListItem[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -88,9 +87,9 @@ export default function HistorialScreen() {
       <ChoferSessionBar onRefresh={() => void cargarHistorial()} />
       
       {/* Dashboard Mini */}
-      <View style={[styles.dashboardCard, { backgroundColor: isDark ? '#1e293b' : '#ffffff' }]}>
-        <Text style={[styles.dashboardTitle, { color: isDark ? '#94a3b8' : '#64748b' }]}>Ingresos Totales Acumulados</Text>
-        <Text style={[styles.dashboardValue, { color: isDark ? '#10b981' : '#059669' }]}>
+      <View style={[styles.dashboardCard, { backgroundColor: '#FFFFFF' }]}>
+        <Text style={[styles.dashboardTitle, { color: '#64748b' }]}>Ingresos Totales Acumulados</Text>
+        <Text style={[styles.dashboardValue, { color: '#059669' }]}>
           ${ingresosMes.toLocaleString('es-CL')}
         </Text>
       </View>
@@ -102,10 +101,10 @@ export default function HistorialScreen() {
       ) : null}
 
       <ScrollView
-        style={[styles.scrollArea, { backgroundColor: isDark ? '#0A0E1A' : '#F8FAFC' }]}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 90, paddingHorizontal: 16, paddingTop: 16 }}
+        style={[styles.scrollArea, { backgroundColor: '#FAFAFA' }]}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 90, paddingHorizontal: 24, paddingTop: 16 }}
       >
-        <Text style={[styles.sectionTitle, { color: isDark ? '#F8FAFC' : '#0F172A' }]}>
+        <Text style={[styles.sectionTitle, { color: '#0F172A' }]}>
           Rutas Completadas ({rutasHistorial.length})
         </Text>
 
@@ -113,9 +112,9 @@ export default function HistorialScreen() {
           <Text style={styles.hint}>Aún no tienes rutas completadas en tu historial.</Text>
         ) : (
           rutasHistorial.map((ruta) => (
-            <View key={ruta.id} style={[styles.rutaCard, { backgroundColor: isDark ? '#1e293b' : '#ffffff' }]}>
+            <View key={ruta.id} style={[styles.rutaCard, { backgroundColor: '#FFFFFF' }]}>
               <View style={styles.rutaHeader}>
-                <Text style={[styles.rutaId, { color: isDark ? '#e2e8f0' : '#1e293b' }]} numberOfLines={1}>
+                <Text style={[styles.rutaId, { color: '#1e293b' }]} numberOfLines={1}>
                   {ruta.origen?.split(',')[0]} ➔ {ruta.destino?.split(',')[0]}
                 </Text>
                 <Text style={[styles.badge, { backgroundColor: '#10b981' }]}>
@@ -124,17 +123,17 @@ export default function HistorialScreen() {
               </View>
               
               <View style={styles.rutaDetalle}>
-                <Text style={[styles.detalleTexto, { color: isDark ? '#cbd5e1' : '#475569' }]}>
+                <Text style={[styles.detalleTexto, { color: '#475569' }]}>
                   📦 Bultos/Slots: {ruta.bultos_despachados || 0}
                 </Text>
-                <Text style={[styles.detalleTexto, { color: isDark ? '#cbd5e1' : '#475569' }]}>
+                <Text style={[styles.detalleTexto, { color: '#475569' }]}>
                   📏 Distancia: {formatDistanciaKm(ruta.distancia_km) || 'N/A'}
                 </Text>
               </View>
               
               <View style={styles.footerCard}>
-                <Text style={[styles.gananciaTexto, { color: isDark ? '#94a3b8' : '#64748b' }]}>Tu Ganancia:</Text>
-                <Text style={[styles.gananciaValor, { color: isDark ? '#10b981' : '#059669' }]}>
+                <Text style={[styles.gananciaTexto, { color: '#64748b' }]}>Tu Ganancia:</Text>
+                <Text style={[styles.gananciaValor, { color: '#059669' }]}>
                   ${Number(ruta.pago_conductor_base_clp || 0).toLocaleString('es-CL')}
                 </Text>
               </View>
@@ -147,42 +146,44 @@ export default function HistorialScreen() {
 }
 
 const styles = StyleSheet.create({
-  screenRoot: { flex: 1, flexDirection: 'column' },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  screenRoot: { flex: 1, flexDirection: 'column', backgroundColor: '#FAFAFA' },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: '#FAFAFA' },
   hint: { marginTop: 12, color: '#64748b', textAlign: 'center' },
   banner: { backgroundColor: '#fef3c7', padding: 12, zIndex: 12 },
   bannerText: { color: '#92400e', fontSize: 13, textAlign: 'center' },
   dashboardCard: {
-    margin: 16,
+    margin: 24,
     padding: 24,
-    borderRadius: 16,
+    borderRadius: 24,
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.03,
+    shadowRadius: 10,
     elevation: 3,
   },
-  dashboardTitle: { fontSize: 14, fontWeight: '600', textTransform: 'uppercase', marginBottom: 8 },
+  dashboardTitle: { fontSize: 14, fontWeight: '700', textTransform: 'uppercase', marginBottom: 8 },
   dashboardValue: { fontSize: 36, fontWeight: '900' },
   scrollArea: { flex: 1 },
-  sectionTitle: { fontSize: 18, fontWeight: '700', marginBottom: 16 },
+  sectionTitle: { fontSize: 18, fontWeight: '800', marginBottom: 16 },
   rutaCard: {
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
+    padding: 20,
+    borderRadius: 20,
+    marginBottom: 14,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.03,
+    shadowRadius: 10,
+    elevation: 1,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   rutaHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  rutaId: { fontSize: 16, fontWeight: 'bold', flex: 1, marginRight: 8 },
+  rutaId: { fontSize: 16, fontWeight: '800', flex: 1, marginRight: 8 },
   badge: { color: '#fff', fontSize: 10, fontWeight: 'bold', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, overflow: 'hidden' },
   rutaDetalle: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-  detalleTexto: { fontSize: 13 },
-  footerCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: 'rgba(128,128,128,0.1)', paddingTop: 12 },
+  detalleTexto: { fontSize: 14, fontWeight: '500' },
+  footerCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 16 },
   gananciaTexto: { fontSize: 14, fontWeight: '600' },
   gananciaValor: { fontSize: 18, fontWeight: '800' }
 });

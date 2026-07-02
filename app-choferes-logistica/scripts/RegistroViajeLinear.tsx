@@ -184,7 +184,16 @@ export default function RegistroViajeLinear({ onSyncComplete, rutaId, destino, e
 
   return (
     <View style={styles.container}>
-      
+
+
+      <View style={styles.mainContentContainer}>
+        <Text style={styles.routeMainTitle}>{destino || 'Ruta Asignada'}</Text>
+        <Text style={styles.routeMainSubtitle}>{estadoRuta ? estadoRuta.replace('_', ' ') : 'Ubicado en ruta'}</Text>
+
+        <TouchableOpacity style={styles.openReportBtn} onPress={() => setIsReporteOpen(true)}>
+          <Text style={styles.openReportText}>⚠️ Reportar Estado / Incidencia</Text>
+        </TouchableOpacity>
+      </View>
       {/* Modal Cámara en Pantalla Completa */}
       <Modal visible={isCameraOpen} animationType="slide" onRequestClose={() => setIsCameraOpen(false)}>
         <View style={{ flex: 1, backgroundColor: 'black' }}>
@@ -246,10 +255,7 @@ export default function RegistroViajeLinear({ onSyncComplete, rutaId, destino, e
         </View>
       </Modal>
 
-      {/* Botón Flotante Superior para Reportes */}
-      <TouchableOpacity style={styles.openReportBtn} onPress={() => setIsReporteOpen(true)}>
-        <Text style={styles.openReportText}>⚠️ Reportar Estado / Incidencia</Text>
-      </TouchableOpacity>
+
 
       <View style={styles.card}>
         <View style={styles.cardHeader}>
@@ -336,9 +342,73 @@ export default function RegistroViajeLinear({ onSyncComplete, rutaId, destino, e
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingTop: 8,
-    paddingHorizontal: 16,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FAFAFA',
+  },
+  mapHeaderPlaceholder: {
+    height: 180,
+    backgroundColor: '#E4F1EE',
+    position: 'relative',
+    overflow: 'hidden',
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+  },
+  mapPin: {
+    position: 'absolute',
+    right: 40,
+    top: 80,
+    width: 44,
+    height: 44,
+    backgroundColor: '#FFF',
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+  },
+  avatarContainer: {
+    alignItems: 'center',
+    marginTop: -40,
+    zIndex: 10,
+  },
+  avatarCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#FDF0E1',
+    borderWidth: 4,
+    borderColor: '#F5F7FA',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+  },
+  avatarText: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#805B10',
+  },
+  mainContentContainer: {
+    paddingHorizontal: 24,
+    paddingTop: 32,
+    paddingBottom: 40,
+  },
+  routeMainTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#1E293B',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  routeMainSubtitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#64748B',
+    textAlign: 'center',
+    marginBottom: 24,
   },
   openReportBtn: {
     backgroundColor: '#FFFBEB',
@@ -356,16 +426,15 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 24,
+    padding: 20,
     marginBottom: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.03,
+    shadowRadius: 12,
+    elevation: 2,
+    borderWidth: 0,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -373,17 +442,17 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   stepNumber: {
-    backgroundColor: '#EFF6FF',
-    color: '#3B82F6',
+    backgroundColor: '#FDF0E1',
+    color: '#805B10',
     fontWeight: '800',
     fontSize: 16,
-    width: 28,
-    height: 28,
+    width: 32,
+    height: 32,
     textAlign: 'center',
-    lineHeight: 28,
-    borderRadius: 14,
+    lineHeight: 32,
+    borderRadius: 16,
     overflow: 'hidden',
-    marginRight: 10,
+    marginRight: 12,
   },
   cardTitle: {
     fontSize: 18,
@@ -546,3 +615,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
   }
 });
+
+

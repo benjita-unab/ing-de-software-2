@@ -18,6 +18,7 @@ export type RutaListItem = {
   total_pagar?: number | string | null;
   costo_servicio?: number | string | null;
   pago_conductor_base_clp?: number | string | null;
+  created_at?: string | null;
 };
 
 export function getClienteNombre(ruta: RutaListItem): string | null {

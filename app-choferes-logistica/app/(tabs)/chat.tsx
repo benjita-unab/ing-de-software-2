@@ -187,8 +187,8 @@ export default function ChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f1f5f9' },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
+  container: { flex: 1, backgroundColor: '#FAFAFA' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: '#FAFAFA' },
   header: {
     paddingHorizontal: 16,
     paddingVertical: 12,

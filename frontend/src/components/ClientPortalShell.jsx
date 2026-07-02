@@ -14,12 +14,23 @@ const SECCION_PEDIDOS = "pedidos";
 const SECCION_PAGOS = "pagos";
 const SECCION_RECURRENCIAS = "recurrencias";
 
-const TAB_PENDIENTES = "pendientes";
+const TAB_TODOS = "todos";
+const TAB_PENDIENTES_PAGO = "pendientes_pago";
+const TAB_ASIGNADOS = "asignados";
 const TAB_COMPLETADOS = "completados";
 
 /** HU-27 CA-4: ENTREGADO = completado; cualquier otro estado = pendiente. */
 function isPedidoCompletado(estado) {
-  return String(estado || "").trim().toUpperCase() === "ENTREGADO";
+  const e = String(estado || "").trim().toUpperCase();
+  return ["ENTREGADO", "FINALIZADO", "COMPLETADO"].includes(e);
+}
+
+function getDisplayState(pedido) {
+  if (!pedido) return "—";
+  if (pedido.estado_pago !== "pagado" && !isPedidoCompletado(pedido.estado)) {
+    return "PENDIENTE DE PAGO";
+  }
+  return pedido.estado || "—";
 }
 
 const styles = {
@@ -58,8 +69,15 @@ const styles = {
     background:
       estado === "ENTREGADO"
         ? "rgba(34,197,94,0.2)"
+        : estado === "PENDIENTE DE PAGO"
+        ? "rgba(245,158,11,0.2)"
         : "rgba(14,165,233,0.2)",
-    color: estado === "ENTREGADO" ? "#86efac" : "#7dd3fc",
+    color: 
+      estado === "ENTREGADO" 
+        ? "#86efac" 
+        : estado === "PENDIENTE DE PAGO"
+        ? "#fcd34d"
+        : "#7dd3fc",
   }),
   btn: {
     padding: "10px 16px",
@@ -128,8 +146,15 @@ const styles = {
     background:
       variant === "completados"
         ? "rgba(34,197,94,0.25)"
+        : variant === "pendientes_pago"
+        ? "rgba(245,158,11,0.25)"
         : "rgba(14,165,233,0.25)",
-    color: variant === "completados" ? "#86efac" : "#7dd3fc",
+    color:
+      variant === "completados"
+        ? "#86efac"
+        : variant === "pendientes_pago"
+        ? "#fcd34d"
+        : "#7dd3fc",
   }),
   emptyState: {
     textAlign: "center",
@@ -187,7 +212,7 @@ function formatDate(value) {
 export default function ClientPortalShell({ user, onSignOut }) {
   const [seccionActiva, setSeccionActiva] = useState(SECCION_PEDIDOS);
   const [pedidos, setPedidos] = useState([]);
-  const [activeTab, setActiveTab] = useState(TAB_PENDIENTES);
+  const [activeTab, setActiveTab] = useState(TAB_TODOS);
   const [selectedId, setSelectedId] = useState(null);
   const [detalle, setDetalle] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -248,21 +273,23 @@ export default function ClientPortalShell({ user, onSignOut }) {
     window.history.replaceState({}, document.title, window.location.pathname);
   }, [loadPedidos]);
 
-  const { pedidosPendientes, pedidosCompletados } = useMemo(() => {
-    const pendientes = [];
-    const completados = [];
-    for (const p of pedidos) {
-      if (isPedidoCompletado(p.estado)) {
-        completados.push(p);
-      } else {
-        pendientes.push(p);
-      }
-    }
-    return { pedidosPendientes: pendientes, pedidosCompletados: completados };
-  }, [pedidos]);
+  const categorias = useMemo(() => {
+    const todos = pedidos;
+    const completados = pedidos.filter(p => isPedidoCompletado(p.estado));
+    const pendientesPago = pedidos.filter(p => p.estado_pago !== 'pagado');
+    const asignados = pedidos.filter(p => 
+      ["ASIGNADO", "EN_TRANSITO", "EN_CAMINO_ORIGEN", "EN_CARGA", "EN_DESTINO"].includes(String(p.estado || "").trim().toUpperCase()) && p.estado_pago === 'pagado'
+    );
 
-  const pedidosVisibles =
-    activeTab === TAB_COMPLETADOS ? pedidosCompletados : pedidosPendientes;
+    let visibles = todos;
+    if (activeTab === TAB_COMPLETADOS) visibles = completados;
+    else if (activeTab === TAB_PENDIENTES_PAGO) visibles = pendientesPago;
+    else if (activeTab === TAB_ASIGNADOS) visibles = asignados;
+
+    return { todos, completados, pendientesPago, asignados, visibles };
+  }, [pedidos, activeTab]);
+
+  const pedidosVisibles = categorias.visibles;
 
   async function handleSelectPedido(id) {
     setSelectedId(id);
@@ -326,7 +353,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
           <strong>
             {p.nombre_ruta || `${p.origen || "—"} → ${p.destino || "—"}`}
           </strong>
-          <span style={styles.badge(p.estado)}>{p.estado || "—"}</span>
+          <span style={styles.badge(getDisplayState(p))}>{getDisplayState(p)}</span>
         </div>
         <p style={{ margin: "8px 0 0", fontSize: "13px", opacity: 0.8 }}>
           Entrega estimada: {formatDate(p.fecha_estimada_entrega)}
@@ -340,7 +367,13 @@ export default function ClientPortalShell({ user, onSignOut }) {
     if (activeTab === TAB_COMPLETADOS) {
       return "No hay pedidos completados en este momento.";
     }
-    return "No hay pedidos en curso en este momento.";
+    if (activeTab === TAB_PENDIENTES_PAGO) {
+      return "No hay pedidos pendientes de pago en este momento.";
+    }
+    if (activeTab === TAB_ASIGNADOS) {
+      return "No hay pedidos asignados en curso en este momento.";
+    }
+    return "No hay pedidos en este momento.";
   }
 
   const handlePagarKhipu = async (id, monto, tipo = "base", e) => {
@@ -412,11 +445,9 @@ export default function ClientPortalShell({ user, onSignOut }) {
   };
 
   const tituloSeccion =
-    seccionActiva === SECCION_PAGOS
-      ? "Mis pagos"
-      : seccionActiva === SECCION_RECURRENCIAS
-        ? "Mis recurrencias"
-        : "Mis pedidos";
+    seccionActiva === SECCION_RECURRENCIAS
+      ? "Mis recurrencias"
+      : "Mis pedidos";
 
   return (
     <div style={styles.page}>
@@ -454,15 +485,6 @@ export default function ClientPortalShell({ user, onSignOut }) {
         <button
           type="button"
           role="tab"
-          aria-selected={seccionActiva === SECCION_PAGOS}
-          style={styles.tab(seccionActiva === SECCION_PAGOS)}
-          onClick={() => setSeccionActiva(SECCION_PAGOS)}
-        >
-          Pagos
-        </button>
-        <button
-          type="button"
-          role="tab"
           aria-selected={seccionActiva === SECCION_RECURRENCIAS}
           style={styles.tab(seccionActiva === SECCION_RECURRENCIAS)}
           onClick={() => setSeccionActiva(SECCION_RECURRENCIAS)}
@@ -470,10 +492,6 @@ export default function ClientPortalShell({ user, onSignOut }) {
           Recurrencias
         </button>
       </div>
-
-      {seccionActiva === SECCION_PAGOS ? (
-        <PortalPagos clienteId={user?.clienteId} />
-      ) : null}
 
       {seccionActiva === SECCION_RECURRENCIAS ? (
         <PortalRecurrencias />
@@ -497,12 +515,32 @@ export default function ClientPortalShell({ user, onSignOut }) {
             <button
               type="button"
               role="tab"
-              aria-selected={activeTab === TAB_PENDIENTES}
-              style={styles.tab(activeTab === TAB_PENDIENTES)}
-              onClick={() => setActiveTab(TAB_PENDIENTES)}
+              aria-selected={activeTab === TAB_TODOS}
+              style={styles.tab(activeTab === TAB_TODOS)}
+              onClick={() => setActiveTab(TAB_TODOS)}
             >
-              Pendientes
-              <span style={styles.tabCount("pendientes")}>{pedidosPendientes.length}</span>
+              Todos
+              <span style={styles.tabCount("todos")}>{categorias.todos.length}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === TAB_PENDIENTES_PAGO}
+              style={styles.tab(activeTab === TAB_PENDIENTES_PAGO)}
+              onClick={() => setActiveTab(TAB_PENDIENTES_PAGO)}
+            >
+              Pendientes de pago
+              <span style={styles.tabCount("pendientes_pago")}>{categorias.pendientesPago.length}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === TAB_ASIGNADOS}
+              style={styles.tab(activeTab === TAB_ASIGNADOS)}
+              onClick={() => setActiveTab(TAB_ASIGNADOS)}
+            >
+              Asignados
+              <span style={styles.tabCount("asignados")}>{categorias.asignados.length}</span>
             </button>
             <button
               type="button"
@@ -512,7 +550,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
               onClick={() => setActiveTab(TAB_COMPLETADOS)}
             >
               Completados
-              <span style={styles.tabCount("completados")}>{pedidosCompletados.length}</span>
+              <span style={styles.tabCount("completados")}>{categorias.completados.length}</span>
             </button>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
@@ -533,8 +571,8 @@ export default function ClientPortalShell({ user, onSignOut }) {
                 <>
                   <h2 style={{ marginTop: 0, fontSize: "18px" }}>Detalle del pedido</h2>
                   <p>
-                    <span style={styles.badge(detalle.ruta.estado)}>
-                      {detalle.ruta.estado}
+                    <span style={styles.badge(getDisplayState(detalle.ruta))}>
+                      {getDisplayState(detalle.ruta)}
                     </span>
                   </p>
                   <p style={{ fontWeight: 600 }}>

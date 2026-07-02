@@ -38,6 +38,14 @@ export default function PedidoDetalleScreen() {
     return String(estado || '').trim().toUpperCase() === 'ENTREGADO';
   };
 
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/');
+    }
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
@@ -51,7 +59,7 @@ export default function PedidoDetalleScreen() {
       <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
         <View style={styles.center}>
           <Text style={[styles.errorText, { color: colors.error }]}>{error || 'No se encontró el pedido'}</Text>
-          <TouchableOpacity style={[styles.btn, { backgroundColor: colors.primary }]} onPress={() => router.back()}>
+          <TouchableOpacity style={[styles.btn, { backgroundColor: colors.primary }]} onPress={handleBack}>
             <Text style={styles.btnText}>Volver</Text>
           </TouchableOpacity>
         </View>
@@ -65,7 +73,7 @@ export default function PedidoDetalleScreen() {
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity onPress={handleBack} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={[styles.title, { color: colors.textPrimary }]}>Seguimiento</Text>

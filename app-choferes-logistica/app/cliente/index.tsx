@@ -92,8 +92,17 @@ export default function ClienteHomeScreen() {
     }
   };
 
+  const getDisplayState = (p: any) => {
+    if (!p) return '—';
+    if (p.estado_pago !== 'pagado' && !['ENTREGADO', 'FINALIZADO', 'COMPLETADO'].includes(p.estado)) {
+      return 'PENDIENTE DE PAGO';
+    }
+    return p.estado || '—';
+  };
+
   const obtenerColorEstado = (estado: string) => {
     switch (estado?.toUpperCase()) {
+      case 'PENDIENTE DE PAGO': return '#f59e0b';
       case 'PENDIENTE': return '#f59e0b';
       case 'ASIGNADO': return '#3b82f6';
       case 'EN_CURSO': return '#3b82f6';
@@ -102,18 +111,17 @@ export default function ClienteHomeScreen() {
     }
   };
 
-  const tabs = ['Todos', 'Pendientes de Pago', 'En Curso', 'Completados'];
+  const tabs = ['Todos', 'En Curso', 'Completados'];
 
   const pedidosFiltrados = pedidos.filter(p => {
     if (activeTab === 'Todos') return true;
-    if (activeTab === 'Pendientes de Pago') return p.estado_pago !== 'pagado';
     if (activeTab === 'En Curso') return ['ASIGNADO', 'EN_TRANSITO', 'EN_CAMINO_ORIGEN', 'EN_CARGA', 'EN_DESTINO'].includes(p.estado) && p.estado_pago === 'pagado';
-    if (activeTab === 'Completados') return p.estado === 'ENTREGADO';
+    if (activeTab === 'Completados') return ['ENTREGADO', 'FINALIZADO', 'COMPLETADO'].includes(p.estado);
     return true;
   });
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: '#0a0e1a' }]}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: '#FAFAFA' }]}>
       <View style={styles.header}>
         <View>
           <Text style={styles.welcomeText}>Portal Clientes</Text>
@@ -137,7 +145,7 @@ export default function ClienteHomeScreen() {
       </View>
 
       <View style={styles.content}>
-        <Text style={[styles.body, { color: colors.textSecondary, marginBottom: 16, fontWeight: 'bold' }]}>
+        <Text style={[styles.body, { color: '#0F172A', marginBottom: 16, fontWeight: 'bold' }]}>
           Tus pedidos recientes
         </Text>
         
@@ -151,9 +159,9 @@ export default function ClienteHomeScreen() {
               <TouchableOpacity style={styles.pedidoCard} onPress={() => abrirDetalle(item)}>
                 <View style={styles.pedidoCardHeader}>
                   <Text style={styles.pedidoCardTitle}>{item.nombre_ruta || 'Pedido Sin Nombre'}</Text>
-                  <View style={[styles.statusBadge, { backgroundColor: obtenerColorEstado(item.estado) + '20', borderColor: obtenerColorEstado(item.estado) + '50' }]}>
-                    <Text style={[styles.statusText, { color: obtenerColorEstado(item.estado) }]}>
-                      {item.estado}
+                  <View style={[styles.statusBadge, { backgroundColor: obtenerColorEstado(getDisplayState(item)) + '20', borderColor: obtenerColorEstado(getDisplayState(item)) + '50' }]}>
+                    <Text style={[styles.statusText, { color: obtenerColorEstado(getDisplayState(item)) }]}>
+                      {getDisplayState(item)}
                     </Text>
                   </View>
                 </View>
@@ -183,7 +191,7 @@ export default function ClienteHomeScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Detalle del Despacho</Text>
               <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeBtn}>
-                <Ionicons name="close" size={24} color="#fff" />
+                <Ionicons name="close" size={24} color="#0F172A" />
               </TouchableOpacity>
             </View>
 
@@ -193,9 +201,9 @@ export default function ClienteHomeScreen() {
                 <View style={styles.detailSection}>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Estado del Pedido:</Text>
-                    <View style={[styles.statusBadge, { backgroundColor: obtenerColorEstado(selectedRuta.estado) + '20', borderColor: obtenerColorEstado(selectedRuta.estado) + '50' }]}>
-                      <Text style={[styles.statusText, { color: obtenerColorEstado(selectedRuta.estado) }]}>
-                        {selectedRuta.estado}
+                    <View style={[styles.statusBadge, { backgroundColor: obtenerColorEstado(getDisplayState(selectedRuta)) + '20', borderColor: obtenerColorEstado(getDisplayState(selectedRuta)) + '50' }]}>
+                      <Text style={[styles.statusText, { color: obtenerColorEstado(getDisplayState(selectedRuta)) }]}>
+                        {getDisplayState(selectedRuta)}
                       </Text>
                     </View>
                   </View>
@@ -300,12 +308,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.06)'
+    borderBottomColor: '#E2E8F0'
   },
   tabsContainer: {
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+    borderBottomColor: '#E2E8F0',
   },
   tabsScroll: {
     paddingHorizontal: 16,
@@ -315,16 +323,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: 'transparent',
+    borderColor: '#E2E8F0',
   },
   tabButtonActive: {
     backgroundColor: 'rgba(56, 189, 248, 0.15)',
     borderColor: '#38bdf8',
   },
   tabText: {
-    color: '#94a3b8',
+    color: '#64748b',
     fontSize: 14,
     fontWeight: '500',
   },
@@ -335,11 +343,11 @@ const styles = StyleSheet.create({
   welcomeText: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#38bdf8'
+    color: '#0F172A'
   },
   emailText: {
     fontSize: 12,
-    color: '#94a3b8',
+    color: '#64748b',
     marginTop: 2,
     maxWidth: 200
   },
@@ -352,12 +360,17 @@ const styles = StyleSheet.create({
   body: { fontSize: 16, lineHeight: 24 },
   hint: { fontSize: 14, lineHeight: 22, marginBottom: 12 },
   pedidoCard: {
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)'
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   pedidoCardHeader: {
     flexDirection: 'row',
@@ -366,19 +379,19 @@ const styles = StyleSheet.create({
     marginBottom: 8
   },
   pedidoCardTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#f8fafc',
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
     flex: 1,
     marginRight: 8
   },
   pedidoCardText: {
     fontSize: 14,
-    color: '#cbd5e1',
+    color: '#475569',
     marginTop: 4
   },
   emptyText: {
-    color: '#94a3b8',
+    color: '#64748b',
     textAlign: 'center',
     marginTop: 40,
     fontStyle: 'italic'
@@ -393,25 +406,25 @@ const styles = StyleSheet.create({
   modalContent: {
     width: '100%',
     maxHeight: '85%',
-    backgroundColor: '#1e293b',
+    backgroundColor: '#FFFFFF',
     borderRadius: 20,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)'
+    borderColor: '#E2E8F0'
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: '#FAFAFA',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.05)'
+    borderBottomColor: '#E2E8F0'
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#f8fafc'
+    fontWeight: '800',
+    color: '#0F172A'
   },
   closeBtn: {
     padding: 4
@@ -421,11 +434,11 @@ const styles = StyleSheet.create({
   },
   detailSection: {
     marginBottom: 20,
-    backgroundColor: 'rgba(255,255,255,0.02)',
+    backgroundColor: '#F8FAFC',
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)'
+    borderColor: '#E2E8F0'
   },
   detailRow: {
     flexDirection: 'row',
@@ -435,8 +448,8 @@ const styles = StyleSheet.create({
   },
   detailLabel: {
     fontSize: 15,
-    color: '#cbd5e1',
-    fontWeight: '500'
+    color: '#475569',
+    fontWeight: '600'
   },
   statusBadge: {
     paddingHorizontal: 12,
@@ -450,12 +463,12 @@ const styles = StyleSheet.create({
   },
   detailSubtext: {
     fontSize: 13,
-    color: '#94a3b8'
+    color: '#64748b'
   },
   sectionHeader: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#f8fafc',
+    fontWeight: '800',
+    color: '#0F172A',
     marginBottom: 12
   },
   routePathContainer: {
@@ -465,14 +478,14 @@ const styles = StyleSheet.create({
   },
   routePathText: {
     fontSize: 14,
-    color: '#cbd5e1',
+    color: '#475569',
     marginLeft: 8,
     flex: 1
   },
   routePathDistance: {
     marginTop: 12,
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
     color: '#38bdf8',
     textAlign: 'right'
   },
@@ -481,22 +494,23 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.05)'
+    borderBottomColor: '#E2E8F0'
   },
   bultoName: {
     fontSize: 14,
-    color: '#e2e8f0',
-    fontWeight: '500'
+    color: '#0F172A',
+    fontWeight: '600'
   },
   bultoSpecs: {
     fontSize: 13,
-    color: '#94a3b8'
+    color: '#64748b'
   },
   noBultosText: {
     fontSize: 14,
-    color: '#94a3b8',
+    color: '#64748b',
     fontStyle: 'italic',
     textAlign: 'center',
     paddingVertical: 8
   }
 });
+

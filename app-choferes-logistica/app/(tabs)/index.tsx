@@ -62,10 +62,11 @@ export default function HomeScreen() {
   const [rutaActivaId, setRutaActivaId] = useState<string | null>(null);
   const [rutasOperativas, setRutasOperativas] = useState<RutaListItem[]>([]);
   const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  const isDark = false; // forced light mode
   const [cargandoRutas, setCargandoRutas] = useState(true);
   const [errorRutas, setErrorRutas] = useState<string | null>(null);
   const [resetKey, setResetKey] = useState(0);
+  const [mostrarLista, setMostrarLista] = useState(true);
 
   const cargarRutas = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent ?? false;
@@ -94,7 +95,12 @@ export default function HomeScreen() {
         : raw && typeof raw === 'object' && Array.isArray((raw as any).data)
         ? (raw as any).data
         : [];
-      const operativas = lista.filter((r) => esRutaOperativa(r.estado));
+      
+      const operativas = lista.filter((r) => esRutaOperativa(r.estado)).sort((a, b) => {
+         const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+         const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+         return dateA - dateB; // ASC, oldest first
+      });
       setRutasOperativas(operativas);
 
       const persisted = await AsyncStorage.getItem(STORAGE_RUTA_ACTIVA_ID);
@@ -105,6 +111,7 @@ export default function HomeScreen() {
         if (encontrada) {
           console.log('USANDO RUTA GUARDADA');
           setRutaActivaId(encontrada.id);
+          setMostrarLista(false);
           if (encontrada.id !== persistedTrim) {
             await AsyncStorage.setItem(STORAGE_RUTA_ACTIVA_ID, encontrada.id);
           }
@@ -113,21 +120,9 @@ export default function HomeScreen() {
         await AsyncStorage.removeItem(STORAGE_RUTA_ACTIVA_ID);
       }
 
-      if (operativas.length === 0) {
-        setRutaActivaId(null);
-        return;
-      }
-
-      if (operativas.length > 1) {
-        console.log('MOSTRANDO SELECTOR DE RUTAS');
-        setRutaActivaId(null);
-        return;
-      }
-
-      const solo = operativas[0].id;
-      console.log('SET AUTO SOLO UNA RUTA');
-      setRutaActivaId(solo);
-      await AsyncStorage.setItem(STORAGE_RUTA_ACTIVA_ID, solo);
+      // No active route saved, so we must show the list for them to pick
+      setRutaActivaId(null);
+      setMostrarLista(true);
     } catch (e: unknown) {
       const mensaje =
         e instanceof Error ? e.message : 'No se pudieron cargar las rutas';
@@ -149,6 +144,7 @@ export default function HomeScreen() {
     console.log('SET MANUAL:', trimmed);
     setRutaActivaId(trimmed);
     await AsyncStorage.setItem(STORAGE_RUTA_ACTIVA_ID, trimmed);
+    setMostrarLista(false);
   }, []);
 
   const cambiarRuta = useCallback(async () => {
@@ -166,6 +162,15 @@ export default function HomeScreen() {
         Alert.alert('Pago Pendiente', 'El cliente aún no ha pagado esta ruta. No puedes iniciarla.');
         return;
       }
+      if (rutaActivaId === id) {
+        // They clicked the active route. Just go to it.
+        setMostrarLista(false);
+        return;
+      }
+      if (rutaActivaId && rutaActivaId !== id) {
+        Alert.alert('Ruta en transcurso', 'Debes finalizar el pedido en transcurso antes de iniciar otro.');
+        return;
+      }
       Alert.alert(
         'Comenzar Ruta',
         '¿Desea comenzar esta ruta?',
@@ -175,7 +180,7 @@ export default function HomeScreen() {
         ]
       );
     },
-    [seleccionarRuta, rutasOperativas],
+    [seleccionarRuta, rutasOperativas, rutaActivaId],
   );
 
   const rutasMemo = useMemo(() => rutasOperativas, [rutasOperativas]);
@@ -211,8 +216,7 @@ export default function HomeScreen() {
     );
   }
 
-  const debeElegirRuta =
-    rutasMemo.length > 1 && rutaActivaId === null;
+  const debeElegirRuta = mostrarLista;
 
   if (debeElegirRuta) {
     const selectorPadBottom = insets.bottom + 96;
@@ -229,7 +233,7 @@ export default function HomeScreen() {
         <ScrollView
           style={[
             styles.selectorScroll,
-            { backgroundColor: isDark ? '#0A0E1A' : '#F8FAFC' },
+            { backgroundColor: isDark ? '#0A0E1A' : '#FAFAFA' },
           ]}
           contentContainerStyle={[
             styles.selectorScrollContent,
@@ -245,7 +249,7 @@ export default function HomeScreen() {
           <View
             style={[
               styles.selectorStripInner,
-              { backgroundColor: isDark ? '#0A0E1A' : '#F8FAFC' },
+              { backgroundColor: isDark ? '#0A0E1A' : '#FAFAFA' },
             ]}
             collapsable={false}
           >
@@ -258,7 +262,7 @@ export default function HomeScreen() {
                   {pagadas.length > 0 && (
                     <>
                       <Text style={[styles.selectorTitle, { color: isDark ? '#F8FAFC' : '#0F172A', marginTop: 8 }]}>
-                        Rutas listas para iniciar (Pagadas)
+                        Rutas pendientes
                       </Text>
                       {pagadas.map((ruta) => {
                         const idStr = String(ruta.id);
@@ -266,6 +270,7 @@ export default function HomeScreen() {
                           <RutaChoferCard
                             key={idStr}
                             ruta={ruta}
+                            isActive={idStr === rutaActivaId}
                             onPress={onPressPorRutaId.get(idStr)!}
                             accessibilityLabel={`Seleccionar ${etiquetaRutaAccesibilidad(ruta)}`}
                           />
@@ -276,19 +281,20 @@ export default function HomeScreen() {
 
                   {noPagadas.length > 0 && (
                     <>
-                      <Text style={[styles.selectorTitle, { color: isDark ? '#94A3B8' : '#64748B', marginTop: 24 }]}>
+                      <Text style={[styles.selectorTitle, { color: isDark ? '#94A3B8' : '#64748B', marginTop: 32 }]}>
                         Rutas pendientes de pago
                       </Text>
                       {noPagadas.map((ruta) => {
                         const idStr = String(ruta.id);
                         return (
-                          <View key={idStr} style={{ opacity: 0.65 }}>
-                            <RutaChoferCard
-                              ruta={ruta}
-                              onPress={onPressPorRutaId.get(idStr)!}
-                              accessibilityLabel={`Seleccionar ${etiquetaRutaAccesibilidad(ruta)}`}
-                            />
-                          </View>
+                          <RutaChoferCard
+                            key={idStr}
+                            ruta={ruta}
+                            isUnpaid={true}
+                            isActive={idStr === rutaActivaId}
+                            onPress={onPressPorRutaId.get(idStr)!}
+                            accessibilityLabel={`Seleccionar ${etiquetaRutaAccesibilidad(ruta)}`}
+                          />
                         );
                       })}
                     </>
@@ -326,7 +332,10 @@ export default function HomeScreen() {
 
       <View style={styles.selectorSingle}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={styles.selectorSingleText}>
+          <TouchableOpacity onPress={() => setMostrarLista(true)} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 12 }}>
+            <Text style={{ color: '#3b82f6', fontSize: 14, fontWeight: '700' }}>← Volver</Text>
+          </TouchableOpacity>
+          <Text style={[styles.selectorSingleText, { flex: 1 }]} numberOfLines={1}>
             Ruta Activa: {rutaActiva ? etiquetaRutaDesdeApi(rutaActiva) : '—'}
           </Text>
           <TouchableOpacity 
@@ -387,12 +396,14 @@ const styles = StyleSheet.create({
   screenRoot: {
     flex: 1,
     flexDirection: 'column',
+    backgroundColor: '#FAFAFA',
   },
   centered: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
+    backgroundColor: '#FAFAFA',
   },
   hint: { marginTop: 12, color: '#64748b' },
   banner: {
@@ -412,16 +423,15 @@ const styles = StyleSheet.create({
   },
   /** Contenido del selector dentro del ScrollView */
   selectorStripInner: {
-    paddingHorizontal: 16,
-    paddingTop: 4,
-    paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e2e8f0',
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 24,
+    borderBottomWidth: 0,
   },
   selectorTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    marginBottom: 12,
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 16,
   },
   cardPressed: {
     opacity: 0.92,
@@ -464,3 +474,4 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
 });
+
