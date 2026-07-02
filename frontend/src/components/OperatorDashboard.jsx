@@ -9,6 +9,7 @@ import AlertQueue from "./AlertQueue";
 import AlertDetailPanel from "./AlertDetailPanel";
 import AlertasConductor from "./AlertasConductor";
 import MonitoreoLicencias from "./MonitoreoLicencias";
+
 import Flota from "./Flota";
 import RutasActivas from "./RutasActivas";
 import GuiasDespacho from "./GuiasDespacho";
@@ -17,6 +18,7 @@ import HistorialDespachos from "./HistorialDespachos";
 import PagosCliente from "./PagosCliente";
 import RutasPlantilla from "./RutasPlantilla";
 import ModulePage from "./ui/ModulePage";
+
 import PageHeader from "./ui/PageHeader";
 import { useAlerts } from "../hooks/useAlerts";
 import { useAlertasConductor } from "../hooks/useAlertasConductor";
@@ -109,42 +111,54 @@ export default function OperatorDashboard({ operator, onSignOut }) {
                 </ModulePage>
               )}
               {activeSection === "rutas" && (
-                <ModulePage title="Rutas" subtitle="Gestión y seguimiento de rutas operativas">
+                <ModulePage title="Rutas">
                   <RutasActivas />
                 </ModulePage>
               )}
-              {activeSection === "clientes" && (
-                <ModulePage title="Clientes" subtitle="Directorio de clientes y historial de despachos">
-                  <Clientes />
-                </ModulePage>
-              )}
-              {activeSection === "pagos" && (
-                <ModulePage
-                  title="Pagos de clientes"
-                  subtitle="Consulta y gestión de cobros B2B asociados a pedidos"
-                >
-                  <PagosCliente />
-                </ModulePage>
-              )}
-              {activeSection === "historial" && (
-                <ModulePage title="Historial de despachos" subtitle="Consulta de entregas completadas y evidencias">
-                  <HistorialDespachos />
-                </ModulePage>
-              )}
-              {activeSection === "despachos" && (
-                <ModulePage title="Rutas Activas" subtitle="Seguimiento de rutas activas y cierre de despachos">
-                  <GuiasDespacho />
-                </ModulePage>
-              )}
-              {activeSection === "camiones" && (
-                <ModulePage title="Flota" subtitle="Gestión de choferes y vehículos">
-                  <Flota operator={operator} />
-                </ModulePage>
-              )}
-            </div>
-          )}
-      </main>
-    </div>
+
+  {
+    activeSection === "clientes" && (
+      <ModulePage title="Clientes" subtitle="Directorio de clientes y historial de despachos">
+        <Clientes />
+      </ModulePage>
+    )
+  }
+  {
+    activeSection === "pagos" && (
+      <ModulePage
+        title="Pagos de clientes"
+        subtitle="Consulta y gestión de cobros B2B asociados a pedidos"
+      >
+        <PagosCliente />
+      </ModulePage>
+    )
+  }
+  {
+    activeSection === "historial" && (
+      <ModulePage title="Historial de despachos" subtitle="Consulta de entregas completadas y evidencias">
+        <HistorialDespachos />
+      </ModulePage>
+    )
+  }
+  {
+    activeSection === "despachos" && (
+      <ModulePage title="Rutas Activas" subtitle="Seguimiento de rutas activas y cierre de despachos">
+        <GuiasDespacho />
+      </ModulePage>
+    )
+  }
+  {
+    activeSection === "camiones" && (
+      <ModulePage title="Flota" subtitle="Gestión de choferes y vehículos">
+        <Flota operator={operator} />
+      </ModulePage>
+    )
+  }
+            </div >
+          )
+}
+      </main >
+    </div >
   );
 }
 
@@ -189,3 +203,4 @@ export function LegacyIncidenciasAlertPanel({
     </div>
   );
 }
+

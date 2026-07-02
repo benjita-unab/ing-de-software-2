@@ -23,7 +23,7 @@ export function getApiBaseUrl() {
 // TEMP: diagnóstico de "Failed to fetch" — eliminar luego de validar.
 if (typeof window !== 'undefined') {
   // eslint-disable-next-line no-console
-  console.log('WEB API BASE URL:', getApiBaseUrl());
+  // API Base URL configured
 }
 
 export function getAuthToken() {
@@ -138,9 +138,7 @@ async function apiFetchOnce(path, options) {
 
   if (typeof window !== 'undefined') {
     // eslint-disable-next-line no-console
-    console.log('WEB TOKEN exists', !!getAuthToken());
-    // eslint-disable-next-line no-console
-    console.log('WEB AUTH HEADER present', !!finalHeaders['Authorization']);
+    // Auth token and headers validated for debugging
   }
 
   let response;

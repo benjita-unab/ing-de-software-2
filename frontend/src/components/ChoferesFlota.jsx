@@ -1,14 +1,14 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { CircleHelp, Eye, Search } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { CircleHelp, Eye, Search, UserPlus } from "lucide-react";
 import {
   displayNombreConductor,
-  filtrarYOrdenarConductores,
   NOMBRE_API_AYUDA,
   ORDEN_CHOFERES,
 } from "../lib/conductorUtils";
 import { obtenerConductoresActivos } from "../lib/rutasService";
 import Badge from "./ui/Badge";
 import DetalleConductorModal from "./DetalleConductorModal";
+import CrearChoferModal from "./CrearChoferModal";
 import EmptyState from "./ui/EmptyState";
 import Pagination from "./ui/Pagination";
 function licenciaBadgeFromDias(diasRestantes) {
@@ -72,6 +72,7 @@ export default function ChoferesFlota({ configPagosVersion = 0 }) {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [meta, setMeta] = useState(null);
+  const [mostrarCrearModal, setMostrarCrearModal] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedBusqueda(busqueda), 400);
@@ -132,10 +133,21 @@ export default function ChoferesFlota({ configPagosVersion = 0 }) {
     <>
       <div className="lt-card lt-module-card">
         <div className="lt-card__body">
-          <h3 className="lt-module-card__title">
-            Choferes activos ({(meta?.total_items ?? conductores.length)}
-            {busqueda.trim() ? ` de ${conductores.length}` : ""})
-          </h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <h3 className="lt-module-card__title" style={{ margin: 0 }}>
+              Choferes activos ({meta?.total_items ?? conductores.length}
+              {busqueda.trim() ? ` de ${conductores.length}` : ""})
+            </h3>
+            <button
+              type="button"
+              className="lt-btn lt-btn--primary"
+              onClick={() => setMostrarCrearModal(true)}
+              style={{ display: "flex", alignItems: "center", gap: 6 }}
+            >
+              <UserPlus size={16} />
+              Nuevo Chofer
+            </button>
+          </div>
           <div className="lt-toolbar" style={{ marginBottom: 16 }}>
             <div className="lt-search-wrap" style={{ flex: 1, maxWidth: 420 }}>
               <Search size={14} className="lt-search-icon" />
@@ -281,6 +293,16 @@ export default function ChoferesFlota({ configPagosVersion = 0 }) {
           onClose={() => setConductorDetalle(null)}
           onConductorActualizado={handleConductorActualizado}
           configPagosVersion={configPagosVersion}
+        />
+      )}
+
+      {mostrarCrearModal && (
+        <CrearChoferModal
+          onClose={() => setMostrarCrearModal(false)}
+          onCreated={() => {
+            setMensaje({ tipo: "success", texto: "Chofer creado con éxito." });
+            handleConductorActualizado();
+          }}
         />
       )}
     </>

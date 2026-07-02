@@ -1,181 +1,516 @@
-import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
+import React from 'react';
+import { StyleSheet, Text, View, Modal, TouchableOpacity, ScrollView, ActivityIndicator, FlatList } from 'react-native';
+import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
+import MapView, { Marker, Polyline } from 'react-native-maps';
+import { getPortalPedidos, getPortalPedidoById } from '@/src/services/portalClienteService';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import * as Location from 'expo-location';
 import { LogiTrackLogo } from '@/src/components/auth/LogiTrackLogo';
 import { SignOutButton } from '@/src/components/SignOutButton';
 import { useAuth } from '@/src/context/AuthContext';
 import { useAuthTheme } from '@/src/hooks/use-auth-theme';
 import { AuthSpacing } from '@/src/constants/authTheme';
-import { getPortalPedidos, PortalPedidoListItem } from '@/src/services/portalClienteService';
-import { Ionicons } from '@expo/vector-icons';
 
+/** Área mínima post-login cliente (portal web es el destino principal). */
 export default function ClienteHomeScreen() {
   const { session } = useAuth();
   const { colors } = useAuthTheme();
-  const router = useRouter();
 
-  const [pedidos, setPedidos] = useState<PortalPedidoListItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [modalVisible, setModalVisible] = React.useState(false);
+  const [selectedRuta, setSelectedRuta] = React.useState(null);
+  const [loadingMap, setLoadingMap] = React.useState(false);
+  const [mapCoords, setMapCoords] = React.useState(null);
+  const [pedidos, setPedidos] = React.useState<any[]>([]);
+  const [loadingPedidos, setLoadingPedidos] = React.useState(true);
+  const [activeTab, setActiveTab] = React.useState('Todos');
 
-  useEffect(() => {
+  const SIZES: Record<string, number> = {
+    'XS': 1, 'S': 4, 'M': 12, 'L': 24, 'XL': 48, 'MAXIMO': 96
+  };
+
+  React.useEffect(() => {
+    async function loadPedidos() {
+      try {
+        const res = await getPortalPedidos();
+        setPedidos(res.data || []);
+      } catch (err) {
+        console.warn('Error loading pedidos:', err);
+      } finally {
+        setLoadingPedidos(false);
+      }
+    }
     loadPedidos();
   }, []);
 
-  const loadPedidos = async () => {
-    setLoading(true);
-    setError(null);
+  const abrirDetalle = async (item: any) => {
+    setSelectedRuta(item);
+    setModalVisible(true);
+    setLoadingMap(true);
+    setMapCoords(null);
     try {
-      const res = await getPortalPedidos();
-      setPedidos(res.data || []);
-    } catch (err: any) {
-      setError(err.message || 'Error al cargar los pedidos');
+      const detail = await getPortalPedidoById(item.id);
+      if (detail && detail.ruta) {
+        setSelectedRuta({ ...detail.ruta, bultos: detail.bultos });
+
+        let latOrig = -33.4489, lngOrig = -70.6693;
+        let latDest = -33.0245, lngDest = -71.5518;
+        
+        try {
+          const resOrig = await Location.geocodeAsync(detail.ruta.origen || item.origen || '');
+          if (resOrig && resOrig.length > 0) {
+            latOrig = resOrig[0].latitude;
+            lngOrig = resOrig[0].longitude;
+          }
+          const resDest = await Location.geocodeAsync(detail.ruta.destino || item.destino || '');
+          if (resDest && resDest.length > 0) {
+            latDest = resDest[0].latitude;
+            lngDest = resDest[0].longitude;
+          }
+        } catch(e) {
+          console.warn("Geocoding fallback", e);
+        }
+
+        const curve = [];
+        for (let i = 0; i <= 10; i++) {
+          const t = i / 10;
+          curve.push({
+            latitude: latOrig + (latDest - latOrig) * t,
+            longitude: lngOrig + (lngDest - lngOrig) * t,
+          });
+        }
+
+        setMapCoords({
+          origin: { latitude: latOrig, longitude: lngOrig },
+          dest: { latitude: latDest, longitude: lngDest },
+          curve
+        });
+      }
+    } catch (err) {
+      console.warn('Error fetching details', err);
     } finally {
-      setLoading(false);
+      setLoadingMap(false);
     }
   };
 
-  const isCompletado = (estado: string | null) => {
-    return String(estado || '').trim().toUpperCase() === 'ENTREGADO';
+  const getDisplayState = (p: any) => {
+    if (!p) return '—';
+    if (p.estado_pago !== 'pagado' && !['ENTREGADO', 'FINALIZADO', 'COMPLETADO'].includes(p.estado)) {
+      return 'PENDIENTE DE PAGO';
+    }
+    return p.estado || '—';
   };
 
-  const renderItem = ({ item }: { item: PortalPedidoListItem }) => {
-    const entregado = isCompletado(item.estado);
-    return (
-      <TouchableOpacity 
-        style={[styles.card, { backgroundColor: '#f8fafc' }]}
-        onPress={() => router.push(`/cliente/${item.id}`)}
-      >
-        <View style={styles.cardHeader}>
-          <Text style={[styles.routeText, { color: '#0f172a' }]}>
-            {item.origen || '—'} a {item.destino || '—'}
-          </Text>
-          <View style={[styles.badge, entregado ? styles.badgeSuccess : styles.badgeInfo]}>
-            <Text style={[styles.badgeText, entregado ? styles.badgeTextSuccess : styles.badgeTextInfo]}>
-              {item.estado || '—'}
-            </Text>
-          </View>
-        </View>
-        
-        <Text style={[styles.detailText, { color: '#475569' }]}>
-          ETA: {item.fecha_estimada_entrega ? new Date(item.fecha_estimada_entrega).toLocaleDateString('es-CL') : '—'}
-        </Text>
-        <Text style={[styles.detailText, { color: '#64748b' }]}>
-          Bultos: {item.bultos_despachados ?? '—'}
-        </Text>
-      </TouchableOpacity>
-    );
+  const obtenerColorEstado = (estado: string) => {
+    switch (estado?.toUpperCase()) {
+      case 'PENDIENTE DE PAGO': return '#f59e0b';
+      case 'PENDIENTE': return '#f59e0b';
+      case 'ASIGNADO': return '#3b82f6';
+      case 'EN_CURSO': return '#3b82f6';
+      case 'ENTREGADO': return '#10b981';
+      default: return '#64748b';
+    }
   };
+
+  const tabs = ['Todos', 'En Curso', 'Completados'];
+
+  const pedidosFiltrados = pedidos.filter(p => {
+    if (activeTab === 'Todos') return true;
+    if (activeTab === 'En Curso') return ['ASIGNADO', 'EN_TRANSITO', 'EN_CAMINO_ORIGEN', 'EN_CARGA', 'EN_DESTINO'].includes(p.estado) && p.estado_pago === 'pagado';
+    if (activeTab === 'Completados') return ['ENTREGADO', 'FINALIZADO', 'COMPLETADO'].includes(p.estado);
+    return true;
+  });
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
-      <View style={styles.content}>
-        <LogiTrackLogo portalTitle="Portal Cliente" />
-        
-        <View style={styles.headerInfo}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.body, { color: colors.textSecondary }]}>
-              Sesión iniciada como {session?.email ?? 'cliente'}.
-            </Text>
-            <Text style={[styles.hint, { color: colors.textMuted }]}>
-              Tus pedidos y seguimiento de despachos:
-            </Text>
-          </View>
+    <SafeAreaView style={[styles.safe, { backgroundColor: '#FAFAFA' }]}>
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.welcomeText}>Portal Clientes</Text>
+          <Text style={styles.emailText} numberOfLines={1}>{session?.email}</Text>
         </View>
+        <SignOutButton />
+      </View>
 
-        <View style={styles.listContainer}>
-          {loading ? (
-            <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
-          ) : error ? (
-            <View style={styles.center}>
-              <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
-              <TouchableOpacity style={[styles.retryBtn, { backgroundColor: colors.primary }]} onPress={loadPedidos}>
-                <Text style={styles.retryBtnText}>Reintentar</Text>
+      <View style={styles.tabsContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsScroll}>
+          {tabs.map(tab => (
+            <TouchableOpacity 
+              key={tab} 
+              style={[styles.tabButton, activeTab === tab && styles.tabButtonActive]}
+              onPress={() => setActiveTab(tab)}
+            >
+              <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>{tab}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
+      <View style={styles.content}>
+        <Text style={[styles.body, { color: '#0F172A', marginBottom: 16, fontWeight: 'bold' }]}>
+          Tus pedidos recientes
+        </Text>
+        
+        {loadingPedidos ? (
+          <ActivityIndicator size="large" color="#38bdf8" style={{ marginTop: 40 }} />
+        ) : (
+          <FlatList
+            data={pedidosFiltrados}
+            keyExtractor={item => item.id}
+            renderItem={({ item }) => (
+              <TouchableOpacity style={styles.pedidoCard} onPress={() => abrirDetalle(item)}>
+                <View style={styles.pedidoCardHeader}>
+                  <Text style={styles.pedidoCardTitle}>{item.nombre_ruta || 'Pedido Sin Nombre'}</Text>
+                  <View style={[styles.statusBadge, { backgroundColor: obtenerColorEstado(getDisplayState(item)) + '20', borderColor: obtenerColorEstado(getDisplayState(item)) + '50' }]}>
+                    <Text style={[styles.statusText, { color: obtenerColorEstado(getDisplayState(item)) }]}>
+                      {getDisplayState(item)}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.pedidoCardText}><Text style={{ fontWeight: 'bold' }}>Origen:</Text> {item.origen}</Text>
+                <Text style={styles.pedidoCardText}><Text style={{ fontWeight: 'bold' }}>Destino:</Text> {item.destino}</Text>
+                {item.fecha_estimada_entrega && (
+                  <Text style={styles.pedidoCardText}><Text style={{ fontWeight: 'bold' }}>Entrega Est.:</Text> {new Date(item.fecha_estimada_entrega).toLocaleDateString()}</Text>
+                )}
+              </TouchableOpacity>
+            )}
+            contentContainerStyle={{ paddingBottom: 20 }}
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={<Text style={styles.emptyText}>No tienes pedidos registrados en esta categoría.</Text>}
+          />
+        )}
+      </View>
+
+      {/* MODAL DE DETALLE (UX LIQUIDGLASS) */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Detalle del Despacho</Text>
+              <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeBtn}>
+                <Ionicons name="close" size={24} color="#0F172A" />
               </TouchableOpacity>
             </View>
-          ) : pedidos.length === 0 ? (
-            <View style={styles.center}>
-              <Ionicons name="cube-outline" size={64} color={colors.textMuted} />
-              <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No tienes pedidos</Text>
-              <Text style={[styles.emptySub, { color: colors.textSecondary }]}>Tus despachos asignados aparecerán aquí.</Text>
-            </View>
-          ) : (
-            <FlatList
-              data={pedidos}
-              keyExtractor={(item) => item.id}
-              renderItem={renderItem}
-              contentContainerStyle={styles.flatlistContent}
-              refreshing={loading}
-              onRefresh={loadPedidos}
-            />
-          )}
-        </View>
 
-        <View style={styles.footer}>
-          <SignOutButton />
+            {selectedRuta && (
+              <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
+                {/* Estado General */}
+                <View style={styles.detailSection}>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Estado del Pedido:</Text>
+                    <View style={[styles.statusBadge, { backgroundColor: obtenerColorEstado(getDisplayState(selectedRuta)) + '20', borderColor: obtenerColorEstado(getDisplayState(selectedRuta)) + '50' }]}>
+                      <Text style={[styles.statusText, { color: obtenerColorEstado(getDisplayState(selectedRuta)) }]}>
+                        {getDisplayState(selectedRuta)}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={styles.detailSubtext}>Creado el: {selectedRuta.created_at ? new Date(selectedRuta.created_at).toLocaleDateString() : 'Desconocido'}</Text>
+                </View>
+
+                {/* Ruta */}
+                <View style={styles.detailSection}>
+                  <Text style={styles.sectionHeader}>Trayecto</Text>
+                  <View style={styles.routePathContainer}>
+                    <Ionicons name="pin" size={16} color="#ef4444" />
+                    <Text style={styles.routePathText}><Text style={{ fontWeight: 'bold' }}>Origen:</Text> {selectedRuta.origen}</Text>
+                  </View>
+                  <View style={[styles.routePathContainer, { marginTop: 8 }]}>
+                    <Ionicons name="location" size={16} color="#10b981" />
+                    <Text style={styles.routePathText}><Text style={{ fontWeight: 'bold' }}>Destino:</Text> {selectedRuta.destino}</Text>
+                  </View>
+                  <Text style={styles.routePathDistance}>
+                    Distancia total: {selectedRuta.distancia_km} Km
+                  </Text>
+                </View>
+
+                {/* Mapa */}
+                <View style={[styles.detailSection, { height: 250, padding: 0, overflow: 'hidden' }]}>
+                  {loadingMap ? (
+                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                      <ActivityIndicator size="small" color="#38bdf8" />
+                      <Text style={{ color: '#94a3b8', marginTop: 8 }}>Cargando mapa...</Text>
+                    </View>
+                  ) : mapCoords ? (
+                    <MapView
+                      provider="google"
+                      style={{ flex: 1 }}
+                      initialRegion={{
+                        latitude: (mapCoords.origin.latitude + mapCoords.dest.latitude) / 2,
+                        longitude: (mapCoords.origin.longitude + mapCoords.dest.longitude) / 2,
+                        latitudeDelta: Math.abs(mapCoords.origin.latitude - mapCoords.dest.latitude) * 2 + 0.5,
+                        longitudeDelta: Math.abs(mapCoords.origin.longitude - mapCoords.dest.longitude) * 2 + 0.5,
+                      }}
+                    >
+                      <Marker coordinate={mapCoords.origin} title="Origen" pinColor="#ef4444" />
+                      <Marker coordinate={mapCoords.dest} title="Destino" pinColor="#10b981" />
+
+                      <Polyline
+                        coordinates={mapCoords.curve}
+                        strokeColor="#38bdf8"
+                        strokeWidth={4}
+                        lineDashPattern={[10, 10]}
+                      />
+
+                      {/* Camión animado/estático a la mitad del trayecto */}
+                      <Marker coordinate={mapCoords.curve[Math.floor(mapCoords.curve.length / 2)]}>
+                        <View style={{ backgroundColor: '#1e293b', padding: 6, borderRadius: 20, borderWidth: 2, borderColor: '#38bdf8' }}>
+                          <FontAwesome5 name="truck" size={16} color="#38bdf8" />
+                        </View>
+                      </Marker>
+                    </MapView>
+                  ) : (
+                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                      <Text style={{ color: '#94a3b8' }}>Mapa no disponible</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Paquetes */}
+                <View style={styles.detailSection}>
+                  <Text style={styles.sectionHeader}>Detalles del Paquete</Text>
+                  {selectedRuta.bultos && selectedRuta.bultos.length > 0 ? (
+                    selectedRuta.bultos.map((b: any, idx: number) => {
+                      const catUpper = (b.categoria || '').toUpperCase();
+                      const slots = SIZES[catUpper] || 0;
+                      return (
+                        <View key={b.id} style={styles.bultoDetailRow}>
+                          <Text style={styles.bultoName}>#{idx + 1} {b.categoria || 'Estándar'}</Text>
+                          <Text style={styles.bultoSpecs}>
+                            {slots} Slots usados
+                          </Text>
+                        </View>
+                      );
+                    })
+                  ) : (
+                    <Text style={styles.noBultosText}>Sin detalle de paquetes registrados.</Text>
+                  )}
+                </View>
+
+
+              </ScrollView>
+            )}
+          </View>
         </View>
-      </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0'
+  },
+  tabsContainer: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  tabsScroll: {
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  tabButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  tabButtonActive: {
+    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    borderColor: '#38bdf8',
+  },
+  tabText: {
+    color: '#64748b',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  tabTextActive: {
+    color: '#38bdf8',
+    fontWeight: 'bold',
+  },
+  welcomeText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#0F172A'
+  },
+  emailText: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 2,
+    maxWidth: 200
+  },
   content: {
     flex: 1,
-    paddingTop: AuthSpacing.screenPadding,
+    padding: AuthSpacing.screenPadding,
+    gap: 16,
+    justifyContent: 'center',
   },
-  headerInfo: {
-    paddingHorizontal: AuthSpacing.screenPadding,
+  body: { fontSize: 16, lineHeight: 24 },
+  hint: { fontSize: 14, lineHeight: 22, marginBottom: 12 },
+  pedidoCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  pedidoCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8
+  },
+  pedidoCardTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+    flex: 1,
+    marginRight: 8
+  },
+  pedidoCardText: {
+    fontSize: 14,
+    color: '#475569',
+    marginTop: 4
+  },
+  emptyText: {
+    color: '#64748b',
+    textAlign: 'center',
+    marginTop: 40,
+    fontStyle: 'italic'
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20
+  },
+  modalContent: {
+    width: '100%',
+    maxHeight: '85%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E2E8F0'
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#FAFAFA',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0'
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A'
+  },
+  closeBtn: {
+    padding: 4
+  },
+  modalScroll: {
+    padding: 16
+  },
+  detailSection: {
+    marginBottom: 20,
+    backgroundColor: '#F8FAFC',
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0'
+  },
+  detailRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 8
   },
-  body: { fontSize: 16, lineHeight: 24 },
-  hint: { fontSize: 14, lineHeight: 22, marginTop: 4 },
-  listContainer: { flex: 1 },
-  flatlistContent: { paddingHorizontal: AuthSpacing.screenPadding, paddingBottom: 40 },
-  card: {
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+  detailLabel: {
+    fontSize: 15,
+    color: '#475569',
+    fontWeight: '600'
   },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  routeText: {
-    fontSize: 16,
-    fontWeight: '600',
-    flex: 1,
-    marginRight: 8,
-  },
-  badge: {
-    paddingHorizontal: 8,
+  statusBadge: {
+    paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
+    borderWidth: 1
   },
-  badgeSuccess: { backgroundColor: '#dcfce7' },
-  badgeInfo: { backgroundColor: '#e0f2fe' },
-  badgeText: { fontSize: 12, fontWeight: 'bold' },
-  badgeTextSuccess: { color: '#166534' },
-  badgeTextInfo: { color: '#0369a1' },
-  detailText: { fontSize: 14, marginTop: 4 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
-  loader: { flex: 1, justifyContent: 'center' },
-  errorText: { fontSize: 16, textAlign: 'center', marginBottom: 16 },
-  retryBtn: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 },
-  retryBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
-  emptyTitle: { fontSize: 18, fontWeight: 'bold', marginTop: 16 },
-  emptySub: { fontSize: 14, marginTop: 8, textAlign: 'center' },
-  footer: { padding: 16, alignItems: 'center', justifyContent: 'center' },
+  statusText: {
+    fontSize: 12,
+    fontWeight: 'bold'
+  },
+  detailSubtext: {
+    fontSize: 13,
+    color: '#64748b'
+  },
+  sectionHeader: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 12
+  },
+  routePathContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingRight: 16
+  },
+  routePathText: {
+    fontSize: 14,
+    color: '#475569',
+    marginLeft: 8,
+    flex: 1
+  },
+  routePathDistance: {
+    marginTop: 12,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#38bdf8',
+    textAlign: 'right'
+  },
+  bultoDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0'
+  },
+  bultoName: {
+    fontSize: 14,
+    color: '#0F172A',
+    fontWeight: '600'
+  },
+  bultoSpecs: {
+    fontSize: 13,
+    color: '#64748b'
+  },
+  noBultosText: {
+    fontSize: 14,
+    color: '#64748b',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    paddingVertical: 8
+  }
 });
+

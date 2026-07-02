@@ -125,7 +125,7 @@ export default function MetricasPagoConductor({
           subtotal: desglose.montoPorEntregas,
         },
         {
-          concepto: "Bultos entregados",
+          concepto: "Paquetes entregados",
           cantidad: desglose.totalBultos,
           unitario: desglose.precioUnitarioBulto,
           subtotal: desglose.montoPorBultos,
@@ -244,7 +244,7 @@ export default function MetricasPagoConductor({
             />
             <KpiCard
               icon={Truck}
-              label="Bultos entregados"
+              label="Paquetes entregados"
               value={formatNumero(ops?.bultosEntregados)}
               iconClass="lt-kpi-icon--amber"
             />
@@ -309,7 +309,7 @@ export default function MetricasPagoConductor({
                       <th>Conductor</th>
                       <th>Rutas</th>
                       <th>Entregas</th>
-                      <th>Bultos</th>
+                      <th>Paquetes</th>
                       <th>Km</th>
                       <th>Total pago</th>
                     </tr>
@@ -354,7 +354,7 @@ export default function MetricasPagoConductor({
                       <th>Origen</th>
                       <th>Destino</th>
                       <th>Completada</th>
-                      <th>Bultos</th>
+                      <th>Paquetes</th>
                       <th>Km</th>
                     </tr>
                   </thead>

@@ -25,6 +25,7 @@ import { ConfiguracionPagosModule } from './modules/configuracion-pagos/configur
 import { ChatRutaModule } from './modules/chat-ruta/chat-ruta.module';
 import { PagosClienteModule } from './modules/pagos-cliente/pagos-cliente.module';
 import { RutasPlantillaModule } from './modules/rutas-plantilla/rutas-plantilla.module';
+import { PagosModule } from './modules/pagos/pagos.module';
 import { RecurrenciasModule } from './modules/recurrencias/recurrencias.module';
 import { CostosOperativosModule } from './modules/costos-operativos/costos-operativos.module';
 
@@ -61,6 +62,7 @@ import { CostosOperativosModule } from './modules/costos-operativos/costos-opera
     ChatRutaModule,
     PagosClienteModule,
     RutasPlantillaModule,
+    PagosModule,
     RecurrenciasModule,
     CostosOperativosModule,
   ],

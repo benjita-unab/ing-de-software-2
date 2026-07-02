@@ -114,6 +114,9 @@ export async function loginWithCredentials(
 
   const url = `${requiredApiUrl()}/api/auth/login`;
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 seconds timeout
+
   let response: Response;
   try {
     response = await fetch(url, {
@@ -123,9 +126,15 @@ export async function loginWithCredentials(
         email: trimmedEmail,
         password: trimmedPassword,
       }),
+      signal: controller.signal,
     });
-  } catch (networkErr) {
+  } catch (networkErr: any) {
+    if (networkErr.name === 'AbortError') {
+      throw new Error('El servidor tardó demasiado en responder. Revisa tu conexión a internet y asegúrate de que el backend esté accesible.');
+    }
     throw new Error(mapNetworkLoginError(networkErr));
+  } finally {
+    clearTimeout(timeoutId);
   }
 
   const body = await readLoginResponseBody(response);

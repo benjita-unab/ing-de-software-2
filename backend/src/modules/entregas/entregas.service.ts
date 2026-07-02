@@ -50,6 +50,12 @@ export class EntregasService {
         destino,
         ficha_despacho_url,
         bultos_despachados,
+        tarifa_base_total,
+        costo_espera_total,
+        total_pagar,
+        tiempo_espera_minutos,
+        hora_llegada_destino,
+        estado,
         clientes(id, nombre, contacto_email),
         conductores(rut),
         camiones(patente)
@@ -69,6 +75,22 @@ export class EntregasService {
     // Se considera válida si la ruta tiene `ficha_despacho_url` o existe
     // un `traceability_events` con tipo FICHA_DESPACHO o etapa HOJA_DESPACHO.
     await this.validarFichaDespachoOFallar(supabase, rutaId, ruta);
+
+    // Calcular atraso
+    let costoExtra = 0;
+    let extraSeconds = 0;
+    const nowTime = Date.now();
+    const llegadaTime = ruta.hora_llegada_destino ? new Date(ruta.hora_llegada_destino).getTime() : nowTime;
+    const timeDiffMs = nowTime - llegadaTime;
+    extraSeconds = Math.max(0, Math.floor(timeDiffMs / 1000) - 30); // 30s gracia
+    costoExtra = Math.ceil(extraSeconds / 15) * 500;
+    
+    // Mutar ruta en memoria para que el PDF reciba los datos actualizados
+    if (costoExtra > 0) {
+      ruta.costo_espera_total = costoExtra;
+      ruta.tiempo_espera_minutos = extraSeconds;
+      ruta.total_pagar = (ruta.tarifa_base_total || 0) + costoExtra;
+    }
 
     const cliente = Array.isArray(ruta.clientes)
       ? ruta.clientes[0]
@@ -130,6 +152,10 @@ export class EntregasService {
           bultosRecepcionados: bultos_recepcionados ?? null,
           comentarioDiferenciaBultos: comentario_diferencia_bultos?.trim() || null,
           firmaBuffer,
+          tarifaBaseTotal: ruta.tarifa_base_total,
+          costoEsperaTotal: ruta.costo_espera_total,
+          totalPagar: ruta.total_pagar,
+          tiempoEsperaMinutos: ruta.tiempo_espera_minutos,
         });
         console.log('PDF STEP -> PDF generado, bytes:', pdfBuffer?.length ?? 0);
       } catch (e: any) {
@@ -278,19 +304,36 @@ export class EntregasService {
         );
       }
 
-      // ── 8) Pasar la ruta a ENTREGADO (enum estado_ruta) ──────
+      // ── 8) Pasar la ruta a COMPLETADO o PAGO_ATRASO_PENDIENTE y guardar costos ──────
       try {
+        let nuevoEstado = 'COMPLETADO';
+        if (costoExtra > 0) {
+          nuevoEstado = 'PAGO_ATRASO_PENDIENTE';
+        }
+
+        const updatePayloadRuta: any = {
+          estado: nuevoEstado,
+          fecha_fin: new Date().toISOString()
+        };
+
+        if (costoExtra > 0) {
+          updatePayloadRuta.costo_espera_total = costoExtra;
+          updatePayloadRuta.tiempo_espera_minutos = extraSeconds;
+          updatePayloadRuta.total_pagar = ruta.total_pagar;
+        }
+
         const { error: estadoRutaError } = await supabase
           .from('rutas')
-          .update({ estado: 'ENTREGADO', fecha_fin: new Date().toISOString() })
+          .update(updatePayloadRuta)
           .eq('id', rutaId);
+
         if (estadoRutaError) {
           console.warn(
-            'CLOSE DELIVERY -> error actualizando rutas.estado a ENTREGADO:',
+            `CLOSE DELIVERY -> error actualizando rutas.estado a ${nuevoEstado}:`,
             estadoRutaError.message,
           );
         } else {
-          console.log('CLOSE DELIVERY -> rutas.estado=ENTREGADO OK');
+          console.log(`CLOSE DELIVERY -> rutas.estado=${nuevoEstado} OK`);
         }
 
         try {
@@ -526,7 +569,7 @@ export class EntregasService {
 
       // Subir archivo
       const { error: uploadError } = await supabase.storage
-        .from('entregas')
+        .from('fotos_trazabilidad')
         .upload(filePath, buffer, {
           contentType: 'image/jpeg',
           upsert: false,
@@ -538,7 +581,7 @@ export class EntregasService {
 
       // Obtener URL pública
       const { data: publicUrlData } = supabase.storage
-        .from('entregas')
+        .from('fotos_trazabilidad')
         .getPublicUrl(filePath);
 
       // Actualizar ruta con URL de ficha
@@ -898,6 +941,10 @@ export class EntregasService {
     bultosRecepcionados?: number | null;
     comentarioDiferenciaBultos?: string | null;
     firmaBuffer?: Buffer | null;
+    tarifaBaseTotal?: number | string | null;
+    costoEsperaTotal?: number | string | null;
+    totalPagar?: number | string | null;
+    tiempoEsperaMinutos?: number | string | null;
   }): Promise<Buffer> {
     console.log(
       'PDF generateDeliveryPDF -> firmaBuffer bytes:',
@@ -975,6 +1022,22 @@ export class EntregasService {
             ? String(data.bultosRecepcionados)
             : 'No registrado',
         ],
+      );
+
+      if (data.tiempoEsperaMinutos != null) {
+        filas.push(['Tiempo de espera', `${data.tiempoEsperaMinutos} minutos`]);
+      }
+      if (data.tarifaBaseTotal != null) {
+        filas.push(['Tarifa base total', `$${data.tarifaBaseTotal} CLP`]);
+      }
+      if (data.costoEsperaTotal != null) {
+        filas.push(['Costo de espera', `$${data.costoEsperaTotal} CLP`]);
+      }
+      if (data.totalPagar != null) {
+        filas.push(['Total a pagar', `$${data.totalPagar} CLP`]);
+      }
+
+      filas.push(
         [
           'Observaciones',
           data.comentarioDiferenciaBultos?.trim() || 'Sin observaciones',

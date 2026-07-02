@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Plus } from "lucide-react";
+import { createClient } from "@supabase/supabase-js";
 import { apiFetch } from "../lib/apiClient";
+import ComprobanteModal from "./ComprobanteModal";
 import { getPlantillasPorCliente } from "../lib/clientesService";
 import {
   getRutaPlantillaById,
@@ -21,11 +23,16 @@ import ParadaPlantillaInput from "./ParadaPlantillaInput";
 import ConsolidacionRutaPanel from "./ConsolidacionRutaPanel";
 import CostosOperativosPanel from "./CostosOperativosPanel";
 import ModalRecurrencia from "./ModalRecurrencia";
+import CreadorCarga from "./CreadorCarga";
 import Badge from "./ui/Badge";
 import Spinner from "./ui/Spinner";
 
 const MODO_PLANTILLA = "plantilla";
 const MODO_MANUAL = "manual";
+
+const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || "";
+const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY || "";
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 function mensajeFilaClass(tipo) {
   if (tipo === "ok") return "lt-alert-banner lt-alert-banner--success";
@@ -203,7 +210,7 @@ export default function RutasActivas() {
   const [conductores, setConductores] = useState([]);
   const [camiones, setCamiones] = useState([]);
   const [listsLoading, setListsLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
+  const [activeTab, setActiveTab] = useState("crear");
   const [saving, setSaving] = useState(false);
   const [mensaje, setMensaje] = useState(null);
   const [erroresFormulario, setErroresFormulario] = useState({});
@@ -214,6 +221,9 @@ export default function RutasActivas() {
   const [notifyingId, setNotifyingId] = useState(null);
   const [calculandoEstimacion, setCalculandoEstimacion] = useState(false);
   const [calculandoEstimacionRutaId, setCalculandoEstimacionRutaId] = useState(null);
+  const [showRentabilidadModal, setShowRentabilidadModal] = useState(false);
+  const [rutaRentabilidad, setRutaRentabilidad] = useState(null);
+  const [comprobanteRutaId, setComprobanteRutaId] = useState(null);
   const [plantillasCliente, setPlantillasCliente] = useState([]);
   const [plantillaSeleccionadaId, setPlantillaSeleccionadaId] = useState("");
   const [cargandoPlantillas, setCargandoPlantillas] = useState(false);
@@ -254,11 +264,11 @@ export default function RutasActivas() {
   const destinoInputRef = useRef(null);
 
   const { error: mapsOrigenError } = useGooglePlacesAutocomplete(origenInputRef, {
-    enabled: showForm,
+    enabled: false,
     onPlaceSelected: (address) => actualizarCampo("origen", address),
   });
   const { error: mapsDestinoError } = useGooglePlacesAutocomplete(destinoInputRef, {
-    enabled: showForm,
+    enabled: false,
     onPlaceSelected: (address) => actualizarCampo("destino", address),
   });
   const mapsError = mapsOrigenError || mapsDestinoError;
@@ -342,6 +352,29 @@ export default function RutasActivas() {
     cargarRutas();
     cargarListas();
   }, [cargarRutas, cargarListas]);
+
+  const handleDelete = async (id) => {
+    if (
+      !window.confirm(
+        "¿Estás seguro de que deseas eliminar esta ruta? Esta acción no se puede deshacer.",
+      )
+    ) {
+      return;
+    }
+    try {
+      await supabase.from("historial_estados").delete().eq("ruta_id", id);
+      await supabase.from("bultos").delete().eq("ruta_id", id);
+      await supabase.from("cargas").delete().eq("ruta_id", id);
+      const { error } = await supabase.from("rutas").delete().eq("id", id);
+      if (error) {
+        alert(`Error al eliminar ruta: ${error.message}`);
+      } else {
+        setRutas((prev) => prev.filter((r) => r.id !== id));
+      }
+    } catch (err) {
+      alert(`Error al procesar eliminación: ${err.message}`);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -937,7 +970,7 @@ export default function RutasActivas() {
     setGuardarComoPlantilla(false);
     setNombrePlantilla("");
     setErroresFormulario({});
-    setShowForm(false);
+    setActiveTab("lista");
     await cargarRutas();
   };
 
@@ -1143,413 +1176,35 @@ export default function RutasActivas() {
           </div>
         )}
 
-        <div className="lt-form-actions" style={{ marginTop: 0 }}>
+                <div className="lt-tabs" style={{ display: 'flex', gap: '16px', marginBottom: '24px', borderBottom: '2px solid rgba(128,128,128,0.2)' }}>
           <button
             type="button"
-            className="lt-btn lt-btn--primary"
-            onClick={() => {
-              setShowForm((v) => {
-                const next = !v;
-                if (next) setErroresFormulario({});
-                return next;
-              });
-              setMensaje(null);
-            }}
+            className={`lt-tab ${activeTab === 'crear' ? 'active' : ''}`}
+            style={{ padding: '12px 24px', background: 'transparent', border: 'none', borderBottom: activeTab === 'crear' ? '2px solid #3B82F6' : '2px solid transparent', color: activeTab === 'crear' ? '#3B82F6' : 'inherit', fontWeight: activeTab === 'crear' ? 'bold' : 'normal', cursor: 'pointer', fontSize: '16px', transition: 'all 0.2s' }}
+            onClick={() => setActiveTab('crear')}
           >
-            {showForm ? "Ocultar formulario" : "Crear nueva ruta"}
+            Crear Nueva Ruta
+          </button>
+          <button
+            type="button"
+            className={`lt-tab ${activeTab === 'lista' ? 'active' : ''}`}
+            style={{ padding: '12px 24px', background: 'transparent', border: 'none', borderBottom: activeTab === 'lista' ? '2px solid #3B82F6' : '2px solid transparent', color: activeTab === 'lista' ? '#3B82F6' : 'inherit', fontWeight: activeTab === 'lista' ? 'bold' : 'normal', cursor: 'pointer', fontSize: '16px', transition: 'all 0.2s' }}
+            onClick={() => setActiveTab('lista')}
+          >
+            Rutas Registradas
           </button>
         </div>
 
-        {showForm && (
-          <form
-            onSubmit={enviarFormulario}
-            noValidate
-            className="lt-card rutas-nueva-form"
-            style={{ marginTop: 16, marginBottom: 16, overflow: "visible" }}
-          >
-            <div className="lt-module-card__title" style={{ marginBottom: 12 }}>
-              Nuevo pedido / ruta
-            </div>
-
-            <div className="lt-field-group" style={{ gridColumn: "1 / -1", marginBottom: 16 }}>
-              <span className="lt-label">Modo de creación</span>
-              <div className="lt-form-actions" style={{ marginTop: 8, gap: 8 }}>
-                <button
-                  type="button"
-                  className={`lt-btn ${modoCreacion === MODO_PLANTILLA ? "lt-btn--primary" : "lt-btn--secondary"}`}
-                  onClick={() => cambiarModoCreacion(MODO_PLANTILLA)}
-                >
-                  Usar ruta existente
-                </button>
-                <button
-                  type="button"
-                  className={`lt-btn ${modoCreacion === MODO_MANUAL ? "lt-btn--primary" : "lt-btn--secondary"}`}
-                  onClick={() => cambiarModoCreacion(MODO_MANUAL)}
-                >
-                  Crear ruta manual
-                </button>
-              </div>
-            </div>
-
-            <div className="lt-form-grid">
-              <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
-                <label className="lt-label" htmlFor="ruta-nombre">Nombre de la ruta (Opcional)</label>
-                <input
-                  id="ruta-nombre"
-                  className="lt-input"
-                  value={form.nombreRuta}
-                  onChange={(e) => actualizarCampo("nombreRuta", e.target.value)}
-                  placeholder="Ej: Ruta Norte #2 (se autogenerará si se deja vacío)"
-                />
-              </div>
-              <div className="lt-field-group">
-                <label className="lt-label" htmlFor="ruta-cliente">Cliente *</label>
-                <select
-                  id="ruta-cliente"
-                  className="lt-select"
-                  required
-                  value={form.clienteId}
-                  onChange={(e) => actualizarCampo("clienteId", e.target.value)}
-                  disabled={listsLoading}
-                >
-                  <option value="">Seleccionar…</option>
-                  {clientes.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.nombre || c.id}
-                    </option>
-                  ))}
-                </select>
-                {renderErrorFormulario("clienteId")}
-              </div>
-
-              {modoCreacion === MODO_PLANTILLA && (
-                <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
-                  <label className="lt-label" htmlFor="ruta-plantilla">
-                    Ruta reutilizable *
-                  </label>
-                  {cargandoRutasReutilizables ? (
-                    <p className="lt-card__subtitle">Cargando rutas disponibles…</p>
-                  ) : rutasReutilizables.length === 0 ? (
-                    <p className="lt-card__subtitle">
-                      No hay rutas reutilizables activas
-                      {form.clienteId ? " para este cliente" : ""}. Cree una en Rutas plantilla o use el modo manual.
-                    </p>
-                  ) : (
-                    <select
-                      id="ruta-plantilla"
-                      className="lt-select"
-                      value={plantillaSeleccionadaId}
-                      onChange={(e) => aplicarPlantilla(e.target.value)}
-                    >
-                      <option value="">Seleccionar ruta…</option>
-                      {rutasReutilizables.map((ruta) => (
-                        <option key={ruta.id} value={ruta.id}>
-                          {ruta.nombre} — {ruta.origen} → {ruta.destino}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                  {renderErrorFormulario("plantillaId")}
-                </div>
-              )}
-
-              {modoCreacion === MODO_MANUAL && form.clienteId && plantillasCliente.length > 0 && (
-                <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
-                  <label className="lt-label" htmlFor="ruta-plantilla-cliente">
-                    Precargar desde plantilla del cliente (opcional)
-                  </label>
-                  {cargandoPlantillas ? (
-                    <p className="lt-card__subtitle">Buscando plantillas adjudicadas…</p>
-                  ) : (
-                    <select
-                      id="ruta-plantilla-cliente"
-                      className="lt-select"
-                      value={plantillaSeleccionadaId}
-                      onChange={(e) => aplicarPlantilla(e.target.value)}
-                    >
-                      <option value="">Seleccionar plantilla para precargar datos…</option>
-                      {plantillasCliente.map((plantilla) => (
-                        <option key={plantilla.id} value={plantilla.id}>
-                          {plantilla.nombre} — {plantilla.origen} → {plantilla.destino}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-              )}
-
-              <div className="lt-field-group">
-                <label className="lt-label" htmlFor="ruta-conductor">Conductor *</label>
-                <select
-                  id="ruta-conductor"
-                  className="lt-select"
-                  required
-                  value={form.conductorId}
-                  onChange={(e) => actualizarCampo("conductorId", e.target.value)}
-                  disabled={listsLoading}
-                >
-                  <option value="">Seleccionar conductor…</option>
-                  {conductores.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.rut || c.id}
-                    </option>
-                  ))}
-                </select>
-                {renderErrorFormulario("conductorId")}
-              </div>
-              <div className="lt-field-group">
-                <label className="lt-label" htmlFor="ruta-camion">Camión *</label>
-                <select
-                  id="ruta-camion"
-                  className="lt-select"
-                  required
-                  value={form.camionId}
-                  onChange={(e) => actualizarCampo("camionId", e.target.value)}
-                  disabled={listsLoading}
-                >
-                  <option value="">Seleccionar camión…</option>
-                  {camiones.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.patente || c.id} {c.estado ? `(${c.estado})` : ""}
-                    </option>
-                  ))}
-                </select>
-                {renderErrorFormulario("camionId")}
-              </div>
-              <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
-                <label className="lt-label" htmlFor="ruta-origen">Origen *</label>
-                {mapsError && (
-                  <div className="lt-alert-banner lt-alert-banner--error" role="alert" style={{ marginBottom: 8 }}>
-                    {mapsError}
-                  </div>
-                )}
-                <input
-                  id="ruta-origen"
-                  ref={origenInputRef}
-                  className="lt-input"
-                  required
-                  autoComplete="off"
-                  readOnly={modoCreacion === MODO_PLANTILLA && !!form.plantillaId}
-                  value={form.origen}
-                  onChange={(e) => actualizarCampo("origen", e.target.value)}
-                  placeholder="Escribe y selecciona una dirección sugerida…"
-                />
-                {renderErrorFormulario("origen")}
-              </div>
-              <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
-                <label className="lt-label" htmlFor="ruta-destino">Destino *</label>
-                <input
-                  id="ruta-destino"
-                  ref={destinoInputRef}
-                  className="lt-input"
-                  required
-                  autoComplete="off"
-                  readOnly={modoCreacion === MODO_PLANTILLA && !!form.plantillaId}
-                  value={form.destino}
-                  onChange={(e) => actualizarCampo("destino", e.target.value)}
-                  placeholder="Escribe y selecciona una dirección sugerida…"
-                />
-                {renderErrorFormulario("destino")}
-              </div>
-
-              <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
-                <div className="lt-form-actions" style={{ justifyContent: "space-between", marginTop: 0 }}>
-                  <span className="lt-label" style={{ marginBottom: 0 }}>
-                    Paradas temporales del pedido
-                  </span>
-                  <button type="button" className="lt-btn lt-btn--secondary lt-btn--sm" onClick={agregarParada}>
-                    <Plus size={14} style={{ marginRight: 4 }} />
-                    Agregar parada
-                  </button>
-                </div>
-                <p className="lt-module-card__subtitle" style={{ marginTop: 4 }}>
-                  Las paradas solo afectan a este pedido; la ruta reutilizable original no se modifica.
-                </p>
-                {paradas.length === 0 ? (
-                  <p className="lt-card__subtitle">Sin paradas intermedias.</p>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
-                    {paradas.map((parada, index) => (
-                      <ParadaPlantillaInput
-                        key={`parada-${index}-${parada.orden}`}
-                        index={index}
-                        parada={parada}
-                        onChange={actualizarParada}
-                        onPlaceSelected={actualizarParadaDesdePlaces}
-                        onRemove={eliminarParada}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
-                <label className="lt-label" htmlFor="ruta-observaciones">Observaciones</label>
-                <textarea
-                  id="ruta-observaciones"
-                  className="lt-input"
-                  rows={2}
-                  value={form.observaciones}
-                  onChange={(e) => actualizarCampo("observaciones", e.target.value)}
-                  placeholder="Notas operativas del pedido (opcional)"
-                />
-              </div>
-
-              {modoCreacion === MODO_MANUAL && (
-                <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
-                  <label className="lt-label" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <input
-                      type="checkbox"
-                      checked={guardarComoPlantilla}
-                      onChange={(e) => setGuardarComoPlantilla(e.target.checked)}
-                    />
-                    Guardar como nueva ruta reutilizable para futuros pedidos
-                  </label>
-                  {guardarComoPlantilla && (
-                    <input
-                      className="lt-input"
-                      style={{ marginTop: 8 }}
-                      value={nombrePlantilla}
-                      onChange={(e) => setNombrePlantilla(e.target.value)}
-                      placeholder="Nombre de la nueva ruta (opcional si completó nombre de ruta)"
-                    />
-                  )}
-                  {renderErrorFormulario("nombrePlantilla")}
-                </div>
-              )}
-
-              <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
-                <label className="lt-label" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <input
-                    type="checkbox"
-                    checked={programarRecurrencia}
-                    onChange={(e) => setProgramarRecurrencia(e.target.checked)}
-                  />
-                  Repetir pedido (programar recurrencia tras crear)
-                </label>
-              </div>
-
-              <div className="lt-field-group">
-                <label className="lt-label" htmlFor="ruta-fecha-inicio">Fecha inicio *</label>
-                <input
-                  id="ruta-fecha-inicio"
-                  className="lt-input"
-                  type="datetime-local"
-                  value={form.fechaInicio}
-                  onChange={(e) => actualizarCampo("fechaInicio", e.target.value)}
-                />
-                {renderErrorFormulario("fechaInicio")}
-              </div>
-              <div className="lt-field-group">
-                <label className="lt-label" htmlFor="ruta-eta">ETA (Tiempo Estimado de Llegada) *</label>
-                <input
-                  id="ruta-eta"
-                  className="lt-input"
-                  type="datetime-local"
-                  value={form.eta}
-                  readOnly
-                  placeholder="Se calcula desde fecha inicio + duración"
-                />
-                {renderErrorFormulario("eta")}
-              </div>
-              <div className="lt-field-group">
-                <label className="lt-label" htmlFor="ruta-bultos">Cantidad de bultos *</label>
-                <input
-                  id="ruta-bultos"
-                  className="lt-input"
-                  type="number"
-                  min="1"
-                  required
-                  value={form.bultosDespachos}
-                  onChange={(e) => actualizarCampo("bultosDespachos", e.target.value)}
-                  placeholder="Ej: 25"
-                />
-                {renderErrorFormulario("bultosDespachos")}
-              </div>
-              <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
-                <div className="lt-form-actions" style={{ marginTop: 0, flexWrap: "wrap" }}>
-                  <span className="lt-module-card__title" style={{ marginBottom: 0, fontSize: 13 }}>
-                    Distancia y Fechas estimadas de entrega
-                  </span>
-                  <button
-                    type="button"
-                    className="lt-btn lt-btn--secondary"
-                    disabled={calculandoEstimacion || saving}
-                    onClick={calcularDistanciaYFechasForm}
-                  >
-                    {calculandoEstimacion
-                      ? "Calculando…"
-                      : "Calcular distancia y fechas"}
-                  </button>
-                </div>
-                <div className="lt-field-group" style={{ gridColumn: "1 / -1" }}>
-                  <label className="lt-label" htmlFor="ruta-distancia">Distancia *</label>
-                  <p className="lt-module-card__subtitle" style={{ marginTop: 0, marginBottom: 8 }}>
-                    {AYUDA_DISTANCIA_VIAL}
-                  </p>
-                  <input
-                    id="ruta-distancia"
-                    className="lt-input"
-                    type="text"
-                    inputMode="decimal"
-                    value={form.distanciaKm}
-                    onChange={(e) => actualizarCampo("distanciaKm", e.target.value)}
-                    placeholder="Vacío = calcular por carretera con origen y destino"
-                  />
-                  {renderErrorFormulario("distanciaKm")}
-                </div>
-                {form.advertenciaEstimacion && (
-                  <div className="lt-alert-banner lt-alert-banner--warning" role="alert" style={{ marginTop: 10 }}>
-                    {form.advertenciaEstimacion}
-                  </div>
-                )}
-                <div className="lt-form-grid lt-form-grid--3" style={{ marginTop: 10 }}>
-                  <div className="lt-field-group">
-                    <label className="lt-label" htmlFor="ruta-fecha-est-inicio">Inicio rango estimado *</label>
-                    <input
-                      id="ruta-fecha-est-inicio"
-                      type="date"
-                      className="lt-input"
-                      readOnly
-                      value={form.fechasEstimadas.inicio}
-                    />
-                    {renderErrorFormulario("fechaInicioEstimado")}
-                  </div>
-                  <div className="lt-field-group">
-                    <label className="lt-label" htmlFor="ruta-fecha-est-fin">Fin rango estimado *</label>
-                    <input
-                      id="ruta-fecha-est-fin"
-                      type="date"
-                      className="lt-input"
-                      readOnly
-                      value={form.fechasEstimadas.fin}
-                    />
-                    {renderErrorFormulario("finRangoEstimado")}
-                  </div>
-                  <div className="lt-field-group">
-                    <label className="lt-label" htmlFor="ruta-fecha-est-entrega">Día estimado de entrega *</label>
-                    <input
-                      id="ruta-fecha-est-entrega"
-                      type="date"
-                      className="lt-input"
-                      readOnly
-                      value={form.fechasEstimadas.entrega}
-                    />
-                    {renderErrorFormulario("diaEstimadoEntrega")}
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="lt-form-actions">
-              <button type="submit" className="lt-btn lt-btn--primary" disabled={saving || listsLoading}>
-                {saving ? "Guardando…" : "Crear pedido"}
-              </button>
-            </div>
-          </form>
-        )}
       </div>
 
-      <div className="lt-card lt-module-card">
+      {activeTab === 'crear' && (
+         <div className="lt-card lt-module-card" style={{ padding: 0, background: 'transparent', border: 'none', boxShadow: 'none' }}>
+            <CreadorCarga />
+         </div>
+      )}
+
+      {activeTab === 'lista' && (
+<div className="lt-card lt-module-card">
         <h3 className="lt-module-card__title">Rutas registradas</h3>
         {loading ? (
           <Spinner message="Cargando rutas…" />
@@ -1565,7 +1220,11 @@ export default function RutasActivas() {
                   <th>Destino</th>
                   <th>Cliente</th>
                   <th>Estado</th>
+                  <th>Pago (CLP)</th>
+                  <th>Estado de Pago</th>
+                  <th>Conductor / Camión</th>
                   <th>ETA</th>
+                  <th>Fechas estimadas</th>
                   <th>Consolidación</th>
                   <th>Costos</th>
                   <th>Acciones</th>
@@ -1586,7 +1245,176 @@ export default function RutasActivas() {
                         {estadoLabel(ruta.estado)}
                       </Badge>
                     </td>
+                    <td>
+                      {ruta.total_pagar != null || ruta.tarifa_base_total != null ? (
+                        <div style={{ fontSize: "12px", lineHeight: "1.4" }}>
+                          {(() => {
+                            const totalCobradoBruto = Math.round(
+                              Number(ruta.costo_servicio) > 0
+                                ? Number(ruta.costo_servicio)
+                                : Number(ruta.total_pagar || ruta.tarifa_base_total || 0),
+                            );
+                            const totalCobradoNeto = Math.round(
+                              Number(ruta.tarifa_base_total || 0) > 0
+                                ? Number(ruta.tarifa_base_total)
+                                : totalCobradoBruto / 1.19,
+                            );
+                            let pagoConductor = Number(ruta.pago_conductor_base_clp || 0);
+                            if (pagoConductor === 0) {
+                              const totalSlots =
+                                ruta.bultos?.reduce(
+                                  (acc, b) => acc + (Number(b.cuadrados_equivalentes) || 0),
+                                  0,
+                                ) || 1;
+                              const distKm = Number(ruta.distancia_km || 0);
+                              pagoConductor =
+                                5000 + 3000 + totalSlots * 500 + distKm * 2 * 150;
+                            }
+                            const gastos = Math.round(
+                              Number(ruta.costo_combustible_calculado || 0) +
+                                Number(ruta.costo_tac_peajes_clp || 0) +
+                                pagoConductor,
+                            );
+                            const ganancia = Math.round(totalCobradoNeto - gastos);
+                            return (
+                              <>
+                                <div>
+                                  Cobrado:{" "}
+                                  <strong>
+                                    {new Intl.NumberFormat("es-CL", {
+                                      style: "currency",
+                                      currency: "CLP",
+                                      maximumFractionDigits: 0,
+                                    }).format(totalCobradoBruto)}
+                                  </strong>
+                                </div>
+                                <div>
+                                  Ganancia neta:{" "}
+                                  <strong style={{ color: "#10b981" }}>
+                                    {new Intl.NumberFormat("es-CL", {
+                                      style: "currency",
+                                      currency: "CLP",
+                                      maximumFractionDigits: 0,
+                                    }).format(ganancia)}
+                                  </strong>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setRutaRentabilidad({
+                                      ...ruta,
+                                      totalCobradoBruto,
+                                      totalCobradoNeto,
+                                      gastos,
+                                      ganancia,
+                                      pagoConductor,
+                                    });
+                                    setShowRentabilidadModal(true);
+                                  }}
+                                  className="lt-btn lt-btn--secondary"
+                                  style={{
+                                    padding: "4px 8px",
+                                    fontSize: "11px",
+                                    marginTop: "8px",
+                                    width: "100%",
+                                  }}
+                                >
+                                  Ver detalle
+                                </button>
+                              </>
+                            );
+                          })()}
+                        </div>
+                      ) : (
+                        <span className="lt-list-item__sub" style={{ opacity: 0.6 }}>
+                          No calculado
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      <span
+                        style={{
+                          display: "inline-block",
+                          padding: "4px 8px",
+                          borderRadius: "4px",
+                          fontSize: "11px",
+                          fontWeight: "bold",
+                          textTransform: "uppercase",
+                          backgroundColor:
+                            ruta.estado_pago === "pagado"
+                              ? "#10b981"
+                              : ruta.estado_pago === "procesando"
+                                ? "#f59e0b"
+                                : ruta.estado_pago === "fallido"
+                                  ? "#ef4444"
+                                  : "#64748b",
+                          color: "#fff",
+                        }}
+                      >
+                        {ruta.estado_pago || "PENDIENTE"}
+                      </span>
+                      {ruta.estado_pago === "pagado" && (
+                        <button
+                          type="button"
+                          onClick={() => setComprobanteRutaId(ruta.id)}
+                          className="lt-btn lt-btn--secondary"
+                          style={{
+                            padding: "4px 8px",
+                            fontSize: "11px",
+                            marginTop: "8px",
+                            width: "100%",
+                            borderColor: "#3B82F6",
+                            color: "#3B82F6",
+                          }}
+                        >
+                          Ver comprobante
+                        </button>
+                      )}
+                    </td>
+                    <td>
+                      <div>{ruta.conductores?.rut || "—"}</div>
+                      <div className="lt-list-item__sub" style={{ marginTop: 4 }}>
+                        {ruta.camiones?.patente || "—"}
+                      </div>
+                    </td>
                     <td>{fmtDate(ruta.eta)}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="lt-btn lt-btn--secondary lt-btn--sm lt-btn--full"
+                        style={{ marginBottom: 8 }}
+                        disabled={calculandoEstimacionRutaId === ruta.id}
+                        onClick={() => calcularDistanciaYFechasRuta(ruta)}
+                      >
+                        {calculandoEstimacionRutaId === ruta.id
+                          ? "Calculando…"
+                          : "Calcular fechas"}
+                      </button>
+                      <MensajeFilaRuta mensaje={mensajesRuta[ruta.id]?.estimacion} />
+                      <div className="lt-field-group">
+                        <label className="lt-label" htmlFor={`fecha-entrega-${ruta.id}`}>
+                          Día estimado
+                        </label>
+                        <input
+                          id={`fecha-entrega-${ruta.id}`}
+                          type="date"
+                          className="lt-input"
+                          value={(fechasEdit[ruta.id] || fechasFromRuta(ruta)).entrega}
+                          onChange={(e) =>
+                            actualizarFechaRuta(ruta.id, "entrega", e.target.value)
+                          }
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        className="lt-btn lt-btn--secondary lt-btn--sm lt-btn--full"
+                        disabled={savingFechasId === ruta.id}
+                        onClick={() => guardarFechasRuta(ruta.id)}
+                      >
+                        {savingFechasId === ruta.id ? "Guardando…" : "Guardar fechas"}
+                      </button>
+                      <MensajeFilaRuta mensaje={mensajesRuta[ruta.id]?.fechas} />
+                    </td>
                     <td>
                       <button
                         type="button"
@@ -1670,11 +1498,24 @@ export default function RutasActivas() {
                           : "Notificar fecha estimada"}
                       </button>
                       <MensajeFilaRuta mensaje={mensajesRuta[ruta.id]?.notificar} />
+                      <button
+                        type="button"
+                        className="lt-btn lt-btn--full"
+                        style={{
+                          marginTop: 8,
+                          backgroundColor: "transparent",
+                          border: "1px solid #ef4444",
+                          color: "#ef4444",
+                        }}
+                        onClick={() => handleDelete(ruta.id)}
+                      >
+                        Eliminar ruta
+                      </button>
                     </td>
                   </tr>
                   {consolidacionAbiertaId === ruta.id && (
                     <tr key={`${ruta.id}-consolidacion`}>
-                      <td colSpan={9} className="lt-consolidacion-row">
+                      <td colSpan={13} className="lt-consolidacion-row">
                         <ConsolidacionRutaPanel
                           rutaId={ruta.id}
                           onConsolidado={cargarRutas}
@@ -1684,7 +1525,7 @@ export default function RutasActivas() {
                   )}
                   {costosAbiertoId === ruta.id && (
                     <tr key={`${ruta.id}-costos`}>
-                      <td colSpan={9} className="lt-consolidacion-row">
+                      <td colSpan={13} className="lt-consolidacion-row">
                         <CostosOperativosPanel
                           rutaId={ruta.id}
                           rutaEstado={ruta.estado}
@@ -1699,6 +1540,7 @@ export default function RutasActivas() {
           </div>
         )}
       </div>
+      )}
 
       <ModalRecurrencia
         open={recurrenciaModalOpen}
@@ -1747,7 +1589,7 @@ export default function RutasActivas() {
                 aria-label="Cerrar"
                 onClick={() => setRutaDetalleSeleccionada(null)}
               >
-                ✕
+                Ô£ò
               </button>
             </div>
 
@@ -2005,6 +1847,56 @@ export default function RutasActivas() {
           </div>
         </div>
       )}
+      {comprobanteRutaId ? (
+        <ComprobanteModal
+          rutaId={comprobanteRutaId}
+          onClose={() => setComprobanteRutaId(null)}
+        />
+      ) : null}
+      {showRentabilidadModal && rutaRentabilidad ? (
+        <div className="lt-modal-overlay">
+          <div className="lt-modal" style={{ maxWidth: 450 }}>
+            <div className="lt-modal__header">
+              <h3>Simulador de rentabilidad interna</h3>
+              <button
+                type="button"
+                className="lt-modal__close"
+                onClick={() => setShowRentabilidadModal(false)}
+              >
+                ×
+              </button>
+            </div>
+            <div className="lt-modal__content">
+              <p>
+                Total recaudado:{" "}
+                {new Intl.NumberFormat("es-CL", {
+                  style: "currency",
+                  currency: "CLP",
+                  maximumFractionDigits: 0,
+                }).format(rutaRentabilidad.totalCobradoBruto)}
+              </p>
+              <p>
+                Gastos operativos:{" "}
+                {new Intl.NumberFormat("es-CL", {
+                  style: "currency",
+                  currency: "CLP",
+                  maximumFractionDigits: 0,
+                }).format(rutaRentabilidad.gastos)}
+              </p>
+              <p>
+                Ganancia neta:{" "}
+                <strong style={{ color: "#10b981" }}>
+                  {new Intl.NumberFormat("es-CL", {
+                    style: "currency",
+                    currency: "CLP",
+                    maximumFractionDigits: 0,
+                  }).format(rutaRentabilidad.ganancia)}
+                </strong>
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

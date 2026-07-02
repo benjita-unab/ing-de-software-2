@@ -7,11 +7,17 @@ export interface PortalPedidoListItemDto {
   id: string;
   nombre_ruta?: string | null;
   estado: string | null;
+  estado_pago?: string | null;
   origen: string | null;
   destino: string | null;
   fecha_estimada_entrega: string | null;
   distancia_km: number | null;
   bultos_despachados: number | null;
+  created_at?: string | null;
+  tarifa_base_total?: number | null;
+  costo_servicio?: number | null;
+  costo_espera_total?: number | null;
+  total_pagar?: number | null;
 }
 
 export interface PortalPedidoListResponseDto {
@@ -23,11 +29,17 @@ export interface PortalRutaDetalleDto {
   id: string;
   nombre_ruta?: string | null;
   estado: string | null;
+  estado_pago?: string | null;
   origen: string | null;
   destino: string | null;
   fecha_estimada_entrega: string | null;
   distancia_km: number | null;
   bultos_despachados: number | null;
+  created_at?: string | null;
+  tarifa_base_total?: number | null;
+  costo_servicio?: number | null;
+  costo_espera_total?: number | null;
+  total_pagar?: number | null;
 }
 
 export interface PortalHistorialEstadoDto {
@@ -73,6 +85,15 @@ export interface PortalMensajeDto {
   created_at: string | null;
 }
 
+export interface PortalBultoDto {
+  id: string;
+  alto_cm: number | null;
+  ancho_cm: number | null;
+  largo_cm: number | null;
+  peso_kg: number | null;
+  categoria: string | null;
+}
+
 export interface PortalPedidoDetalleResponseDto {
   ruta: PortalRutaDetalleDto;
   historial_estados: PortalHistorialEstadoDto[];
@@ -80,4 +101,5 @@ export interface PortalPedidoDetalleResponseDto {
   guias_despacho: PortalGuiaDespachoDto[];
   incidencias: PortalIncidenciaDto[];
   mensajes: PortalMensajeDto[];
+  bultos: PortalBultoDto[];
 }

@@ -75,13 +75,13 @@ export default function FormularioCamion({
       return;
     }
 
-    if (!isEdit && (Number.isNaN(kmL) || kmL <= 0)) {
-      setError("El rendimiento (Km/L) es obligatorio y debe ser mayor a 0.");
+    if (!isEdit && (Number.isNaN(kmL) || kmL < 0.01)) {
+      setError("El rendimiento (Km/L) es obligatorio y debe ser mayor o igual a 0.01.");
       return;
     }
 
-    if (isEdit && form.km_l.trim() && (Number.isNaN(kmL) || kmL <= 0)) {
-      setError("El rendimiento (Km/L) debe ser mayor a 0.");
+    if (isEdit && form.km_l.trim() && (Number.isNaN(kmL) || kmL < 0.01)) {
+      setError("El rendimiento (Km/L) debe ser mayor o igual a 0.01.");
       return;
     }
 
@@ -226,7 +226,7 @@ export default function FormularioCamion({
               id="camion-km-l"
               type="number"
               min="0.01"
-              step="0.1"
+              step="0.01"
               className="lt-input"
               value={form.km_l}
               onChange={(e) => actualizarCampo("km_l", e.target.value)}

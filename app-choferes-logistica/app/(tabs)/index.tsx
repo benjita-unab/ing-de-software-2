@@ -8,17 +8,18 @@ import {
   Text,
   useColorScheme,
   View,
+  Alert,
+  TouchableOpacity,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import RegistroViaje from '../../scripts/RegistroViaje';
+import RegistroViajeLinear from '../../scripts/RegistroViajeLinear';
 import { BotonCerrarDespacho } from '../../src/components/BotonCerrarDespacho';
 import {
   ChoferSessionBar,
   STORAGE_RUTA_ACTIVA_ID,
 } from '../../src/components/ChoferSessionBar';
 import { bffFetch } from '../../src/services/bffService';
-import { TiemposInspeccionBotones } from '../../src/components/TiemposInspeccionBotones';
 import { RutaChoferCard } from '../../src/components/RutaChoferCard';
 import {
   etiquetaRutaAccesibilidad,
@@ -37,6 +38,9 @@ function mismoId(
 
 /** Etiqueta legible para lista de rutas */
 function etiquetaRutaDesdeApi(r: RutaListItem): string {
+  if (r.nombre_ruta) {
+    return r.nombre_ruta;
+  }
   const o = r.origen?.trim() || '—';
   const d = r.destino?.trim() || '—';
   return `${o} → ${d}`;
@@ -48,10 +52,8 @@ function esRutaOperativa(estado: string | null | undefined): boolean {
     .trim()
     .toUpperCase()
     .replace(/\s+/g, '_');
-  const operativos = new Set(['ASIGNADO', 'EN_CURSO', 'PENDIENTE']);
-  const excluidos = new Set(['ENTREGADO', 'CANCELADO', 'FINALIZADO']);
-  if (excluidos.has(e)) return false;
-  return operativos.has(e);
+  const excluidos = new Set(['ENTREGADO', 'CANCELADO', 'FINALIZADO', 'COMPLETADO', 'PAGO_ATRASO_PENDIENTE']);
+  return !excluidos.has(e);
 }
 
 export default function HomeScreen() {
@@ -60,9 +62,11 @@ export default function HomeScreen() {
   const [rutaActivaId, setRutaActivaId] = useState<string | null>(null);
   const [rutasOperativas, setRutasOperativas] = useState<RutaListItem[]>([]);
   const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  const isDark = false; // forced light mode
   const [cargandoRutas, setCargandoRutas] = useState(true);
   const [errorRutas, setErrorRutas] = useState<string | null>(null);
+  const [resetKey, setResetKey] = useState(0);
+  const [mostrarLista, setMostrarLista] = useState(true);
 
   const cargarRutas = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent ?? false;
@@ -91,7 +95,12 @@ export default function HomeScreen() {
         : raw && typeof raw === 'object' && Array.isArray((raw as any).data)
         ? (raw as any).data
         : [];
-      const operativas = lista.filter((r) => esRutaOperativa(r.estado));
+      
+      const operativas = lista.filter((r) => esRutaOperativa(r.estado)).sort((a, b) => {
+         const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+         const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+         return dateA - dateB; // ASC, oldest first
+      });
       setRutasOperativas(operativas);
 
       const persisted = await AsyncStorage.getItem(STORAGE_RUTA_ACTIVA_ID);
@@ -102,6 +111,7 @@ export default function HomeScreen() {
         if (encontrada) {
           console.log('USANDO RUTA GUARDADA');
           setRutaActivaId(encontrada.id);
+          setMostrarLista(false);
           if (encontrada.id !== persistedTrim) {
             await AsyncStorage.setItem(STORAGE_RUTA_ACTIVA_ID, encontrada.id);
           }
@@ -110,21 +120,9 @@ export default function HomeScreen() {
         await AsyncStorage.removeItem(STORAGE_RUTA_ACTIVA_ID);
       }
 
-      if (operativas.length === 0) {
-        setRutaActivaId(null);
-        return;
-      }
-
-      if (operativas.length > 1) {
-        console.log('MOSTRANDO SELECTOR DE RUTAS');
-        setRutaActivaId(null);
-        return;
-      }
-
-      const solo = operativas[0].id;
-      console.log('SET AUTO SOLO UNA RUTA');
-      setRutaActivaId(solo);
-      await AsyncStorage.setItem(STORAGE_RUTA_ACTIVA_ID, solo);
+      // No active route saved, so we must show the list for them to pick
+      setRutaActivaId(null);
+      setMostrarLista(true);
     } catch (e: unknown) {
       const mensaje =
         e instanceof Error ? e.message : 'No se pudieron cargar las rutas';
@@ -146,6 +144,7 @@ export default function HomeScreen() {
     console.log('SET MANUAL:', trimmed);
     setRutaActivaId(trimmed);
     await AsyncStorage.setItem(STORAGE_RUTA_ACTIVA_ID, trimmed);
+    setMostrarLista(false);
   }, []);
 
   const cambiarRuta = useCallback(async () => {
@@ -155,13 +154,33 @@ export default function HomeScreen() {
     console.log('MOSTRANDO SELECTOR DE RUTAS');
   }, []);
 
-  /** Curry estable: una función por id, sin arrow inline en cada Pressable */
   const handleSeleccionRuta = useCallback(
     (id: string) => () => {
       console.log('CLICK REAL:', id);
-      void seleccionarRuta(id);
+      const ruta = rutasOperativas.find(r => String(r.id) === id);
+      if (ruta?.estado_pago !== 'pagado') {
+        Alert.alert('Pago Pendiente', 'El cliente aún no ha pagado esta ruta. No puedes iniciarla.');
+        return;
+      }
+      if (rutaActivaId === id) {
+        // They clicked the active route. Just go to it.
+        setMostrarLista(false);
+        return;
+      }
+      if (rutaActivaId && rutaActivaId !== id) {
+        Alert.alert('Ruta en transcurso', 'Debes finalizar el pedido en transcurso antes de iniciar otro.');
+        return;
+      }
+      Alert.alert(
+        'Comenzar Ruta',
+        '¿Desea comenzar esta ruta?',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Sí, comenzar', onPress: () => void seleccionarRuta(id) }
+        ]
+      );
     },
-    [seleccionarRuta],
+    [seleccionarRuta, rutasOperativas, rutaActivaId],
   );
 
   const rutasMemo = useMemo(() => rutasOperativas, [rutasOperativas]);
@@ -188,7 +207,7 @@ export default function HomeScreen() {
   if (cargandoRutas) {
     return (
       <View style={styles.screenRoot}>
-        <ChoferSessionBar />
+        <ChoferSessionBar onRefresh={() => void cargarRutas()} />
         <View style={styles.centered}>
           <ActivityIndicator size="large" />
           <Text style={styles.hint}>Cargando rutas…</Text>
@@ -197,14 +216,13 @@ export default function HomeScreen() {
     );
   }
 
-  const debeElegirRuta =
-    rutasMemo.length > 1 && rutaActivaId === null;
+  const debeElegirRuta = mostrarLista;
 
   if (debeElegirRuta) {
     const selectorPadBottom = insets.bottom + 96;
     return (
       <View style={styles.screenRoot} collapsable={false}>
-        <ChoferSessionBar />
+        <ChoferSessionBar onRefresh={() => void cargarRutas()} />
         {errorRutas ? (
           <View style={styles.banner}>
             <Text style={styles.bannerText}>
@@ -215,7 +233,7 @@ export default function HomeScreen() {
         <ScrollView
           style={[
             styles.selectorScroll,
-            { backgroundColor: isDark ? '#0A0E1A' : '#F8FAFC' },
+            { backgroundColor: isDark ? '#0A0E1A' : '#FAFAFA' },
           ]}
           contentContainerStyle={[
             styles.selectorScrollContent,
@@ -231,29 +249,59 @@ export default function HomeScreen() {
           <View
             style={[
               styles.selectorStripInner,
-              { backgroundColor: isDark ? '#0A0E1A' : '#F8FAFC' },
+              { backgroundColor: isDark ? '#0A0E1A' : '#FAFAFA' },
             ]}
             collapsable={false}
           >
-            <Text
-              style={[
-                styles.selectorTitle,
-                { color: isDark ? '#F8FAFC' : '#0F172A' },
-              ]}
-            >
-              Ruta activa — elige una para continuar
-            </Text>
-            {rutasMemo.map((ruta) => {
-              const idStr = String(ruta.id);
+            {(() => {
+              const pagadas = rutasMemo.filter(r => r.estado_pago === 'pagado');
+              const noPagadas = rutasMemo.filter(r => r.estado_pago !== 'pagado');
+
               return (
-                <RutaChoferCard
-                  key={idStr}
-                  ruta={ruta}
-                  onPress={onPressPorRutaId.get(idStr)!}
-                  accessibilityLabel={`Seleccionar ${etiquetaRutaAccesibilidad(ruta)}`}
-                />
+                <>
+                  {pagadas.length > 0 && (
+                    <>
+                      <Text style={[styles.selectorTitle, { color: isDark ? '#F8FAFC' : '#0F172A', marginTop: 8 }]}>
+                        Rutas pendientes
+                      </Text>
+                      {pagadas.map((ruta) => {
+                        const idStr = String(ruta.id);
+                        return (
+                          <RutaChoferCard
+                            key={idStr}
+                            ruta={ruta}
+                            isActive={idStr === rutaActivaId}
+                            onPress={onPressPorRutaId.get(idStr)!}
+                            accessibilityLabel={`Seleccionar ${etiquetaRutaAccesibilidad(ruta)}`}
+                          />
+                        );
+                      })}
+                    </>
+                  )}
+
+                  {noPagadas.length > 0 && (
+                    <>
+                      <Text style={[styles.selectorTitle, { color: isDark ? '#94A3B8' : '#64748B', marginTop: 32 }]}>
+                        Rutas pendientes de pago
+                      </Text>
+                      {noPagadas.map((ruta) => {
+                        const idStr = String(ruta.id);
+                        return (
+                          <RutaChoferCard
+                            key={idStr}
+                            ruta={ruta}
+                            isUnpaid={true}
+                            isActive={idStr === rutaActivaId}
+                            onPress={onPressPorRutaId.get(idStr)!}
+                            accessibilityLabel={`Seleccionar ${etiquetaRutaAccesibilidad(ruta)}`}
+                          />
+                        );
+                      })}
+                    </>
+                  )}
+                </>
               );
-            })}
+            })()}
           </View>
         </ScrollView>
       </View>
@@ -263,7 +311,7 @@ export default function HomeScreen() {
   if (!rutaActivaId) {
     return (
       <View style={styles.screenRoot}>
-        <ChoferSessionBar />
+        <ChoferSessionBar onRefresh={() => void cargarRutas()} />
         <View style={styles.centered}>
           <Text style={styles.hint}>Sin ruta para trabajar.</Text>
         </View>
@@ -273,7 +321,7 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.screenRoot} collapsable={false}>
-      <ChoferSessionBar />
+      <ChoferSessionBar onRefresh={() => void cargarRutas()} />
       {errorRutas ? (
         <View style={styles.banner}>
           <Text style={styles.bannerText}>
@@ -282,55 +330,54 @@ export default function HomeScreen() {
         </View>
       ) : null}
 
-      {rutasMemo.length > 1 ? (
-        <View
-          style={[
-            styles.cambiarRutaBar,
-            {
-              paddingTop: insets.top + 14,
-              paddingBottom: 14,
-            },
-          ]}
-          collapsable={false}
-        >
-          <Pressable
-            style={({ pressed }) => [
-              styles.btnCambiarRuta,
-              pressed && styles.cardPressed,
-            ]}
-            onPress={() => void cambiarRuta()}
-            accessibilityRole="button"
-            accessibilityLabel="Cambiar de ruta"
-            hitSlop={{ top: 18, bottom: 18, left: 24, right: 24 }}
+      <View style={styles.selectorSingle}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <TouchableOpacity onPress={() => setMostrarLista(true)} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 12 }}>
+            <Text style={{ color: '#3b82f6', fontSize: 14, fontWeight: '700' }}>← Volver</Text>
+          </TouchableOpacity>
+          <Text style={[styles.selectorSingleText, { flex: 1 }]} numberOfLines={1}>
+            Ruta Activa: {rutaActiva ? etiquetaRutaDesdeApi(rutaActiva) : '—'}
+          </Text>
+          <TouchableOpacity 
+            style={{ backgroundColor: '#EF4444', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 }}
+            onPress={async () => {
+              if (rutaActivaId) {
+                try {
+                  setTodoSincronizado(false);
+                  const res = await bffFetch(`/api/rutas/${rutaActivaId}/reset`, { method: 'POST' });
+                  if (!res.ok) {
+                    const raw = await res.json().catch(() => ({}));
+                    throw new Error(raw.message || `Error HTTP ${res.status}`);
+                  }
+                  await cargarRutas();
+                  setResetKey(prev => prev + 1);
+                  Alert.alert('Éxito', 'Ruta reseteada correctamente para pruebas.');
+                } catch (e: any) {
+                  Alert.alert('Error', e.message || 'No se pudo resetear la ruta.');
+                  console.error("Error al resetear la ruta", e);
+                }
+              }
+            }}
           >
-            <Text style={styles.btnCambiarRutaText}>Cambiar ruta</Text>
-          </Pressable>
+            <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>Reset (Dev)</Text>
+          </TouchableOpacity>
         </View>
-      ) : rutasMemo.length === 1 ? (
-        <View style={styles.selectorSingle}>
-          <Text style={styles.selectorSingleText}>
-            Ruta: {etiquetaRutaDesdeApi(rutasMemo[0])}
-          </Text>
-        </View>
-      ) : (
-        <View style={styles.selectorSingle}>
-          <Text style={styles.selectorSingleText}>
-            Sin rutas operativas en servidor — elija cuando haya rutas disponibles
-          </Text>
-        </View>
-      )}
+      </View>
 
-      <View style={styles.mainContent} collapsable={false}>
+      <ScrollView style={styles.mainContent} collapsable={false} contentContainerStyle={{ paddingBottom: 60 }}>
         {rutaActivaId ? (
           <>
-            <RegistroViaje
-              key={rutaActivaId}
+            <RegistroViajeLinear
+              key={`${rutaActivaId}-${rutaActiva?.estado || 'init'}-${resetKey}`}
               onSyncComplete={setTodoSincronizado}
               rutaId={rutaActivaId}
+              destino={rutaActiva?.destino}
+              estadoPago={rutaActiva?.estado_pago}
+              estadoRuta={rutaActiva?.estado}
+              horaLlegadaDestino={rutaActiva?.hora_llegada_destino}
             />
             {todoSincronizado && (
               <>
-                <TiemposInspeccionBotones rutaId={rutaActivaId} />
                 <BotonCerrarDespacho
                   rutaId={rutaActivaId}
                   bultosDespachadosOriginal={rutaActiva?.bultos_despachados ?? null}
@@ -340,7 +387,7 @@ export default function HomeScreen() {
             )}
           </>
         ) : null}
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -349,12 +396,14 @@ const styles = StyleSheet.create({
   screenRoot: {
     flex: 1,
     flexDirection: 'column',
+    backgroundColor: '#FAFAFA',
   },
   centered: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
+    backgroundColor: '#FAFAFA',
   },
   hint: { marginTop: 12, color: '#64748b' },
   banner: {
@@ -374,16 +423,15 @@ const styles = StyleSheet.create({
   },
   /** Contenido del selector dentro del ScrollView */
   selectorStripInner: {
-    paddingHorizontal: 16,
-    paddingTop: 4,
-    paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e2e8f0',
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 24,
+    borderBottomWidth: 0,
   },
   selectorTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    marginBottom: 12,
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 16,
   },
   cardPressed: {
     opacity: 0.92,
@@ -426,3 +474,4 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
 });
+

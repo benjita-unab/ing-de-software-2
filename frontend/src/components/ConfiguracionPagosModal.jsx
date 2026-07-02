@@ -20,8 +20,8 @@ const CAMPOS = [
   },
   {
     key: "precioPorBulto",
-    label: "Precio por bulto",
-    hint: "Monto unitario por bulto entregado",
+    label: "Precio por slot",
+    hint: "Monto unitario por slot utilizado",
   },
   {
     key: "precioPorKm",

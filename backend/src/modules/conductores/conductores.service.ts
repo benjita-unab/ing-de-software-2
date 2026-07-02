@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
 import { SupabaseConfigService } from '../../config/supabase.config';
 
 @Injectable()
@@ -278,6 +278,8 @@ export class ConductoresService {
         `
         id,
         rut,
+        nombre,
+        camion_id,
         licencia_numero,
         licencia_vencimiento,
         telefono,
@@ -379,6 +381,189 @@ export class ConductoresService {
       message: 'Licencia actualizada exitosamente',
       data: license,
     };
+  }
+
+  // ========== HELPERS PRIVADOS ==========
+
+  /**
+   * Asigna un camión a un conductor de forma exclusiva (1 a 1).
+   */
+  async asignarCamion(conductorId: string, camionId: string) {
+    if (!conductorId || !camionId) {
+      throw new BadRequestException('ID del conductor y del camión son requeridos');
+    }
+
+    const supabase = this.supabaseConfig.getClient();
+
+    // Validar preventivamente que el camión no esté asignado a otro conductor activo
+    const { data: ocupante, error: checkError } = await supabase
+      .from('conductores')
+      .select('id, rut, nombre')
+      .eq('camion_id', camionId)
+      .neq('id', conductorId) // Excluir al conductor actual
+      .eq('activo', true)
+      .maybeSingle();
+
+    if (ocupante) {
+      throw new ConflictException(`El camión ya se encuentra asignado a otro conductor activo (${ocupante.nombre || ocupante.rut})`);
+    }
+
+    // Hacer el update
+    const { data, error } = await supabase
+      .from('conductores')
+      .update({ camion_id: camionId })
+      .eq('id', conductorId)
+      .select()
+      .single();
+
+    if (error) {
+      throw new BadRequestException(`Error al asignar el camión: ${error.message}`);
+    }
+
+    return data;
+  }
+
+  /**
+   * Libera el camión de un conductor (setea camion_id en NULL).
+   */
+  async liberarCamion(conductorId: string) {
+    if (!conductorId) {
+      throw new BadRequestException('ID del conductor es requerido');
+    }
+
+    const supabase = this.supabaseConfig.getClient();
+
+    const { data, error } = await supabase
+      .from('conductores')
+      .update({ camion_id: null })
+      .eq('id', conductorId)
+      .select()
+      .single();
+
+    if (error) {
+      throw new BadRequestException(`Error al liberar el camión: ${error.message}`);
+    }
+
+    return data;
+  }
+
+  /**
+   * Endpoint optimizado para la App Móvil: Obtiene la asignación actual del camión
+   * usando el usuario_id del JWT.
+   */
+  async getMiFlotaAsignacion(usuarioId: string) {
+    const supabase = this.supabaseConfig.getClient();
+
+    // 1. Obtener conductor y camión asignado (JOIN)
+    const { data: conductorData, error: conductorError } = await supabase
+      .from('conductores')
+      .select(`
+        id,
+        nombre,
+        camion_id,
+        camiones (
+          id,
+          patente,
+          estado,
+          rendimiento_km_l,
+          slots,
+          slots_utilizados,
+          talla
+        )
+      `)
+      .eq('usuario_id', usuarioId)
+      .eq('activo', true)
+      .single();
+
+    if (conductorError || !conductorData) {
+      throw new NotFoundException('Conductor no encontrado o no está activo');
+    }
+
+    // 2. Obtener las rutas pendientes/en camino asignadas a este conductor
+    const { data: rutasData, error: rutasError } = await supabase
+      .from('rutas')
+      .select('id, origen, destino, estado, fecha_estimada_entrega, eta')
+      .eq('conductor_id', conductorData.id)
+      .in('estado', ['PENDIENTE', 'EN_CAMINO'])
+      .order('fecha_estimada_entrega', { ascending: true, nullsFirst: false });
+
+    if (rutasError) {
+      throw new BadRequestException(`Error al obtener las rutas: ${rutasError.message}`);
+    }
+
+    return {
+      conductor: {
+        id: conductorData.id,
+        nombre: conductorData.nombre,
+      },
+      camion: conductorData.camiones || null, // null si no tiene camión asignado
+      rutas_activas: rutasData || [],
+    };
+  }
+
+  /**
+   * Crea un nuevo chofer (Usuario Auth + Perfil Conductor) y asigna un camión opcionalmente.
+   */
+  async createConductor(data: any) {
+    const supabase = this.supabaseConfig.getClient();
+
+    const { email, password, nombre, rut, telefono, camion_id } = data;
+
+    if (!email || !password || !nombre || !rut) {
+      throw new BadRequestException('Email, password, nombre y rut son requeridos');
+    }
+
+    // 1. Crear el usuario en Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true, // Confirmación inmediata
+    });
+
+    if (authError || !authData?.user) {
+      throw new BadRequestException(`Error al crear usuario auth: ${authError?.message}`);
+    }
+
+    const userId = authData.user.id;
+
+    // 2. Crear el registro en public.usuarios
+    const { error: userError } = await supabase
+      .from('usuarios')
+      .insert({
+        id: userId,
+        email,
+        password,
+        nombre,
+        rol: 'CONDUCTOR'
+      });
+
+    if (userError) {
+      // Intentar limpiar auth si falla la DB
+      await supabase.auth.admin.deleteUser(userId);
+      throw new BadRequestException(`Error al insertar en usuarios: ${userError.message}`);
+    }
+
+    // 3. Crear el registro en public.conductores
+    const conductorPayload = {
+      usuario_id: userId,
+      rut,
+      nombre,
+      telefono: telefono || null,
+      camion_id: camion_id || null,
+      activo: true
+    };
+
+    const { data: conductor, error: condError } = await supabase
+      .from('conductores')
+      .insert(conductorPayload)
+      .select()
+      .single();
+
+    if (condError) {
+      throw new BadRequestException(`Error al crear conductor: ${condError.message}`);
+    }
+
+    return conductor;
   }
 
   // ========== HELPERS PRIVADOS ==========

@@ -8,12 +8,14 @@ import {
   ActivityIndicator,
   TextInput,
   Modal,
+  Keyboard,
 } from "react-native";
 import {
   cerrarDespachoYEnviarComprobante,
   enviarQRPrevio,
   guardarFirmaEnSupabase,
 } from "../services/cierreDespachoService";
+import { bffFetch } from "../services/bffService";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import SignatureScreen from "react-native-signature-canvas";
 
@@ -101,6 +103,10 @@ export function BotonCerrarDespacho({
   const [bultosRecepcionados, setBultosRecepcionados] = useState("");
   const [comentarioDiferenciaBultos, setComentarioDiferenciaBultos] = useState("");
   const signatureRef = useRef<any>(null);
+  const cameraRef = useRef<any>(null);
+  const [abrirCamaraDespacho, setAbrirCamaraDespacho] = useState(false);
+  const [subiendoFoto, setSubiendoFoto] = useState(false);
+  const [fotoHojaTomada, setFotoHojaTomada] = useState(false);
 
   const bultosDespachadosOriginalValue =
     typeof bultosDespachadosOriginal === "number" &&
@@ -174,6 +180,10 @@ export function BotonCerrarDespacho({
   }
 
   async function manejarEnviarQR(): Promise<void> {
+    if (!fotoHojaTomada) {
+      Alert.alert("Foto requerida", "Debe tomar la foto de la hoja de despacho antes de continuar.");
+      return;
+    }
     if (cargando) return;
     setCargando(true);
     setEstadoTexto("Enviando QR...");
@@ -275,13 +285,15 @@ export function BotonCerrarDespacho({
 
     try {
       await guardarFirmaEnSupabase(rutaId, firmaBase64);
+      // Detener el reloj automáticamente de parte del backend y calcular penalizaciones
+      await bffFetch(`/api/rutas/${rutaId}/scan-qr`, { method: "POST" });
     } catch {
       cancelarWatchdogLoading();
       setCargando(false);
       setEstadoTexto("");
       Alert.alert(
         "Firma",
-        "No se pudo guardar la firma. Intente nuevamente.",
+        "No se pudo guardar la firma o procesar el tiempo de entrega. Intente nuevamente.",
       );
       return;
     }
@@ -301,7 +313,7 @@ export function BotonCerrarDespacho({
       ) {
         Alert.alert(
           "Error",
-          "Cantidad de bultos recepcionados debe ser un número entero no negativo.",
+          "Cantidad de bultos/slots recepcionados debe ser un número entero no negativo.",
         );
         setCargando(false);
         setEstadoTexto("");
@@ -315,7 +327,7 @@ export function BotonCerrarDespacho({
       ) {
         Alert.alert(
           "Error",
-          "No puede recepcionar más bultos de los despachados",
+          "No puede recepcionar más bultos/slots de los despachados",
         );
         setCargando(false);
         setEstadoTexto("");
@@ -331,7 +343,7 @@ export function BotonCerrarDespacho({
       ) {
         Alert.alert(
           "Error",
-          "Justificación obligatoria: debe ingresar un comentario cuando los bultos recibidos difieren de los despachados.",
+          "Justificación obligatoria: debe ingresar un comentario cuando los bultos/slots recibidos difieren de los despachados.",
         );
         setCargando(false);
         setEstadoTexto("");
@@ -358,11 +370,11 @@ export function BotonCerrarDespacho({
       console.warn("CIERRE DESPACHO ERROR:", err);
       if (
         err instanceof Error &&
-        err.message.includes("Justificación obligatoria por diferencia de bultos")
+        err.message.includes("Justificación obligatoria por diferencia de bultos/slots")
       ) {
         Alert.alert(
           "Error",
-          "Debe ingresar un comentario justificando la diferencia de bultos",
+          "Debe ingresar un comentario justificando la diferencia de bultos/slots",
         );
       } else {
         const mensaje =
@@ -399,7 +411,7 @@ export function BotonCerrarDespacho({
     ) {
       Alert.alert(
         "Error",
-        "Cantidad de bultos recepcionados debe ser un número entero no negativo.",
+        "Cantidad de bultos/slots recepcionados debe ser un número entero no negativo.",
       );
       return;
     }
@@ -411,7 +423,7 @@ export function BotonCerrarDespacho({
     ) {
       Alert.alert(
         "Error",
-        "No puede recepcionar más bultos de los despachados",
+        "No puede recepcionar más bultos/slots de los despachados",
       );
       return;
     }
@@ -425,7 +437,7 @@ export function BotonCerrarDespacho({
     ) {
       Alert.alert(
         "Error",
-        "Justificación obligatoria: debe ingresar un comentario cuando los bultos recibidos difieren de los despachados.",
+        "Justificación obligatoria: debe ingresar un comentario cuando los bultos/slots recibidos difieren de los despachados.",
       );
       return;
     }
@@ -521,10 +533,12 @@ export function BotonCerrarDespacho({
               </View>
               <View style={styles.bottomContainer}>
                 <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Cantidad de Bultos Recepcionados</Text>
+                  <Text style={styles.label}>Cantidad de Bultos/Slots Recepcionados</Text>
                   <TextInput
                     style={styles.input}
                     keyboardType="numeric"
+                    returnKeyType="done"
+                    onSubmitEditing={() => Keyboard.dismiss()}
                     value={bultosRecepcionados}
                     onChangeText={setBultosRecepcionados}
                     placeholder="Ej: 10"
@@ -532,14 +546,16 @@ export function BotonCerrarDespacho({
                   />
                 </View>
                 <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Comentario diferencia de bultos</Text>
+                  <Text style={styles.label}>Comentario diferencia de bultos/slots/slots</Text>
                   <TextInput
                     style={[styles.input, styles.textarea]}
                     multiline
+                    returnKeyType="done"
+                    onSubmitEditing={() => Keyboard.dismiss()}
                     numberOfLines={3}
                     value={comentarioDiferenciaBultos}
                     onChangeText={setComentarioDiferenciaBultos}
-                    placeholder="Ingrese justificación si los bultos difieren"
+                    placeholder="Ingrese justificación si los bultos/slots difieren"
                     placeholderTextColor="#9ca3af"
                   />
                 </View>
@@ -603,22 +619,93 @@ export function BotonCerrarDespacho({
 
   return (
     <View style={styles.container}>
+      {abrirCamaraDespacho && (
+        <Modal animationType="slide" visible={true} onRequestClose={() => setAbrirCamaraDespacho(false)}>
+          <CameraView style={{ flex: 1 }} ref={cameraRef} facing="back">
+            <View style={{ flex: 1, justifyContent: "flex-end", alignItems: "center", paddingBottom: 40 }}>
+               {subiendoFoto ? (
+                 <ActivityIndicator size="large" color="#ffffff" />
+               ) : (
+                 <>
+                   <TouchableOpacity
+                     style={{ width: 70, height: 70, borderRadius: 35, backgroundColor: "white" }}
+                     onPress={async () => {
+                       if (cameraRef.current) {
+                         setSubiendoFoto(true);
+                         try {
+                           const photo = await cameraRef.current.takePictureAsync({ quality: 0.5, base64: true });
+                           const response = await bffFetch(`/api/entregas/${rutaId}/photo`, {
+                             method: "POST",
+                             headers: { "Content-Type": "application/json" },
+                             body: JSON.stringify({ base64Photo: photo.base64 }),
+                           });
+                           if (!response.ok) throw new Error("Error backend");
+                           Alert.alert("Éxito", "Hoja de despacho subida correctamente.");
+                           setFotoHojaTomada(true);
+                           setAbrirCamaraDespacho(false);
+                         } catch (err) {
+                           Alert.alert("Error", "No se pudo subir la foto de la hoja de despacho.");
+                         } finally {
+                           setSubiendoFoto(false);
+                         }
+                       }
+                     }}
+                   />
+                   <TouchableOpacity style={{ marginTop: 20 }} onPress={() => setAbrirCamaraDespacho(false)}>
+                     <Text style={{ color: "white", fontSize: 18, fontWeight: "bold" }}>Cancelar</Text>
+                   </TouchableOpacity>
+                 </>
+               )}
+            </View>
+          </CameraView>
+        </Modal>
+      )}
+
       {estadoFlujo === "inicio" && (
-        <TouchableOpacity
-          onPress={manejarEnviarQR}
-          disabled={cargando || !String(rutaId).trim()}
-          style={[
-            styles.boton,
-            styles.botonQR,
-            cargando && styles.botonDeshabilitado,
-          ]}
-        >
-          {cargando ? (
-            <Text style={styles.texto}>{estadoTexto || "Cargando..."}</Text>
-          ) : (
-            <Text style={styles.texto}>1. Enviar Código QR a Cliente</Text>
-          )}
-        </TouchableOpacity>
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.stepNumber}>5</Text>
+            <Text style={styles.cardTitle}>Cierre de Despacho</Text>
+          </View>
+          <Text style={styles.cardDescription}>Comparta el código QR con el cliente y suba la hoja de despacho firmada.</Text>
+
+          <TouchableOpacity
+            onPress={manejarEnviarQR}
+            disabled={cargando || !String(rutaId).trim()}
+            style={[
+              styles.actionBtn,
+              { backgroundColor: '#10B981', marginBottom: 12 },
+              cargando && styles.botonDeshabilitado,
+            ]}
+          >
+            {cargando ? (
+              <Text style={styles.actionBtnText}>{estadoTexto || "Cargando..."}</Text>
+            ) : (
+              <Text style={styles.actionBtnText}>📱 1. Enviar Código QR a Cliente</Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={async () => {
+              if (!cameraPermission?.granted) {
+                const permiso = await requestCameraPermission();
+                if (!permiso?.granted) {
+                  Alert.alert("Permiso requerido", "Necesitamos acceso a la cámara.");
+                  return;
+                }
+              }
+              setAbrirCamaraDespacho(true);
+            }}
+            disabled={cargando || !String(rutaId).trim()}
+            style={[
+              styles.actionBtn,
+              { backgroundColor: '#F59E0B' },
+              cargando && styles.botonDeshabilitado,
+            ]}
+          >
+            <Text style={styles.actionBtnText}>📄 Tomar Foto Hoja de Despacho</Text>
+          </TouchableOpacity>
+        </View>
       )}
 
       {estadoFlujo === "hecho" && (
@@ -634,14 +721,67 @@ export function BotonCerrarDespacho({
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: 15,
-    paddingHorizontal: 10,
+    // Wrapper para que no rompa otros layouts (se deja sin estilos extra)
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  stepNumber: {
+    backgroundColor: '#EFF6FF',
+    color: '#3B82F6',
+    fontWeight: '800',
+    fontSize: 16,
+    width: 28,
+    height: 28,
+    textAlign: 'center',
+    lineHeight: 28,
+    borderRadius: 14,
+    overflow: 'hidden',
+    marginRight: 10,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  cardDescription: {
+    fontSize: 14,
+    color: '#64748B',
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  actionBtn: {
+    backgroundColor: '#3B82F6',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  actionBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 15,
   },
   instruccionTexto: {
-    fontSize: 16,
-    fontWeight: "bold",
+    fontSize: 18,
+    fontWeight: "700",
     marginBottom: 8,
     textAlign: "center",
+    color: '#1E293B'
   },
   successContainer: {
     backgroundColor: "#e8f5e9",
@@ -655,22 +795,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   boton: {
-    backgroundColor: "#ff6600",
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
+    backgroundColor: "#3B82F6",
+    paddingVertical: 14,
+    borderRadius: 12,
     alignItems: "center",
     marginVertical: 6,
   },
   botonQR: {
-    backgroundColor: "#1565c0",
+    backgroundColor: "#10B981",
   },
   botonDeshabilitado: {
     opacity: 0.6,
   },
   texto: {
     color: "#ffffff",
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "bold",
   },
   label: {

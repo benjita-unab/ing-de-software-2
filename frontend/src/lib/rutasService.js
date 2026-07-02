@@ -1,11 +1,11 @@
 // src/lib/rutasService.js
-// ─────────────────────────────────────────────────────────────────────────────
+// ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 // Servicio para gestión de rutas y asignación de conductores con validación
 // de licencias (HU-5 CA-3).
 //
 // Toda la lógica crítica pasa por el backend NestJS a través de `apiFetch`.
 // No accedemos a Supabase directamente desde el frontend.
-// ─────────────────────────────────────────────────────────────────────────────
+// ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
 import { apiFetch } from "./apiClient";
 import {
@@ -511,6 +511,34 @@ export async function obtenerComparativaMetricasPago(filtros = {}) {
   }
 
   return { data: res.data?.data ?? res.data };
+}
+
+/**
+ * Crea un nuevo chofer (usuario Auth + perfil conductor).
+ */
+export async function crearConductor(data) {
+  const res = await apiFetch(`/api/conductores`, {
+    method: "POST",
+    json: data,
+  });
+  if (!res.ok) {
+    return { data: null, error: res.error || "Error al crear conductor" };
+  }
+  return { data: res.data };
+}
+
+/**
+ * Crea un nuevo camión.
+ */
+export async function crearCamion(data) {
+  const res = await apiFetch(`/api/camiones`, {
+    method: "POST",
+    json: data,
+  });
+  if (!res.ok) {
+    return { data: null, error: res.error || "Error al crear camión" };
+  }
+  return { data: res.data };
 }
 
 /**

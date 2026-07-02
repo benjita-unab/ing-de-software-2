@@ -16,3 +16,23 @@ export async function getPortalPedidoEvidencias(pedidoId) {
     `/api/portal/pedidos/${encodeURIComponent(pedidoId)}/evidencias`,
   );
 }
+
+export async function createPortalPedido(data) {
+  return apiFetch("/api/portal/pedidos", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function pagarPortalPedidoBase(pedidoId) {
+  return apiFetch(`/api/portal/pedidos/${encodeURIComponent(pedidoId)}/pagar_base`, {
+    method: "POST"
+  });
+}
+
+export async function pagarPortalPedidoRetraso(pedidoId) {
+  return apiFetch(`/api/portal/pedidos/${encodeURIComponent(pedidoId)}/pagar_retraso`, {
+    method: "POST"
+  });
+}

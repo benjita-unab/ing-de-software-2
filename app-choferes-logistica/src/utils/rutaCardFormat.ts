@@ -1,7 +1,9 @@
 /** Forma de ruta devuelta por GET /api/rutas (sin transformar en backend). */
 export type RutaListItem = {
   id: string;
+  nombre_ruta?: string | null;
   estado?: string | null;
+  estado_pago?: string | null;
   origen?: string | null;
   destino?: string | null;
   bultos_despachados?: number | null;
@@ -11,6 +13,12 @@ export type RutaListItem = {
     | { id?: string; nombre?: string | null }
     | { id?: string; nombre?: string | null }[]
     | null;
+  tarifa_base_total?: number | string | null;
+  costo_espera_total?: number | string | null;
+  total_pagar?: number | string | null;
+  costo_servicio?: number | string | null;
+  pago_conductor_base_clp?: number | string | null;
+  created_at?: string | null;
 };
 
 export function getClienteNombre(ruta: RutaListItem): string | null {

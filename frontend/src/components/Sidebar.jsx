@@ -23,6 +23,8 @@ const NAV_ITEMS = [
   { id: "alertas", label: "Alertas", icon: Bell, badgeKey: "urgent" },
   { id: "rutas-plantilla", label: "Plantillas", icon: Map },
   { id: "rutas", label: "Rutas", icon: Route },
+
+
   { id: "camiones", label: "Flota", icon: Truck },
   { id: "clientes", label: "Clientes", icon: Users },
   { id: "pagos", label: "Pagos", icon: DollarSign },

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import PortalEvidenciasModal from "./PortalEvidenciasModal";
+import ComprobanteModal from "./ComprobanteModal";
 import PortalPagos from "./PortalPagos";
 import PortalRecurrencias from "./PortalRecurrencias";
 import ModalRecurrencia from "./ModalRecurrencia";
@@ -13,12 +14,23 @@ const SECCION_PEDIDOS = "pedidos";
 const SECCION_PAGOS = "pagos";
 const SECCION_RECURRENCIAS = "recurrencias";
 
-const TAB_PENDIENTES = "pendientes";
+const TAB_TODOS = "todos";
+const TAB_PENDIENTES_PAGO = "pendientes_pago";
+const TAB_ASIGNADOS = "asignados";
 const TAB_COMPLETADOS = "completados";
 
 /** HU-27 CA-4: ENTREGADO = completado; cualquier otro estado = pendiente. */
 function isPedidoCompletado(estado) {
-  return String(estado || "").trim().toUpperCase() === "ENTREGADO";
+  const e = String(estado || "").trim().toUpperCase();
+  return ["ENTREGADO", "FINALIZADO", "COMPLETADO"].includes(e);
+}
+
+function getDisplayState(pedido) {
+  if (!pedido) return "—";
+  if (pedido.estado_pago !== "pagado" && !isPedidoCompletado(pedido.estado)) {
+    return "PENDIENTE DE PAGO";
+  }
+  return pedido.estado || "—";
 }
 
 const styles = {
@@ -57,8 +69,15 @@ const styles = {
     background:
       estado === "ENTREGADO"
         ? "rgba(34,197,94,0.2)"
+        : estado === "PENDIENTE DE PAGO"
+        ? "rgba(245,158,11,0.2)"
         : "rgba(14,165,233,0.2)",
-    color: estado === "ENTREGADO" ? "#86efac" : "#7dd3fc",
+    color: 
+      estado === "ENTREGADO" 
+        ? "#86efac" 
+        : estado === "PENDIENTE DE PAGO"
+        ? "#fcd34d"
+        : "#7dd3fc",
   }),
   btn: {
     padding: "10px 16px",
@@ -127,8 +146,15 @@ const styles = {
     background:
       variant === "completados"
         ? "rgba(34,197,94,0.25)"
+        : variant === "pendientes_pago"
+        ? "rgba(245,158,11,0.25)"
         : "rgba(14,165,233,0.25)",
-    color: variant === "completados" ? "#86efac" : "#7dd3fc",
+    color:
+      variant === "completados"
+        ? "#86efac"
+        : variant === "pendientes_pago"
+        ? "#fcd34d"
+        : "#7dd3fc",
   }),
   emptyState: {
     textAlign: "center",
@@ -164,7 +190,7 @@ function PortalPedidosEmptyState() {
   return (
     <div style={styles.emptyState} role="status" aria-live="polite">
       <div style={styles.emptyIcon} aria-hidden="true">
-        📦
+        ­ƒôª
       </div>
       <h2 style={styles.emptyTitle}>No tienes pedidos disponibles</h2>
       <p style={styles.emptyMessage}>
@@ -186,7 +212,7 @@ function formatDate(value) {
 export default function ClientPortalShell({ user, onSignOut }) {
   const [seccionActiva, setSeccionActiva] = useState(SECCION_PEDIDOS);
   const [pedidos, setPedidos] = useState([]);
-  const [activeTab, setActiveTab] = useState(TAB_PENDIENTES);
+  const [activeTab, setActiveTab] = useState(TAB_TODOS);
   const [selectedId, setSelectedId] = useState(null);
   const [detalle, setDetalle] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -197,6 +223,17 @@ export default function ClientPortalShell({ user, onSignOut }) {
   const [evidenciasLoading, setEvidenciasLoading] = useState(false);
   const [evidenciasError, setEvidenciasError] = useState(null);
   const [modalRecurrenciaOpen, setModalRecurrenciaOpen] = useState(false);
+  const [comprobanteRutaId, setComprobanteRutaId] = useState(null);
+  const [pagandoBase, setPagandoBase] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newOrderForm, setNewOrderForm] = useState({
+    origen: "",
+    destino: "",
+    distancia_km: "",
+    bultos_detalle: [{ categoria: "S" }],
+  });
+  const [creatingOrder, setCreatingOrder] = useState(false);
+  const [createError, setCreateError] = useState("");
 
   const loadPedidos = useCallback(async () => {
     setLoading(true);
@@ -215,21 +252,44 @@ export default function ClientPortalShell({ user, onSignOut }) {
     loadPedidos();
   }, [loadPedidos]);
 
-  const { pedidosPendientes, pedidosCompletados } = useMemo(() => {
-    const pendientes = [];
-    const completados = [];
-    for (const p of pedidos) {
-      if (isPedidoCompletado(p.estado)) {
-        completados.push(p);
-      } else {
-        pendientes.push(p);
-      }
-    }
-    return { pedidosPendientes: pendientes, pedidosCompletados: completados };
-  }, [pedidos]);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const paymentResult = params.get("payment_result");
+    if (!paymentResult) return;
 
-  const pedidosVisibles =
-    activeTab === TAB_COMPLETADOS ? pedidosCompletados : pedidosPendientes;
+    if (paymentResult === "success") {
+      alert(
+        "Pago completado con éxito. Su pedido pasará a estar 'En Curso' en breve mientras verificamos la transacción.",
+      );
+      let retries = 0;
+      const interval = setInterval(() => {
+        loadPedidos();
+        retries += 1;
+        if (retries > 3) clearInterval(interval);
+      }, 5000);
+    } else if (paymentResult === "failed") {
+      alert("El pago no se ha podido completar. Por favor, inténtelo de nuevo.");
+    }
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }, [loadPedidos]);
+
+  const categorias = useMemo(() => {
+    const todos = pedidos;
+    const completados = pedidos.filter(p => isPedidoCompletado(p.estado));
+    const pendientesPago = pedidos.filter(p => p.estado_pago !== 'pagado');
+    const asignados = pedidos.filter(p => 
+      ["ASIGNADO", "EN_TRANSITO", "EN_CAMINO_ORIGEN", "EN_CARGA", "EN_DESTINO"].includes(String(p.estado || "").trim().toUpperCase()) && p.estado_pago === 'pagado'
+    );
+
+    let visibles = todos;
+    if (activeTab === TAB_COMPLETADOS) visibles = completados;
+    else if (activeTab === TAB_PENDIENTES_PAGO) visibles = pendientesPago;
+    else if (activeTab === TAB_ASIGNADOS) visibles = asignados;
+
+    return { todos, completados, pendientesPago, asignados, visibles };
+  }, [pedidos, activeTab]);
+
+  const pedidosVisibles = categorias.visibles;
 
   async function handleSelectPedido(id) {
     setSelectedId(id);
@@ -293,11 +353,11 @@ export default function ClientPortalShell({ user, onSignOut }) {
           <strong>
             {p.nombre_ruta || `${p.origen || "—"} → ${p.destino || "—"}`}
           </strong>
-          <span style={styles.badge(p.estado)}>{p.estado || "—"}</span>
+          <span style={styles.badge(getDisplayState(p))}>{getDisplayState(p)}</span>
         </div>
         <p style={{ margin: "8px 0 0", fontSize: "13px", opacity: 0.8 }}>
           Entrega estimada: {formatDate(p.fecha_estimada_entrega)}
-          {p.bultos_despachados != null ? ` · ${p.bultos_despachados} bultos` : ""}
+          {p.bultos_despachados != null ? ` ┬À ${p.bultos_despachados} bultos` : ""}
         </p>
       </div>
     );
@@ -307,15 +367,87 @@ export default function ClientPortalShell({ user, onSignOut }) {
     if (activeTab === TAB_COMPLETADOS) {
       return "No hay pedidos completados en este momento.";
     }
-    return "No hay pedidos en curso en este momento.";
+    if (activeTab === TAB_PENDIENTES_PAGO) {
+      return "No hay pedidos pendientes de pago en este momento.";
+    }
+    if (activeTab === TAB_ASIGNADOS) {
+      return "No hay pedidos asignados en curso en este momento.";
+    }
+    return "No hay pedidos en este momento.";
   }
 
+  const handlePagarKhipu = async (id, monto, tipo = "base", e) => {
+    e?.stopPropagation?.();
+    setPagandoBase(true);
+    try {
+      const { apiFetch } = await import("../lib/apiClient");
+      const res = await apiFetch("/api/pagos/crear-cobro", {
+        method: "POST",
+        json: { rutaId: id, monto, tipo },
+      });
+      if (res.ok && res.data?.paymentUrl) {
+        window.location.href = res.data.paymentUrl;
+      } else {
+        alert(res?.error || "Error al crear el cobro en Transbank Webpay");
+      }
+    } catch {
+      alert("Error al comunicarse con Transbank Webpay");
+    }
+    setPagandoBase(false);
+  };
+
+  const handleCreateOrderSubmit = async (e) => {
+    e.preventDefault();
+    setCreateError("");
+    setCreatingOrder(true);
+
+    const origen = newOrderForm.origen.trim();
+    const destino = newOrderForm.destino.trim();
+    const dist = Number(newOrderForm.distancia_km);
+
+    if (!origen || !destino || Number.isNaN(dist) || dist <= 0) {
+      setCreateError("Por favor completa origen, destino y kilómetros aproximados.");
+      setCreatingOrder(false);
+      return;
+    }
+
+    try {
+      const payload = {
+        origen,
+        destino,
+        distancia_km: dist,
+        bultos_despachados: newOrderForm.bultos_detalle.length,
+        bultos_detalle: newOrderForm.bultos_detalle.map((b) => ({
+          categoria: b.categoria || "S",
+        })),
+      };
+
+      const { createPortalPedido } = await import("../lib/portalService");
+      const res = await createPortalPedido(payload);
+
+      if (!res.ok) {
+        setCreateError(res.error || "No se pudo crear el pedido.");
+      } else {
+        setShowCreateModal(false);
+        setNewOrderForm({
+          origen: "",
+          destino: "",
+          distancia_km: "",
+          bultos_detalle: [{ categoria: "S" }],
+        });
+        loadPedidos();
+      }
+    } catch (err) {
+      setCreateError(err.message || "Error inesperado al crear pedido.");
+    } finally {
+      setCreatingOrder(false);
+    }
+  };
+
   const tituloSeccion =
-    seccionActiva === SECCION_PAGOS
-      ? "Mis pagos"
-      : seccionActiva === SECCION_RECURRENCIAS
-        ? "Mis recurrencias"
-        : "Mis pedidos";
+    seccionActiva === SECCION_RECURRENCIAS
+      ? "Mis recurrencias"
+      : "Mis pedidos";
 
   return (
     <div style={styles.page}>
@@ -329,6 +461,15 @@ export default function ClientPortalShell({ user, onSignOut }) {
         <button type="button" style={styles.btn} onClick={onSignOut}>
           Cerrar sesión
         </button>
+        {seccionActiva === SECCION_PEDIDOS ? (
+          <button
+            type="button"
+            style={{ ...styles.btn, borderColor: "#0ea5e9", color: "#38bdf8" }}
+            onClick={() => setShowCreateModal(true)}
+          >
+            Crear pedido
+          </button>
+        ) : null}
       </header>
 
       <div style={styles.tabs} role="tablist" aria-label="Secciones del portal">
@@ -344,15 +485,6 @@ export default function ClientPortalShell({ user, onSignOut }) {
         <button
           type="button"
           role="tab"
-          aria-selected={seccionActiva === SECCION_PAGOS}
-          style={styles.tab(seccionActiva === SECCION_PAGOS)}
-          onClick={() => setSeccionActiva(SECCION_PAGOS)}
-        >
-          Pagos
-        </button>
-        <button
-          type="button"
-          role="tab"
           aria-selected={seccionActiva === SECCION_RECURRENCIAS}
           style={styles.tab(seccionActiva === SECCION_RECURRENCIAS)}
           onClick={() => setSeccionActiva(SECCION_RECURRENCIAS)}
@@ -360,10 +492,6 @@ export default function ClientPortalShell({ user, onSignOut }) {
           Recurrencias
         </button>
       </div>
-
-      {seccionActiva === SECCION_PAGOS ? (
-        <PortalPagos clienteId={user?.clienteId} />
-      ) : null}
 
       {seccionActiva === SECCION_RECURRENCIAS ? (
         <PortalRecurrencias />
@@ -387,12 +515,32 @@ export default function ClientPortalShell({ user, onSignOut }) {
             <button
               type="button"
               role="tab"
-              aria-selected={activeTab === TAB_PENDIENTES}
-              style={styles.tab(activeTab === TAB_PENDIENTES)}
-              onClick={() => setActiveTab(TAB_PENDIENTES)}
+              aria-selected={activeTab === TAB_TODOS}
+              style={styles.tab(activeTab === TAB_TODOS)}
+              onClick={() => setActiveTab(TAB_TODOS)}
             >
-              Pendientes
-              <span style={styles.tabCount("pendientes")}>{pedidosPendientes.length}</span>
+              Todos
+              <span style={styles.tabCount("todos")}>{categorias.todos.length}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === TAB_PENDIENTES_PAGO}
+              style={styles.tab(activeTab === TAB_PENDIENTES_PAGO)}
+              onClick={() => setActiveTab(TAB_PENDIENTES_PAGO)}
+            >
+              Pendientes de pago
+              <span style={styles.tabCount("pendientes_pago")}>{categorias.pendientesPago.length}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === TAB_ASIGNADOS}
+              style={styles.tab(activeTab === TAB_ASIGNADOS)}
+              onClick={() => setActiveTab(TAB_ASIGNADOS)}
+            >
+              Asignados
+              <span style={styles.tabCount("asignados")}>{categorias.asignados.length}</span>
             </button>
             <button
               type="button"
@@ -402,7 +550,7 @@ export default function ClientPortalShell({ user, onSignOut }) {
               onClick={() => setActiveTab(TAB_COMPLETADOS)}
             >
               Completados
-              <span style={styles.tabCount("completados")}>{pedidosCompletados.length}</span>
+              <span style={styles.tabCount("completados")}>{categorias.completados.length}</span>
             </button>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
@@ -423,13 +571,107 @@ export default function ClientPortalShell({ user, onSignOut }) {
                 <>
                   <h2 style={{ marginTop: 0, fontSize: "18px" }}>Detalle del pedido</h2>
                   <p>
-                    <span style={styles.badge(detalle.ruta.estado)}>
-                      {detalle.ruta.estado}
+                    <span style={styles.badge(getDisplayState(detalle.ruta))}>
+                      {getDisplayState(detalle.ruta)}
                     </span>
                   </p>
                   <p style={{ fontWeight: 600 }}>
                     {detalle.ruta.nombre_ruta || `${detalle.ruta.origen} → ${detalle.ruta.destino}`}
                   </p>
+
+                  {detalle.bultos?.length > 0 && (
+                    <>
+                      <h3 style={{ fontSize: "15px", marginTop: "16px" }}>Paquetes registrados</h3>
+                      {Object.entries(
+                        detalle.bultos.reduce((acc, b) => {
+                          const label = b.categoria
+                            ? `Tipo ${b.categoria}`
+                            : `${b.alto_cm}x${b.ancho_cm}x${b.largo_cm} cm`;
+                          acc[label] = (acc[label] || 0) + 1;
+                          return acc;
+                        }, {}),
+                      ).map(([desc, count]) => (
+                        <div key={desc} style={{ fontSize: "13px" }}>
+                          • {count}x {desc}
+                        </div>
+                      ))}
+                    </>
+                  )}
+
+                  {detalle.ruta?.tarifa_base_total != null && (
+                    <>
+                      <h3 style={{ fontSize: "15px", marginTop: "16px" }}>Detalle económico</h3>
+                      <div style={{ fontSize: "14px", lineHeight: 1.6 }}>
+                        <div>
+                          Total base:{" "}
+                          {new Intl.NumberFormat("es-CL", {
+                            style: "currency",
+                            currency: "CLP",
+                          }).format(
+                            Number(
+                              detalle.ruta.costo_servicio ||
+                                detalle.ruta.tarifa_base_total ||
+                                0,
+                            ),
+                          )}
+                        </div>
+                        <div>
+                          Espera en destino:{" "}
+                          {new Intl.NumberFormat("es-CL", {
+                            style: "currency",
+                            currency: "CLP",
+                          }).format(Number(detalle.ruta.costo_espera_total || 0))}
+                        </div>
+                      </div>
+                      <div style={{ marginTop: 16, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        {detalle.ruta.estado === "PAGO_ATRASO_PENDIENTE" ? (
+                          <button
+                            type="button"
+                            disabled={pagandoBase}
+                            style={{ ...styles.btn, background: "#ef4444", borderColor: "#ef4444" }}
+                            onClick={(e) =>
+                              handlePagarKhipu(
+                                selectedId,
+                                Number(detalle.ruta.costo_espera_total || 0),
+                                "atraso",
+                                e,
+                              )
+                            }
+                          >
+                            {pagandoBase ? "Redirigiendo..." : "Pagar atraso"}
+                          </button>
+                        ) : detalle.ruta.estado_pago === "pagado" ? (
+                          <button
+                            type="button"
+                            style={{ ...styles.btn, background: "#3B82F6", borderColor: "#3B82F6" }}
+                            onClick={() => setComprobanteRutaId(selectedId)}
+                          >
+                            Ver comprobante
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={pagandoBase}
+                            style={{ ...styles.btn, background: "#10b981", borderColor: "#10b981" }}
+                            onClick={(e) =>
+                              handlePagarKhipu(
+                                selectedId,
+                                Number(
+                                  detalle.ruta.costo_servicio ||
+                                    detalle.ruta.tarifa_base_total ||
+                                    0,
+                                ),
+                                "base",
+                                e,
+                              )
+                            }
+                          >
+                            {pagandoBase ? "Redirigiendo..." : "Pagar"}
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  )}
 
                   <h3 style={{ fontSize: "15px", marginTop: "20px" }}>Historial de estados</h3>
                   {(detalle.historial_estados || []).length === 0 ? (
@@ -449,9 +691,9 @@ export default function ClientPortalShell({ user, onSignOut }) {
                   ) : (
                     detalle.entregas.map((e) => (
                       <div key={e.id} style={{ fontSize: "14px", marginBottom: "8px" }}>
-                        {e.estado || "—"} · validado: {e.validado ? "sí" : "no"}
+                        {e.estado || "—"} ┬À validado: {e.validado ? "sí" : "no"}
                         {e.fecha_entrega_real
-                          ? ` · ${formatDate(e.fecha_entrega_real)}`
+                          ? ` ┬À ${formatDate(e.fecha_entrega_real)}`
                           : ""}
                       </div>
                     ))
@@ -463,10 +705,10 @@ export default function ClientPortalShell({ user, onSignOut }) {
                   ) : (
                     detalle.guias_despacho.map((g) => (
                       <div key={g.id} style={{ fontSize: "14px", marginBottom: "8px" }}>
-                        {g.numero_guia} · {g.estado_recepcion || "—"}
+                        {g.numero_guia} ┬À {g.estado_recepcion || "—"}
                         {g.url_pdf ? (
                           <>
-                            {" · "}
+                            {" ┬À "}
                             <a href={g.url_pdf} target="_blank" rel="noreferrer">
                               PDF
                             </a>
@@ -499,6 +741,8 @@ export default function ClientPortalShell({ user, onSignOut }) {
           </div>
         </>
       )}
+        </>
+      )}
 
       {evidenciasOpen && detalle?.ruta ? (
         <PortalEvidenciasModal
@@ -522,8 +766,117 @@ export default function ClientPortalShell({ user, onSignOut }) {
         portalMode
         titulo="Repetir pedido"
       />
-        </>
-      )}
+
+      {comprobanteRutaId ? (
+        <ComprobanteModal
+          rutaId={comprobanteRutaId}
+          onClose={() => setComprobanteRutaId(null)}
+          stylesObj={styles}
+        />
+      ) : null}
+
+      {showCreateModal ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.75)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: 20,
+          }}
+        >
+          <div
+            style={{
+              background: "#0f172a",
+              border: "1px solid rgba(255,255,255,0.15)",
+              borderRadius: 16,
+              padding: 24,
+              width: "100%",
+              maxWidth: 560,
+              color: "#e2e8f0",
+            }}
+          >
+            <h2 style={{ marginTop: 0 }}>Crear nuevo pedido</h2>
+            {createError ? (
+              <p style={{ color: "#f87171" }} role="alert">
+                {createError}
+              </p>
+            ) : null}
+            <form onSubmit={handleCreateOrderSubmit}>
+              <label style={{ display: "block", marginBottom: 12 }}>
+                Origen
+                <input
+                  className="lt-input"
+                  style={{ display: "block", width: "100%", marginTop: 4 }}
+                  value={newOrderForm.origen}
+                  onChange={(e) =>
+                    setNewOrderForm((prev) => ({ ...prev, origen: e.target.value }))
+                  }
+                  required
+                />
+              </label>
+              <label style={{ display: "block", marginBottom: 12 }}>
+                Destino
+                <input
+                  className="lt-input"
+                  style={{ display: "block", width: "100%", marginTop: 4 }}
+                  value={newOrderForm.destino}
+                  onChange={(e) =>
+                    setNewOrderForm((prev) => ({ ...prev, destino: e.target.value }))
+                  }
+                  required
+                />
+              </label>
+              <label style={{ display: "block", marginBottom: 12 }}>
+                Distancia aproximada (km)
+                <input
+                  type="number"
+                  min="1"
+                  className="lt-input"
+                  style={{ display: "block", width: "100%", marginTop: 4 }}
+                  value={newOrderForm.distancia_km}
+                  onChange={(e) =>
+                    setNewOrderForm((prev) => ({ ...prev, distancia_km: e.target.value }))
+                  }
+                  required
+                />
+              </label>
+              <label style={{ display: "block", marginBottom: 16 }}>
+                Cantidad de paquetes
+                <input
+                  type="number"
+                  min="1"
+                  className="lt-input"
+                  style={{ display: "block", width: "100%", marginTop: 4 }}
+                  value={newOrderForm.bultos_detalle.length}
+                  onChange={(e) => {
+                    const n = Math.max(1, Number(e.target.value) || 1);
+                    setNewOrderForm((prev) => ({
+                      ...prev,
+                      bultos_detalle: Array.from({ length: n }, () => ({ categoria: "S" })),
+                    }));
+                  }}
+                />
+              </label>
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                <button type="button" style={styles.btn} onClick={() => setShowCreateModal(false)}>
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  style={{ ...styles.btn, background: "#0ea5e9", borderColor: "#0ea5e9" }}
+                  disabled={creatingOrder}
+                >
+                  {creatingOrder ? "Guardando..." : "Guardar pedido"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
