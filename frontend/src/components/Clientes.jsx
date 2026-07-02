@@ -176,7 +176,7 @@ export default function Clientes({ operator }) {
                     <InfoItem icon={MapPin} label="Dirección" value={selectedCliente.direccion || "N/A"} />
                     <InfoItem icon={User} label="Contacto" value={selectedCliente.contacto_nombre || "N/A"} />
                     <InfoItem icon={Phone} label="Teléfono" value={selectedCliente.contacto_telefono || "N/A"} />
-                    <InfoItem icon={Mail} label="Email portal" value={selectedCliente.accesoPortal?.email || selectedCliente.contacto_email || "N/A"} />
+                    <InfoItem icon={Mail} label="Correo portal" value={selectedCliente.accesoPortal?.email || selectedCliente.contacto_email || "N/A"} stacked className="lt-clientes-detail__email" />
                     <InfoItem
                       icon={Building2}
                       label="Estado acceso"
@@ -245,9 +245,9 @@ export default function Clientes({ operator }) {
   );
 }
 
-function InfoItem({ icon: Icon, label, value }) {
+function InfoItem({ icon: Icon, label, value, stacked = false, className = "" }) {
   return (
-    <div className="lt-info-row">
+    <div className={`lt-info-row${stacked ? " lt-info-row--stacked" : ""}${className ? ` ${className}` : ""}`}>
       <span className="lt-info-row__label">
         <Icon size={12} />
         {label}

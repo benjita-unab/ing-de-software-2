@@ -1226,7 +1226,12 @@ export default function RutasActivas() {
             </div>
           </div>
           {origenPedido === 'nuevo' ? (
-            <CreadorCarga />
+            <CreadorCarga
+              onCreated={() => {
+                cargarRutas();
+                setActiveTab("lista");
+              }}
+            />
           ) : (
             <div className="lt-card lt-module-card">
               <div className="lt-empty">

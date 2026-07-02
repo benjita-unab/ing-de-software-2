@@ -13,6 +13,10 @@ import {
 } from "lucide-react";
 import KpiCard from "./ui/KpiCard";
 import Card, { CardBody, CardHeader } from "./ui/Card";
+import {
+  DASHBOARD_PERIODO_PRESETS,
+  resolveDashboardPeriodoRange,
+} from "../lib/dashboardFinancieroService";
 import { getDashboardRentabilidadResumen } from "../lib/dashboardRentabilidadService";
 
 const ROW_MARGEN = [
@@ -182,6 +186,7 @@ function RutaExtremaCard({ title, icon: Icon, iconClass, ruta, emptyLabel }) {
 }
 
 export default function DashboardRentabilidad() {
+  const [periodo, setPeriodo] = useState("1m");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -189,7 +194,7 @@ export default function DashboardRentabilidad() {
   const loadResumen = useCallback(async () => {
     setLoading(true);
     setError("");
-    const res = await getDashboardRentabilidadResumen();
+    const res = await getDashboardRentabilidadResumen(resolveDashboardPeriodoRange(periodo));
     if (res.error) {
       setError(res.error);
       setData(null);
@@ -197,7 +202,7 @@ export default function DashboardRentabilidad() {
       setData(res.data);
     }
     setLoading(false);
-  }, []);
+  }, [periodo]);
 
   useEffect(() => {
     loadResumen();
@@ -220,14 +225,32 @@ export default function DashboardRentabilidad() {
           gap: "var(--lt-space-3)",
         }}
       >
-        {periodoSub && !error ? (
-          <p className="lt-dashboard-period-note">
-            <CircleDollarSign size={14} aria-hidden="true" />
-            {periodoSub}
-          </p>
-        ) : (
-          <span />
-        )}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--lt-space-3)", alignItems: "center" }}>
+          <div style={{ minWidth: 160 }}>
+            <label className="lt-info-row__label" htmlFor="periodo-rentabilidad">
+              Período
+            </label>
+            <select
+              id="periodo-rentabilidad"
+              className="lt-input"
+              value={periodo}
+              onChange={(e) => setPeriodo(e.target.value)}
+              disabled={loading}
+            >
+              {DASHBOARD_PERIODO_PRESETS.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          {periodoSub && !error ? (
+            <p className="lt-dashboard-period-note">
+              <CircleDollarSign size={14} aria-hidden="true" />
+              {periodoSub}
+            </p>
+          ) : null}
+        </div>
         <button
           type="button"
           className="lt-btn lt-btn--ghost"

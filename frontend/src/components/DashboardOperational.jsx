@@ -80,6 +80,31 @@ function buildResumenUrl(filters) {
   return qs ? `/api/dashboard/resumen?${qs}` : "/api/dashboard/resumen";
 }
 
+function buildRutasUrl(filters) {
+  const params = new URLSearchParams();
+  params.set("limit", "500");
+  if (filters.clienteId?.trim()) params.set("clienteId", filters.clienteId.trim());
+  if (filters.estado?.trim()) params.set("estado", filters.estado.trim());
+  const qs = params.toString();
+  return `/api/rutas?${qs}`;
+}
+
+function matchesDateRange(createdAt, desde, hasta) {
+  if (!desde?.trim() && !hasta?.trim()) return true;
+  if (!createdAt) return false;
+  const date = new Date(createdAt);
+  if (Number.isNaN(date.getTime())) return false;
+  if (desde?.trim()) {
+    const from = new Date(`${desde.trim()}T00:00:00`);
+    if (date < from) return false;
+  }
+  if (hasta?.trim()) {
+    const to = new Date(`${hasta.trim()}T23:59:59.999`);
+    if (date > to) return false;
+  }
+  return true;
+}
+
 function formatKpiValue(key, value, isPercent) {
   if (value == null || Number.isNaN(Number(value))) return "—";
   if (isPercent) {
@@ -308,25 +333,23 @@ export default function DashboardOperational({
     loadDashboardResumen();
   }, [loadDashboardResumen]);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function fetchRutas() {
-      setRutasLoading(true);
-      try {
-        const result = await apiFetch("/api/rutas");
-        if (cancelled) return;
-        if (!result.ok) { setRutas([]); return; }
-        const payload = result.data;
-        setRutas(Array.isArray(payload) ? payload : payload?.data ?? []);
-      } catch {
-        if (!cancelled) setRutas([]);
-      } finally {
-        if (!cancelled) setRutasLoading(false);
-      }
+  const loadRutas = useCallback(async () => {
+    setRutasLoading(true);
+    try {
+      const result = await apiFetch(buildRutasUrl(filters));
+      if (!result.ok) { setRutas([]); return; }
+      const payload = result.data;
+      setRutas(Array.isArray(payload) ? payload : payload?.data ?? []);
+    } catch {
+      setRutas([]);
+    } finally {
+      setRutasLoading(false);
     }
-    fetchRutas();
-    return () => { cancelled = true; };
-  }, []);
+  }, [filters]);
+
+  useEffect(() => {
+    loadRutas();
+  }, [loadRutas]);
 
   useEffect(() => {
     let cancelled = false;
@@ -349,7 +372,12 @@ export default function DashboardOperational({
     return () => { cancelled = true; };
   }, []);
 
-  const activeRoutesRaw = useMemo(() => rutas.filter(isActiveRoute), [rutas]);
+  const filteredRutas = useMemo(
+    () => rutas.filter((r) => matchesDateRange(r.created_at, filters.desde, filters.hasta)),
+    [rutas, filters.desde, filters.hasta],
+  );
+
+  const activeRoutesRaw = useMemo(() => filteredRutas.filter(isActiveRoute), [filteredRutas]);
 
   const activeRouteIds = useMemo(
     () => activeRoutesRaw.map((r) => r.id).filter(Boolean),

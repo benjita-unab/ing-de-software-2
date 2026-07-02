@@ -154,7 +154,7 @@ export default function ChoferesFlota({ configPagosVersion = 0 }) {
               <input
                 type="text"
                 className="lt-input"
-                placeholder="Buscar por nombre, apellido o RUT..."
+                placeholder="Buscar por nombre, apellido, RUT o licencia..."
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
               />

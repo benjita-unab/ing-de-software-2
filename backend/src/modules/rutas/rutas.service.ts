@@ -37,6 +37,81 @@ export type {
 
 const IVA_TARIFA_CLIENTE = 0.19;
 
+/** Reglas de slots/descuento — port exacto de calculo-paquetes (CreadorCarga.jsx OBTENER_TARIFA_POR_TRAMO). */
+const SLOTS_POR_CATEGORIA: Record<string, number> = {
+  XS: 1,
+  S: 4,
+  M: 12,
+  L: 24,
+  XL: 48,
+  MAXIMO: 96,
+};
+
+type ConteoSlotsFacturables = {
+  countXL: number;
+  countL: number;
+  countM: number;
+  countS: number;
+  countXS: number;
+};
+
+function obtenerTarifaPorTramo(categoria: string, km: number): number {
+  const bloques50km = Math.ceil(km / 50) || 1;
+  const precioBasePorSlot = 1000 + bloques50km * 550;
+  const cat = categoria.toUpperCase();
+  const slots = SLOTS_POR_CATEGORIA[cat] ?? SLOTS_POR_CATEGORIA.XS;
+  const desc =
+    cat === 'S'
+      ? 0.95
+      : cat === 'M'
+        ? 0.9
+        : cat === 'L'
+          ? 0.85
+          : cat === 'XL'
+            ? 0.8
+            : cat === 'MAXIMO'
+              ? 0.75
+              : 1.0;
+  return Math.round(precioBasePorSlot * slots * desc);
+}
+
+function descomponerSlotsEnCategorias(slotsParada: number): ConteoSlotsFacturables {
+  let slotsToPrice = slotsParada;
+  const countXL = Math.floor(slotsToPrice / 48);
+  slotsToPrice %= 48;
+  const countL = Math.floor(slotsToPrice / 24);
+  slotsToPrice %= 24;
+  const countM = Math.floor(slotsToPrice / 12);
+  slotsToPrice %= 12;
+  const countS = Math.floor(slotsToPrice / 4);
+  slotsToPrice %= 4;
+  const countXS = slotsToPrice;
+  return { countXL, countL, countM, countS, countXS };
+}
+
+function sumarTarifaDescompuesta(
+  conteo: ConteoSlotsFacturables,
+  billedDistanceKm: number,
+): number {
+  let total = 0;
+  if (conteo.countXL > 0) {
+    total += conteo.countXL * obtenerTarifaPorTramo('XL', billedDistanceKm);
+  }
+  if (conteo.countL > 0) {
+    total += conteo.countL * obtenerTarifaPorTramo('L', billedDistanceKm);
+  }
+  if (conteo.countM > 0) {
+    total += conteo.countM * obtenerTarifaPorTramo('M', billedDistanceKm);
+  }
+  if (conteo.countS > 0) {
+    total += conteo.countS * obtenerTarifaPorTramo('S', billedDistanceKm);
+  }
+  if (conteo.countXS > 0) {
+    total += conteo.countXS * obtenerTarifaPorTramo('XS', billedDistanceKm);
+  }
+  return total;
+}
+
 /** POST /api/rutas/estimar-fechas (HU-24). */
 export type EstimarFechasDto = {
   origen?: string | null;
@@ -623,6 +698,9 @@ export class RutasService {
         isTarifaManual: Boolean(body.is_tarifa_manual),
         tarifaBaseManual: this.parseTarifaManual(body.tarifa_base_total),
         costoEsperaTotal: 0,
+        bultosDespachados,
+        cantidadParadas: paradasPedido.length || 1,
+        modoRetorno: false,
       });
     }
 
@@ -803,6 +881,9 @@ export class RutasService {
       isTarifaManual,
       tarifaBaseManual,
       costoEsperaTotal,
+      bultosDespachados: this.parseTarifaManual(body.bultos_despachados),
+      cantidadParadas: Number(body.cantidad_paradas) || 0,
+      modoRetorno: body.modo_retorno === true,
     });
 
     const incluirCostos =
@@ -833,14 +914,92 @@ export class RutasService {
     return Number.isFinite(n) ? n : null;
   }
 
+  private slotsDeCategoria(categoria: string): number {
+    return SLOTS_POR_CATEGORIA[categoria.toUpperCase()] ?? SLOTS_POR_CATEGORIA.XS;
+  }
+
+  /**
+   * Port de billedDistanceKm (calculo-paquetes) cuando no hay tramos por parada en el payload.
+   * Sin paradaId por bulto, se asume carga en la primera parada (índice 0).
+   */
+  private calcularBilledDistanceKmHistorico(params: {
+    distanciaLogisticaKm: number;
+    cantidadParadas: number;
+    modoRetorno: boolean;
+    paradaIndex: number;
+  }): number {
+    const n = Math.max(1, params.cantidadParadas);
+    const isLastParada = params.paradaIndex === n - 1;
+
+    if (params.modoRetorno) {
+      const fromPrev = params.distanciaLogisticaKm / n;
+      return Math.round(fromPrev);
+    }
+
+    if (n === 1) {
+      return Math.round(params.distanciaLogisticaKm);
+    }
+
+    const fromPrev = params.distanciaLogisticaKm / n;
+    const toOrigin = params.distanciaLogisticaKm / n;
+    if (isLastParada) {
+      return Math.round(fromPrev + toOrigin);
+    }
+    return Math.round(fromPrev);
+  }
+
+  private consolidarTarifaBultosHistorica(params: {
+    distanciaKm: number;
+    bultosDetalle: { categoria?: string | null }[];
+    bultosDespachados?: number | null;
+    cantidadParadas: number;
+    modoRetorno: boolean;
+  }): { tarifaBaseTotal: number; desglose: DesgloseTarifaBultoDto[] } {
+    const cantidadParadas =
+      params.cantidadParadas > 0 ? params.cantidadParadas : 1;
+
+    // Sin paradaId en el payload: cada bulto se tarifica como unidad propia
+    // (misma lógica que paradas.forEach con un bulto por parada).
+    let tarifaBaseTotal = 0;
+    const desglose: DesgloseTarifaBultoDto[] = [];
+
+    params.bultosDetalle.forEach((b, indice) => {
+      const cat = String(b.categoria || 'XS').toUpperCase();
+      const slotsParada = this.slotsDeCategoria(cat);
+      if (slotsParada === 0) return;
+
+      const paradaIndex = 0;
+      const billedDistanceKm = this.calcularBilledDistanceKmHistorico({
+        distanciaLogisticaKm: params.distanciaKm,
+        cantidadParadas,
+        modoRetorno: params.modoRetorno,
+        paradaIndex,
+      });
+
+      const conteo = descomponerSlotsEnCategorias(slotsParada);
+      const tarifaBulto = sumarTarifaDescompuesta(conteo, billedDistanceKm);
+      tarifaBaseTotal += tarifaBulto;
+      desglose.push({
+        indice: indice + 1,
+        categoria: cat,
+        tarifaClp: tarifaBulto,
+      });
+    });
+
+    return { tarifaBaseTotal, desglose };
+  }
+
   private async calcularTarifaComercial(
-    supabase: ReturnType<SupabaseConfigService['getClient']>,
+    _supabase: ReturnType<SupabaseConfigService['getClient']>,
     params: {
       distanciaKm: number;
       bultosDetalle: { categoria?: string | null }[];
       isTarifaManual: boolean;
       tarifaBaseManual: number | null;
       costoEsperaTotal: number;
+      bultosDespachados?: number | null;
+      cantidadParadas?: number;
+      modoRetorno?: boolean;
     },
   ): Promise<TarifaComercialResultDto> {
     const {
@@ -849,29 +1008,28 @@ export class RutasService {
       isTarifaManual,
       tarifaBaseManual,
       costoEsperaTotal,
+      bultosDespachados,
+      cantidadParadas = 0,
+      modoRetorno = false,
     } = params;
 
     let tarifaBaseTotal = 0;
     let fuente: TarifaComercialResultDto['fuente'] = 'sin_bultos';
-    const desglose: DesgloseTarifaBultoDto[] = [];
+    let desglose: DesgloseTarifaBultoDto[] = [];
 
     if (isTarifaManual && tarifaBaseManual != null && tarifaBaseManual >= 0) {
       tarifaBaseTotal = Math.round(tarifaBaseManual);
       fuente = 'manual';
     } else if (bultosDetalle.length > 0) {
-      const matriz = await this.cargarMatrizTarifas(supabase);
-      if (!matriz.length) {
-        throw new BadRequestException(
-          'No hay matriz de tarifas configurada para calcular el monto comercial',
-        );
-      }
-
-      bultosDetalle.forEach((b, indice) => {
-        const cat = String(b.categoria || 'XS').toUpperCase();
-        const tarifaClp = this.resolverTarifaMatriz(matriz, cat, distanciaKm);
-        tarifaBaseTotal += tarifaClp;
-        desglose.push({ indice: indice + 1, categoria: cat, tarifaClp });
+      const consolidado = this.consolidarTarifaBultosHistorica({
+        distanciaKm,
+        bultosDetalle,
+        bultosDespachados,
+        cantidadParadas,
+        modoRetorno,
       });
+      tarifaBaseTotal = consolidado.tarifaBaseTotal;
+      desglose = consolidado.desglose;
       fuente = 'matriz';
     }
 
@@ -892,51 +1050,6 @@ export class RutasService {
     };
   }
 
-  private async cargarMatrizTarifas(
-    supabase: ReturnType<SupabaseConfigService['getClient']>,
-  ): Promise<
-    Array<{
-      tramo_min_km: number;
-      tramo_max_km: number;
-      categoria: string;
-      tarifa_clp: number;
-    }>
-  > {
-    const { data: matriz, error } = await supabase
-      .from('tarifas_matriz')
-      .select('*');
-
-    if (error || !matriz) {
-      return [];
-    }
-    return matriz as Array<{
-      tramo_min_km: number;
-      tramo_max_km: number;
-      categoria: string;
-      tarifa_clp: number;
-    }>;
-  }
-
-  private resolverTarifaMatriz(
-    matriz: Array<{
-      tramo_min_km: number;
-      tramo_max_km: number;
-      categoria: string;
-      tarifa_clp: number;
-    }>,
-    categoria: string,
-    km: number,
-  ): number {
-    const queryKm = Math.min(3500, Math.max(0, km));
-    const matching = matriz.find(
-      (t) =>
-        queryKm >= t.tramo_min_km &&
-        queryKm <= t.tramo_max_km &&
-        t.categoria.toUpperCase() === categoria.toUpperCase(),
-    );
-    return matching ? Number(matching.tarifa_clp) : 0;
-  }
-
   private async aplicarTarifaComercialARuta(
     supabase: ReturnType<SupabaseConfigService['getClient']>,
     rutaId: string,
@@ -946,6 +1059,9 @@ export class RutasService {
       isTarifaManual: boolean;
       tarifaBaseManual: number | null;
       costoEsperaTotal: number;
+      bultosDespachados?: number | null;
+      cantidadParadas?: number;
+      modoRetorno?: boolean;
     },
   ): Promise<TarifaComercialResultDto | null> {
     try {
@@ -1066,12 +1182,26 @@ export class RutasService {
         return;
       }
 
+      const { count: cantidadParadas } = await supabase
+        .from('rutas_paradas')
+        .select('*', { count: 'exact', head: true })
+        .eq('ruta_id', rutaId);
+
+      const { data: rutaSlots } = await supabase
+        .from('rutas')
+        .select('bultos_despachados')
+        .eq('id', rutaId)
+        .single();
+
       await this.aplicarTarifaComercialARuta(supabase, rutaId, {
         distanciaKm: Number(ruta.distancia_km || 0),
         bultosDetalle: bultos,
         isTarifaManual: Boolean(ruta.is_tarifa_manual),
         tarifaBaseManual: this.parseTarifaManual(ruta.tarifa_base_total),
         costoEsperaTotal: Number(ruta.costo_espera_total || 0),
+        bultosDespachados: Number(rutaSlots?.bultos_despachados || 0) || null,
+        cantidadParadas: cantidadParadas || 1,
+        modoRetorno: false,
       });
     } catch (e: unknown) {
       console.error('Error en calcularYBloquearTarifaRuta:', e);
@@ -1830,9 +1960,7 @@ export class RutasService {
         .or(`nombre.ilike.%${q}%,rut.ilike.%${q}%`);
       const conductorIds = conductors?.map((c) => c.id) || [];
 
-      // Construimos el filtro OR din├ímicamente
-      // Simulamos "nombre de ruta" usando el origen o destino
-      let orString = `origen.ilike.%${q}%,destino.ilike.%${q}%`;
+      let orString = `origen.ilike.%${q}%,destino.ilike.%${q}%,nombre_ruta.ilike.%${q}%`;
       
       if (clientIds.length > 0) {
         orString += `,cliente_id.in.(${clientIds.join(',')})`;

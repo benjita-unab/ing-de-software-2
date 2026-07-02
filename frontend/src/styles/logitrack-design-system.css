@@ -2301,6 +2301,24 @@ body {
   color: var(--lt-accent);
 }
 
+.lt-info-row--stacked {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--lt-space-1);
+}
+
+.lt-info-row--stacked .lt-info-row__value {
+  text-align: left;
+  min-width: 0;
+  width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.lt-clientes-detail__email {
+  grid-column: 1 / -1;
+}
+
 /* ── Accordion (clientes) ── */
 .lt-accordion {
   display: flex;
@@ -3242,8 +3260,16 @@ html:not(.dark) .lt-module-card__subtitle,
 html:not(.dark) .lt-empty-state__desc,
 html:not(.dark) .lt-empty-state__hint,
 html:not(.dark) .lt-mensajes-conv-item__meta,
-html:not(.dark) .lt-mensajes-polling {
+html:not(.dark) .lt-mensajes-polling,
+html:not(.dark) .lt-mensajes-detail__sub,
+html:not(.dark) .lt-mensajes-ack,
+html:not(.dark) .lt-search-icon,
+html:not(.dark) .lt-mensajes-msg-time {
   color: var(--lt-text-secondary);
+}
+
+html:not(.dark) .lt-table__row--urgent {
+  background: var(--lt-danger-bg);
 }
 
 html:not(.dark) .lt-table th,

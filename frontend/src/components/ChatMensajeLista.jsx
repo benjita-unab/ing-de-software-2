@@ -132,7 +132,7 @@ export default function ChatMensajeLista({
                           <Badge variant={esOperador ? "accent" : "info"} showDot={false}>
                             {esOperador ? "Operador" : "Conductor"}
                           </Badge>
-                          <span style={{ fontSize: 12, color: "var(--lt-text-muted)" }}>
+                          <span className="lt-mensajes-msg-time" style={{ fontSize: 12 }}>
                             {formatTimestamp(mensaje.created_at)}
                           </span>
                         </div>

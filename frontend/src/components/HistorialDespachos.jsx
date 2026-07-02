@@ -367,7 +367,7 @@ export default function HistorialDespachos() {
             <input
               type="search"
               className="lt-input"
-              placeholder="Buscar..."
+              placeholder="Buscar por pedido, cliente o RUT..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               aria-label="Buscar en historial"

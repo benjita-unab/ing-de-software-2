@@ -1,6 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { apiFetch } from '../lib/apiClient';
 import { crearRuta, estimarFechasEstimadas, estimarTarifaComercial } from '../lib/rutasService';
+import { obtenerConfiguracionPagos } from '../lib/configuracionPagosService';
+import {
+  calcularSimuladorRentabilidadHistorico,
+  consolidarTarifaBultosHistorica,
+} from '../lib/tarifaComercialHistorica';
 import { getRutaPlantillaById, getRutasPlantilla } from '../lib/rutasPlantillaService';
 import { useGooglePlacesAutocomplete } from '../hooks/useGooglePlacesAutocomplete';
 import '../LiquidGlass.css';
@@ -49,7 +54,7 @@ const CALCULAR_DIAS_ENTREGA = (km) => {
   return { texto: "1 semana (Entrega Especial)", maxDias: 7 };
 };
 
-export default function CreadorCarga() {
+export default function CreadorCarga({ onCreated }) {
   const [clientes, setClientes] = useState([]);
   const [conductores, setConductores] = useState([]);
   const [camiones, setCamiones] = useState([]);
@@ -87,6 +92,7 @@ export default function CreadorCarga() {
 
   const origenRef = useRef(null);
   const nuevaParadaRef = useRef(null);
+  const cotizacionSeqRef = useRef(0);
 
   const { error: origenErr } = useGooglePlacesAutocomplete(origenRef, {
     onPlaceSelected: (address) => { setOrigen(address); setOrigenInput(address); }
@@ -128,13 +134,43 @@ export default function CreadorCarga() {
     onPlaceSelected: (address) => { handleAddParada(address); }
   });
 
-  const handleRemoveParada = (id) => {
-    setParadas(paradas.filter(p => p.id !== id));
-    // Remove bultos associated with this parada
-    setBultos(bultos.filter(b => b.paradaId !== id));
+  const handleRemoveParada = async (id) => {
+    const remaining = paradas.filter((p) => p.id !== id);
+    setBultos((prev) => prev.filter((b) => b.paradaId !== id));
     if (activeParadaId === id) {
       setActiveParadaId("");
     }
+
+    if (remaining.length === 0) {
+      setParadas([]);
+      return;
+    }
+
+    const rebuilt = [];
+    let cumulative = 0;
+    for (let i = 0; i < remaining.length; i++) {
+      const prevAddress = i === 0 ? origen : rebuilt[i - 1].address;
+      const resIda = await estimarFechasEstimadas({ origen: prevAddress, destino: remaining[i].address });
+      if (!resIda.success || resIda.data?.distancia_km == null) {
+        setMensaje({ tipo: "error", texto: "No se pudo recalcular distancias tras eliminar la parada." });
+        return;
+      }
+      const fromPrev = resIda.data.distancia_km;
+      cumulative += fromPrev;
+      rebuilt.push({
+        ...remaining[i],
+        distanceFromPrev: fromPrev,
+        distanceKm: cumulative,
+        distanceToOrigin: 0,
+      });
+    }
+
+    const last = rebuilt[rebuilt.length - 1];
+    const resVuelta = await estimarFechasEstimadas({ origen: last.address, destino: origen });
+    last.distanceToOrigin = resVuelta.success
+      ? (resVuelta.data?.distancia_km || last.distanceFromPrev)
+      : last.distanceFromPrev;
+    setParadas(rebuilt);
   };
 
   const [bultos, setBultos] = useState(draft?.bultos || []);
@@ -198,6 +234,15 @@ export default function CreadorCarga() {
     }
     setParadas(nuevasParadas);
     setBultos([]);
+
+    if (nuevasParadas.length > 0 && plantilla.origen) {
+      const last = nuevasParadas[nuevasParadas.length - 1];
+      const resVuelta = await estimarFechasEstimadas({ origen: last.address, destino: plantilla.origen });
+      if (resVuelta.success && resVuelta.data?.distancia_km != null) {
+        last.distanceToOrigin = resVuelta.data.distancia_km;
+        setParadas([...nuevasParadas]);
+      }
+    }
   };
 
   useEffect(() => {
@@ -210,6 +255,13 @@ export default function CreadorCarga() {
   const [rendimientoCamion, setRendimientoCamion] = useState(4.5);
 
   const [costoTac, setCostoTac] = useState("");
+  const [precioDiesel, setPrecioDiesel] = useState(1498);
+  const [tarifasConfig, setTarifasConfig] = useState({
+    precioPorRuta: 5000,
+    precioPorEntrega: 3000,
+    precioPorBulto: 500,
+    precioPorKm: 150,
+  });
 
   const [isTarifaManual, setIsTarifaManual] = useState(false);
   const [tarifaManualTotal, setTarifaManualTotal] = useState("");
@@ -299,6 +351,11 @@ export default function CreadorCarga() {
         const resCli = await apiFetch("/api/clientes");
         if (resCli.ok) setClientes(Array.isArray(resCli.data) ? resCli.data : resCli.data?.data || []);
 
+        const resTarifas = await obtenerConfiguracionPagos();
+        if (resTarifas.data) {
+          setTarifasConfig(resTarifas.data);
+        }
+
         const resCond = await apiFetch("/api/conductores");
         if (resCond.ok) {
           setConductores(parseListPayload(resCond.data));
@@ -387,11 +444,13 @@ export default function CreadorCarga() {
       return;
     }
 
+    const paradaOrden = paradas.findIndex((p) => p.id === activeParadaId) + 1;
     setBultos([...bultos, {
       id: Math.random().toString(),
       categoria: activeSizeBrush,
       slots: neededSlots,
-      paradaId: activeParadaId
+      paradaId: activeParadaId,
+      paradaOrden,
     }]);
   };
 
@@ -412,11 +471,25 @@ export default function CreadorCarga() {
 
   const slotsPintados = [];
   bultos.forEach((b) => {
-    const bParadaIndex = paradas.findIndex(p => p.id === b.paradaId) + 1;
+    const bParadaIndex = Number(b.paradaOrden) || (paradas.findIndex(p => p.id === b.paradaId) + 1);
     for (let i = 0; i < b.slots; i++) {
       slotsPintados.push({ color: SIZES_CONFIG[b.categoria].color, paradaNumber: bParadaIndex, id: b.id });
     }
   });
+
+  useEffect(() => {
+    setBultos((prev) => {
+      let changed = false;
+      const next = prev.map((b) => {
+        if (b.paradaOrden) return b;
+        const orden = paradas.findIndex((p) => p.id === b.paradaId) + 1;
+        if (orden <= 0) return b;
+        changed = true;
+        return { ...b, paradaOrden: orden };
+      });
+      return changed ? next : prev;
+    });
+  }, [paradas]);
 
   useEffect(() => {
     if (bultos.length === 0 || paradas.length === 0) {
@@ -425,6 +498,7 @@ export default function CreadorCarga() {
       return undefined;
     }
 
+    const seq = ++cotizacionSeqRef.current;
     const timer = setTimeout(async () => {
       setCotizacionLoading(true);
       setCotizacionError("");
@@ -439,6 +513,7 @@ export default function CreadorCarga() {
         rendimiento_km_l: rendimientoCamion,
         modo_retorno: modoCarga === 'RETORNO',
       });
+      if (seq !== cotizacionSeqRef.current) return;
       setCotizacionLoading(false);
       if (res.success) {
         setCotizacion(res.data);
@@ -448,7 +523,10 @@ export default function CreadorCarga() {
       }
     }, 400);
 
-    return () => clearTimeout(timer);
+    return () => {
+      cotizacionSeqRef.current += 1;
+      clearTimeout(timer);
+    };
   }, [
     bultos,
     paradas.length,
@@ -461,9 +539,62 @@ export default function CreadorCarga() {
     modoCarga,
   ]);
 
-  const tarifaFinalBase = cotizacion?.tarifaBaseTotal ?? 0;
-  const ivaCalculado = cotizacion?.iva ?? 0;
-  const totalAPagarCliente = cotizacion?.totalPagar ?? 0;
+  const bultosParaTarifaHistorica = useMemo(() => (
+    bultos.map((b) => {
+      const orden = Number(b.paradaOrden) || (paradas.findIndex((p) => p.id === b.paradaId) + 1);
+      const parada = orden > 0 ? paradas[orden - 1] : null;
+      return {
+        ...b,
+        paradaId: parada?.id ?? b.paradaId,
+        slots: Number(b.slots) > 0 ? Number(b.slots) : (SIZES_CONFIG[b.categoria]?.slots ?? 0),
+      };
+    })
+  ), [bultos, paradas]);
+
+  const ingresosConsolidados = useMemo(() => {
+    if (paradas.length === 0 || bultosParaTarifaHistorica.length === 0) return null;
+    return consolidarTarifaBultosHistorica({
+      paradas,
+      bultos: bultosParaTarifaHistorica,
+      modoRetorno: modoCarga === 'RETORNO',
+    });
+  }, [paradas, bultosParaTarifaHistorica, modoCarga]);
+
+  const simuladorHistorico = useMemo(() => {
+    if (!ingresosConsolidados) return null;
+    return {
+      ...calcularSimuladorRentabilidadHistorico({
+        paradas,
+        bultos: bultosParaTarifaHistorica,
+        modoRetorno: modoCarga === 'RETORNO',
+        distanciaLogisticaKm,
+        rendimientoCamion,
+        precioDiesel,
+        tarifasConfig,
+        costoTac: Number(costoTac || 0),
+        isTarifaManual,
+        tarifaManualTotal,
+      }),
+      breakdown: ingresosConsolidados.breakdown,
+    };
+  }, [
+    ingresosConsolidados,
+    paradas,
+    bultosParaTarifaHistorica,
+    modoCarga,
+    distanciaLogisticaKm,
+    rendimientoCamion,
+    precioDiesel,
+    tarifasConfig,
+    costoTac,
+    isTarifaManual,
+    tarifaManualTotal,
+  ]);
+
+  const tarifaFinalBase = simuladorHistorico?.tarifaBaseTotal ?? 0;
+  const ivaCalculado = simuladorHistorico?.iva ?? 0;
+  const totalAPagarCliente = simuladorHistorico?.totalPagar ?? 0;
+  const margenGanancia = simuladorHistorico?.margenGanancia ?? 0;
   const pagoConductorAutomatico = cotizacion?.costosOperativos?.conductor ?? 0;
 
   const handleCrearRuta = async (e) => {
@@ -475,6 +606,10 @@ export default function CreadorCarga() {
     }
     if (!cotizacion && !isTarifaManual) {
       setMensaje({ tipo: "error", texto: cotizacionError || "Espere el cálculo de tarifa del servidor." });
+      return;
+    }
+    if (isTarifaManual && Number(tarifaManualTotal) <= 0) {
+      setMensaje({ tipo: "error", texto: "Ingrese un monto válido para tarifa manual." });
       return;
     }
 
@@ -529,6 +664,7 @@ export default function CreadorCarga() {
       }
 
       setMensaje({ tipo: "ok", texto: "Pedido creado." });
+      if (onCreated) onCreated();
 
       localStorage.removeItem('creadorCargaDraft');
       setOrigen(""); setOrigenInput(""); setParadas([]); setCostoTac("");
@@ -554,7 +690,7 @@ export default function CreadorCarga() {
     && camionId
     && isCargaMinimaRetornoValida
     && !cotizacionLoading
-    && (cotizacion || isTarifaManual);
+    && (cotizacion || (isTarifaManual && Number(tarifaManualTotal) > 0));
 
   const validaciones = [
     { ok: !!clienteId, label: 'Cliente' },
@@ -566,7 +702,7 @@ export default function CreadorCarga() {
     },
     { ok: !!camionId, label: 'Camión' },
     {
-      ok: !!(cotizacion || isTarifaManual),
+      ok: !!(cotizacion || (isTarifaManual && Number(tarifaManualTotal) > 0)),
       pending: cotizacionLoading && bultos.length > 0 && paradas.length > 0,
       label: 'Tarifa',
     },
@@ -666,7 +802,7 @@ export default function CreadorCarga() {
                 ref={origenRef}
                 required
                 type="text"
-                defaultValue={origenInput || origen}
+                value={origenInput || origen}
                 onChange={e => {
                   setOrigenInput(e.target.value);
                   if (!e.target.value) setOrigen("");
@@ -940,7 +1076,7 @@ export default function CreadorCarga() {
           <div className="liquid-block__grid-2" style={{ marginTop: 'var(--lt-space-4)' }}>
             <div className="liquid-field">
               <label className="liquid-label">TAC / peajes (CLP)</label>
-              <input type="number" required disabled={!camionId} value={costoTac} onChange={e => setCostoTac(e.target.value)} className="liquid-input" placeholder="0" />
+              <input type="number" disabled={!camionId} value={costoTac} onChange={e => setCostoTac(e.target.value)} className="liquid-input" placeholder="0" />
             </div>
             <div className="liquid-field">
               <label className="liquid-label" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
@@ -992,25 +1128,71 @@ export default function CreadorCarga() {
               <span className="liquid-summary-row__label">Distancia</span>
               <span className="liquid-summary-row__value">{distanciaLogisticaKm > 0 ? `${distanciaLogisticaKm} km` : '—'}</span>
             </div>
-            <div className="liquid-summary-row">
-              <span className="liquid-summary-row__label">Tarifa neta</span>
-              <span className="liquid-summary-row__value">
-                {cotizacionLoading ? 'Calculando…' : tarifaFinalBase > 0 ? `$${tarifaFinalBase.toLocaleString()}` : '—'}
-              </span>
-            </div>
-            <div className="liquid-summary-row">
-              <span className="liquid-summary-row__label">IVA (19%)</span>
-              <span className="liquid-summary-row__value">
-                {cotizacionLoading ? '—' : ivaCalculado > 0 ? `$${ivaCalculado.toLocaleString()}` : '—'}
-              </span>
-            </div>
-            <div className="liquid-summary-row liquid-summary-row--total">
-              <span className="liquid-summary-row__label">Total</span>
-              <span className="liquid-summary-row__value">
-                {cotizacionLoading ? '—' : totalAPagarCliente > 0 ? `$${totalAPagarCliente.toLocaleString()}` : '—'}
-              </span>
-            </div>
           </div>
+
+          {simuladorHistorico && ingresosConsolidados && (
+            <div className="liquid-resume" style={{ marginTop: 'var(--lt-space-4)', padding: 'var(--lt-space-4)', borderRadius: 'var(--lt-radius-lg)' }}>
+              <div className="liquid-block__title" style={{ fontSize: '0.95rem', marginBottom: 'var(--lt-space-2)' }}>
+                Ingresos (cobro a clientes)
+              </div>
+              {ingresosConsolidados.breakdown.map((bk, i) => (
+                <div key={i} className="liquid-summary-row" style={{ fontSize: '0.875rem' }}>
+                  <span className="liquid-summary-row__label">
+                    Carga {bk.parada} ({bk.kmFacturado} km): {bk.qty}× {bk.cat}
+                  </span>
+                  <span className="liquid-summary-row__value">+${bk.subtotal.toLocaleString()}</span>
+                </div>
+              ))}
+              <div className="liquid-summary-row">
+                <span className="liquid-summary-row__label">Subtotal neto</span>
+                <span className="liquid-summary-row__value">${tarifaFinalBase.toLocaleString()}</span>
+              </div>
+              <div className="liquid-summary-row">
+                <span className="liquid-summary-row__label">IVA (19%)</span>
+                <span className="liquid-summary-row__value">+${ivaCalculado.toLocaleString()}</span>
+              </div>
+              <div className="liquid-summary-row liquid-summary-row--total">
+                <span className="liquid-summary-row__label">Total recaudado</span>
+                <span className="liquid-summary-row__value">${totalAPagarCliente.toLocaleString()}</span>
+              </div>
+
+              <div className="liquid-block__title" style={{ fontSize: '0.95rem', marginTop: 'var(--lt-space-4)', marginBottom: 'var(--lt-space-2)' }}>
+                Costos operativos (internos)
+              </div>
+              <div className="liquid-summary-row" style={{ fontSize: '0.875rem' }}>
+                <span className="liquid-summary-row__label">
+                  Combustible ({distanciaLogisticaKm} km / {rendimientoCamion} km/L)
+                </span>
+                <span className="liquid-summary-row__value">
+                  {modoCarga === 'RETORNO'
+                    ? `$0 (-$${simuladorHistorico.costoCombustibleCalculado.toLocaleString()} financiado por ida)`
+                    : `-$${simuladorHistorico.costoCombustibleCalculado.toLocaleString()}`}
+                </span>
+              </div>
+              <div className="liquid-summary-row" style={{ fontSize: '0.875rem' }}>
+                <span className="liquid-summary-row__label">Pago conductor</span>
+                <span className="liquid-summary-row__value">-${simuladorHistorico.pagoConductorAutomatico.toLocaleString()}</span>
+              </div>
+              <div className="liquid-summary-row" style={{ fontSize: '0.875rem' }}>
+                <span className="liquid-summary-row__label">TAC / peajes</span>
+                <span className="liquid-summary-row__value">-${Number(costoTac || 0).toLocaleString()}</span>
+              </div>
+              <div className="liquid-summary-row">
+                <span className="liquid-summary-row__label">Gasto total estimado</span>
+                <span className="liquid-summary-row__value">-${simuladorHistorico.totalCostosOperativos.toLocaleString()}</span>
+              </div>
+
+              <div
+                className="liquid-summary-row liquid-summary-row--total"
+                style={{ color: margenGanancia < 0 ? 'var(--lt-danger-text)' : 'var(--lt-success-text)' }}
+              >
+                <span className="liquid-summary-row__label">Margen de ganancia</span>
+                <span className="liquid-summary-row__value">
+                  {margenGanancia < 0 ? '-' : '+'}${Math.abs(margenGanancia).toLocaleString()} CLP
+                </span>
+              </div>
+            </div>
+          )}
         </section>
 
         <div className="liquid-form-footer">

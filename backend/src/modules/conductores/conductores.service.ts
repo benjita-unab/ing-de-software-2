@@ -291,8 +291,25 @@ export class ConductoresService {
       .eq('activo', true);
 
     if (params?.search) {
-      const term = `%${params.search.trim()}%`;
-      query = query.or(`rut.ilike.${term},telefono.ilike.${term},licencia_numero.ilike.${term}`);
+      const q = params.search.trim();
+      const term = `%${q}%`;
+
+      const { data: usuarios } = await supabase
+        .from('usuarios')
+        .select('id')
+        .ilike('nombre', term);
+      const usuarioIds = usuarios?.map((u) => u.id) || [];
+
+      const orParts = [
+        `rut.ilike.${term}`,
+        `nombre.ilike.${term}`,
+        `telefono.ilike.${term}`,
+        `licencia_numero.ilike.${term}`,
+      ];
+      if (usuarioIds.length > 0) {
+        orParts.push(`usuario_id.in.(${usuarioIds.join(',')})`);
+      }
+      query = query.or(orParts.join(','));
     }
 
     if (params?.orden) {
